@@ -10,7 +10,6 @@ ascenso-copia-*.json
 
 # Imágenes propias del marco (pueden tener derechos de autor).
 # Para subir alguna a propósito: git add -f assets/images/nombre.jpg
-assets/images/*
 !assets/images/.gitkeep
 !assets/images/lista.js
 
