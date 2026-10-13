@@ -1,0 +1,21 @@
+# Normaliza los finales de línea en el repositorio
+* text=auto
+
+# Los .bat necesitan CRLF para funcionar bien en Windows
+*.bat      text eol=crlf
+# Los scripts de macOS/Linux necesitan LF (con CRLF fallan con "/bin/sh^M")
+*.command  text eol=lf
+*.sh       text eol=lf
+*.py       text eol=lf
+
+# Archivos binarios: sin conversiones
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.webp     binary
+*.ico      binary
+*.icns     binary
+*.db       binary
+
+# fuentes.css son datos incrustados: que no aparezcan en los diffs
+assets/css/fuentes.css  -diff linguist-generated

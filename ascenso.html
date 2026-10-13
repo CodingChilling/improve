@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E4E7E4">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ascenso">
+<title>Ascenso</title>
+<link rel="manifest" href="assets/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icono/icono-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icono/icono-192.png">
+<link rel="apple-touch-icon" href="assets/icono/icono-180.png">
+<link rel="stylesheet" href="assets/css/fuentes.css">
+<link rel="stylesheet" href="assets/css/estilos.css">
+</head>
+<body>
+<main>
+  <header class="head no-img" id="head">
+    <div class="titleblock"><h1>Ascenso</h1><div class="date" id="hdate"></div></div>
+    <div class="frame-slot">
+      <figure class="frame" id="frame" role="button" tabindex="0" aria-label="Imagen del día. Pulsa para ver otra.">
+        <div class="win"><img alt="" id="fa"><img alt="" id="fb"></div>
+        <figcaption id="fcap"></figcaption>
+      </figure>
+    </div>
+    <blockquote id="quote"><p></p><footer></footer></blockquote>
+    <div class="summit"><div class="n" id="streakN">0</div><div class="l" id="streakL">días de racha<small>Cumple tus hábitos y empieza a subir.</small></div></div>
+  </header>
+
+  <section aria-labelledby="h-week">
+    <h2 id="h-week">Esta semana</h2>
+    <div class="week" id="week"></div>
+    <div class="legend" id="legend"></div>
+    <p class="hint">Toca un día para verlo. Cambia su entreno con los botones de abajo.</p>
+  </section>
+
+  <section aria-labelledby="h-day">
+    <div class="dayhead">
+      <h2 id="h-day">Hoy</h2>
+      <div class="nav">
+        <button id="prev" aria-label="Día anterior">‹</button>
+        <button id="today">Hoy</button>
+        <button id="next" aria-label="Día siguiente">›</button>
+      </div>
+    </div>
+    <div class="plan" id="plan" role="group" aria-label="Entreno de este día"></div>
+    <ul class="checks" id="checks"></ul>
+    <div class="weight">
+      <label for="w">Peso de hoy (kg)</label>
+      <input id="w" type="number" inputmode="decimal" step="0.1" min="30" max="250" placeholder="81.5">
+    </div>
+  </section>
+
+  <section aria-labelledby="h-tasks" class="tasks">
+    <div class="dayhead tasks-head">
+      <h2 id="h-tasks">Tareas <span class="tdate" id="tdate"></span></h2>
+    </div>
+    <div class="tadd">
+      <input type="text" id="tnew" maxlength="120" placeholder="Nueva tarea…" aria-label="Nueva tarea">
+      <div class="trow">
+        <label>Prioridad <select id="tprio"><option value="urgente">Urgente</option><option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option></select></label>
+        <label>Lista <select id="tlist"><option value="pendiente" selected>Pendientes</option><option value="proceso">En proceso</option><option value="hecha">Hechas</option></select></label>
+        <button type="button" class="add" id="taddbtn">Añadir</button>
+      </div>
+      <div class="tagpick" id="tnewtags" aria-label="Etiquetas de la nueva tarea"></div>
+    </div>
+    <div class="ttabs" id="ttabs" role="tablist" aria-label="Listas de tareas"></div>
+    <div class="board" id="board"></div>
+    <p class="hint drag-hint"><span class="h-wide">Arrastra una tarea a otra columna para cambiarla de lista.</span><span class="h-narrow">Mantén pulsada una tarea y arrástrala a otra pestaña para cambiarla de lista.</span></p>
+    <details class="cfg tagmgr">
+      <summary>Etiquetas</summary>
+      <div class="cfgbody">
+        <p>Cada etiqueta tiene un nombre y un color. Si quitas una, desaparece también de las tareas que la tenían.</p>
+        <div id="taglist"></div>
+        <div class="tagnew">
+          <input type="color" id="tagcolor" value="#2e86ab" aria-label="Color de la nueva etiqueta">
+          <input type="text" id="tagname" maxlength="30" placeholder="Nueva etiqueta" aria-label="Nombre de la nueva etiqueta">
+          <button type="button" class="add" id="tagadd">Crear</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-prog">
+    <h2 id="h-prog">Progreso</h2>
+    <div class="stats" id="stats"></div>
+    <div class="scroll"><table id="hist"></table></div>
+  </section>
+
+  <details class="cfg" id="cfg">
+    <summary>Configurar hábitos</summary>
+    <div class="cfgbody">
+      <p>Añade, edita o quita hábitos. Elige en qué días aplica cada uno y si cuenta para la racha y para el porcentaje semanal. Un hábito que no cuenta para nada sigue apareciendo en la lista, solo como recordatorio.</p>
+      <div class="thr"><label for="thr">La racha sigue si cumplo al menos</label>
+        <select id="thr"><option value="0.5">la mitad</option><option value="0.66">dos tercios</option><option value="0.75">tres cuartos</option><option value="1">todos</option></select>
+        <span>de los hábitos que cuentan para la racha ese día.</span></div>
+      <div id="hlist"></div>
+      <button class="add" id="addh">Añadir hábito</button>
+    </div>
+  </details>
+
+  <details class="cfg">
+    <summary>Imágenes</summary>
+    <div class="cfgbody">
+      <p>Cada día el marco muestra una imagen de la carpeta assets/images. Para añadir o quitar imágenes, basta con copiarlas o borrarlas de esa carpeta. Si el nombre de un archivo contiene el de un autor (por ejemplo «seneca» o «marco-aurelio»), aparecerá los días en que la frase sea suya.</p>
+      <p id="imgcfg"></p>
+    </div>
+  </details>
+
+  <details class="cfg">
+    <summary>Copia de seguridad</summary>
+    <div class="cfgbody">
+      <p>Exporta una copia de tus datos de vez en cuando, o para pasarlos a otro dispositivo. Al importar una copia se sustituyen los datos actuales.</p>
+      <div class="row backup">
+        <button class="add" id="exp">Exportar datos</button>
+        <label class="add alt">Importar datos<input type="file" id="imp" accept="application/json,.json" hidden></label>
+      </div>
+      <p id="bmsg" class="bmsg"></p>
+    </div>
+  </details>
+
+  <dialog id="taskdlg" class="tdlg" aria-label="Ficha de la tarea"></dialog>
+
+  <p class="status" id="status"></p>
+  <p class="status status-img" id="imgstatus"></p>
+</main>
+
+<script src="assets/js/ascenso.js"></script>
+</body>
+</html>

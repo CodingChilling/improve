@@ -1,0 +1,29 @@
+# ---- Datos personales: nunca al repositorio ----
+ascenso.db
+ascenso.db-wal
+ascenso.db-shm
+ascenso.log
+ascenso-copia-*.json
+
+# Perfil del navegador que usa la ventana de la aplicación (ajustes de Edge/Chrome)
+.perfil-app/
+
+# Imágenes propias del marco (pueden tener derechos de autor).
+# Para subir alguna a propósito: git add -f assets/images/nombre.jpg
+assets/images/*
+!assets/images/.gitkeep
+!assets/images/lista.js
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+
+# ---- Paquetes generados ----
+*.zip
+
+# ---- Sistema y editores ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
