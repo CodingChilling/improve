@@ -26,7 +26,18 @@
         <figcaption id="fcap"></figcaption>
       </figure>
     </div>
-    <blockquote id="quote"><p></p><footer></footer></blockquote>
+    <blockquote id="quote">
+      <button type="button" class="qmark" id="qmark" aria-label="Notas y reflexión del día" aria-expanded="false" aria-controls="notepad"><span aria-hidden="true">“</span></button>
+      <p></p><footer></footer>
+      <div class="notepad" id="notepad" role="dialog" aria-label="Notas y reflexión del día" hidden>
+        <div class="np-tabs" role="tablist">
+          <button type="button" role="tab" data-tab="r">Reflexión</button><span aria-hidden="true">·</span><button type="button" role="tab" data-tab="n">Notas</button>
+        </div>
+        <textarea id="np-r" class="np-r" rows="4" maxlength="20000" placeholder="¿Qué te dice hoy esta frase?" aria-label="Reflexión"></textarea>
+        <textarea id="np-n" class="np-n" rows="4" maxlength="20000" placeholder="Apuntes sueltos, uno por línea…" aria-label="Notas" hidden></textarea>
+        <div class="np-foot"><span id="np-date"></span><span id="np-saved" class="np-saved" aria-live="polite">Guardado</span></div>
+      </div>
+    </blockquote>
     <div class="summit"><div class="n" id="streakN">0</div><div class="l" id="streakL">días de racha<small>Cumple tus hábitos y empieza a subir.</small></div></div>
   </header>
 

@@ -24,8 +24,19 @@ const cleanState = (x,fallbackDays) => ({
   thr:[0.5,0.66,0.75,1].includes(+x.thr)?+x.thr:0.66,
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
-  tasks:cleanTasks(x.tasks)
+  tasks:cleanTasks(x.tasks),
+  notes:cleanNotes(x.notes)
 });
+// Notas del día: {fecha: {r: reflexión, n: notas}}; los días sin nada escrito no se guardan
+function cleanNotes(x){
+  const o={};
+  if(x&&typeof x==="object") for(const [k,v] of Object.entries(x)){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||!v||typeof v!=="object") continue;
+    const r=typeof v.r==="string"?v.r.slice(0,20000):"", n=typeof v.n==="string"?v.n.slice(0,20000):"";
+    if(r.trim()||n.trim()) o[k]={r,n};
+  }
+  return o;
+}
 // Historial: qué frase (id) e imagen (ruta dentro de assets/images) se mostró cada día
 function cleanHist(h){
   const o={};
@@ -400,9 +411,74 @@ function renderQuote(){
   bq.querySelector("p").textContent=q;
   bq.querySelector("footer").innerHTML=esc(a)+"<cite>"+esc(src)+"</cite>";
   renderFrame(k,a);
+  if(!pad.hidden && padDay!==k) closePad();
+  updateQmark();
   const d=t.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
   document.getElementById("hdate").textContent=d.charAt(0).toUpperCase()+d.slice(1);
 }
+// ---------- Notas y reflexión del día: se abren pulsando las comillas de la frase ----------
+const qmark=document.getElementById("qmark"), pad=document.getElementById("notepad");
+const padR=document.getElementById("np-r"), padN=document.getElementById("np-n"), padSaved=document.getElementById("np-saved");
+let padDay=null, padTimer=null, padPending=false;
+let padTab=(()=>{ try{ return localStorage.getItem("ascenso-notetab")==="n"?"n":"r"; }catch(e){ return "r"; } })();
+// Las comillas se ven algo más intensas los días en que hay algo escrito
+function updateQmark(){ qmark.classList.toggle("has-note", !!state.notes[key(sel)]); }
+function growPad(ta){ ta.style.height="auto"; ta.style.height=Math.min(ta.scrollHeight, Math.round(window.innerHeight*0.5))+"px"; }
+function setPadTab(t){
+  padTab=t; try{ localStorage.setItem("ascenso-notetab",t); }catch(e){}
+  pad.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected", String(b.dataset.tab===t)));
+  padR.hidden=t!=="r"; padN.hidden=t!=="n";
+  const ta=t==="r"?padR:padN; growPad(ta); ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length);
+}
+function openPad(){
+  padDay=key(sel);
+  const n=state.notes[padDay]||{};
+  padR.value=n.r||""; padN.value=n.n||"";
+  const d=sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+  document.getElementById("np-date").textContent=d.charAt(0).toUpperCase()+d.slice(1);
+  padSaved.classList.remove("show");
+  pad.hidden=false; qmark.setAttribute("aria-expanded","true");
+  setPadTab(padTab);
+}
+function storePad(){
+  if(!padDay) return;
+  const r=padR.value, n=padN.value;
+  if(r.trim()||n.trim()) state.notes[padDay]={r,n}; else delete state.notes[padDay];
+}
+function flushPad(){
+  if(!padPending) return;
+  clearTimeout(padTimer); padPending=false; storePad(); save(); updateQmark();
+}
+function closePad(){
+  if(pad.hidden) return;
+  flushPad(); pad.hidden=true; qmark.setAttribute("aria-expanded","false"); padDay=null;
+}
+// Guardado automático: medio segundo después de dejar de escribir
+function padInput(e){
+  growPad(e.target); padPending=true; storePad();
+  clearTimeout(padTimer); padTimer=setTimeout(flushPad,600);
+}
+// Si se cierra la ventana o se cambia de aplicación justo después de escribir, se envía al momento
+function persistPadNow(){
+  if(!padDay) return;
+  const pending=padPending; clearTimeout(padTimer); padPending=false; storePad(); saveLocal();
+  if(pending && online){
+    const v=state.notes[padDay]||{r:"",n:""};
+    fetch(API+"notas/"+padDay,{method:"PUT",keepalive:true,headers:{"X-Ascenso":"1","Content-Type":"application/json"},body:JSON.stringify(v)})
+      .then(r=>{ if(r.ok){ if(state.notes[padDay]) synced.notes[padDay]=JSON.parse(JSON.stringify(v)); else delete synced.notes[padDay]; } }).catch(()=>{});
+  } else if(pending) save();
+}
+document.addEventListener("ascenso:guardado",()=>{
+  if(pad.hidden) return;
+  padSaved.classList.remove("show"); void padSaved.offsetWidth; padSaved.classList.add("show");
+});
+qmark.addEventListener("click",()=>{ pad.hidden ? openPad() : closePad(); });
+pad.addEventListener("click",e=>{ const b=e.target.closest("[data-tab]"); if(b) setPadTab(b.dataset.tab); });
+padR.addEventListener("input",padInput); padN.addEventListener("input",padInput);
+document.addEventListener("pointerdown",e=>{ if(!pad.hidden && !pad.contains(e.target) && !qmark.contains(e.target)) closePad(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !pad.hidden){ closePad(); qmark.focus(); } });
+window.addEventListener("pagehide",persistPadNow);
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) persistPadNow(); });
 function render(){ renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); }
 function renderAll(){ render(); renderCfg(); renderTagMgr(); }
 // Si la app queda abierta y cambia el día, salta al nuevo día y su frase
@@ -730,7 +806,7 @@ const API=/^https?:$/.test(location.protocol) ? "api/" : null;
 let online=false, synced=null, syncTimer=null, syncing=false, syncAgain=false, retryTimer=null;
 const setStatus=t=>document.getElementById("status").textContent=t;
 function saveLocal(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); return true; }catch(e){ return false; } }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks})); }
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes})); }
 async function api(method,path,body){
   const opt={method, headers:{"X-Ascenso":"1"}};
   if(body!==undefined){ opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
@@ -748,6 +824,7 @@ function dayPayload(d){
 function save(){
   const okLocal=saveLocal();
   if(!online){
+    if(okLocal) document.dispatchEvent(new Event("ascenso:guardado"));
     setStatus(okLocal ? (API?"Sin conexión con la base de datos: guardado en este navegador.":"Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.")
                       : "Este navegador no permite guardar datos. Exporta una copia de seguridad para no perderlos.");
     return;
@@ -775,6 +852,13 @@ async function sync(){
     }
     for(const id of Object.keys(synced.tasks)) if(!now.tasks[id]){ await api("DELETE","tareas/"+id); delete synced.tasks[id]; }
     for(const id of Object.keys(synced.tags)) if(!now.tags[id]){ await api("DELETE","etiquetas/"+id); delete synced.tags[id]; }
+    for(const k of new Set([...Object.keys(now.notes),...Object.keys(synced.notes)])){
+      const v=now.notes[k]||null;
+      if(JSON.stringify(v)!==JSON.stringify(synced.notes[k]||null)){
+        await api("PUT","notas/"+k, v||{r:"",n:""});
+        if(v) synced.notes[k]=v; else delete synced.notes[k];
+      }
+    }
     for(const [k,v] of Object.entries(now.hist)){
       if(JSON.stringify(v)!==JSON.stringify(synced.hist[k]||null)){
         await api("PUT","historial/"+k,v); synced.hist[k]=v;
@@ -787,6 +871,7 @@ async function sync(){
       }
     }
     setStatus("Guardado en la base de datos (ascenso.db).");
+    document.dispatchEvent(new Event("ascenso:guardado"));
   }catch(e){
     const why = e instanceof TypeError ? "el servidor no está en marcha" : e.message;
     setStatus("No se pudo guardar en la base de datos ("+why+"). Queda guardado en este navegador y se reintentará.");

@@ -138,8 +138,14 @@ CREATE TABLE IF NOT EXISTS tarea_etiquetas (
   etiqueta_id TEXT NOT NULL REFERENCES etiquetas(id) ON DELETE CASCADE,
   PRIMARY KEY (tarea_id, etiqueta_id)
 );
+CREATE TABLE IF NOT EXISTS notas (
+  fecha       TEXT PRIMARY KEY,  -- AAAA-MM-DD
+  reflexion   TEXT NOT NULL DEFAULT '',
+  notas       TEXT NOT NULL DEFAULT '',
+  actualizado TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 """
-VERSION_BD = 3
+VERSION_BD = 4
 
 
 class ErrorDatos(Exception):
@@ -207,7 +213,11 @@ def leer_estado(con):
     for r in con.execute("SELECT tarea_id, etiqueta_id FROM tarea_etiquetas ORDER BY rowid"):
         if r["tarea_id"] in tareas:
             tareas[r["tarea_id"]]["tags"].append(r["etiqueta_id"])
-    vacia = not config and not habitos and not dias and not historial and not etiquetas and not tareas
+    notas = {
+        r["fecha"]: {"r": r["reflexion"], "n": r["notas"]}
+        for r in con.execute("SELECT fecha, reflexion, notas FROM notas")
+    }
+    vacia = not config and not habitos and not dias and not historial and not etiquetas and not tareas and not notas
     return {
         "plan": config.get("plan"),
         "thr": config.get("thr"),
@@ -216,6 +226,7 @@ def leer_estado(con):
         "hist": historial,
         "tags": etiquetas,
         "tasks": tareas,
+        "notes": notas,
         "vacia": vacia,
     }
 
@@ -411,9 +422,28 @@ def borrar_tarea(con, tid):
     con.execute("DELETE FROM tareas WHERE id = ?", (comprobar_id(tid, "tarea"),))
 
 
+def guardar_notas(con, fecha, datos):
+    if not FECHA_RE.match(fecha):
+        raise ErrorDatos("fecha no válida")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("notas no válidas")
+    reflexion = str(datos.get("r") or "")[:20000]
+    notas = str(datos.get("n") or "")[:20000]
+    if not reflexion.strip() and not notas.strip():
+        con.execute("DELETE FROM notas WHERE fecha = ?", (fecha,))   # día sin nada escrito
+        return
+    con.execute(
+        """INSERT INTO notas (fecha, reflexion, notas) VALUES (?, ?, ?)
+           ON CONFLICT(fecha) DO UPDATE SET reflexion=excluded.reflexion, notas=excluded.notas,
+             actualizado=datetime('now', 'localtime')""",
+        (fecha, reflexion, notas),
+    )
+
+
 def importar(con, estado):
     if not isinstance(estado, dict) or not isinstance(estado.get("days"), dict):
         raise ErrorDatos("copia no válida")
+    con.execute("DELETE FROM notas")
     con.execute("DELETE FROM tarea_etiquetas")
     con.execute("DELETE FROM tareas")
     con.execute("DELETE FROM etiquetas")
@@ -438,6 +468,10 @@ def importar(con, estado):
     if isinstance(tareas, dict):
         for tid, t in tareas.items():
             guardar_tarea(con, tid, t)
+    notas = estado.get("notes") or {}
+    if isinstance(notas, dict):
+        for fecha, n in notas.items():
+            guardar_notas(con, str(fecha), n)
 
 
 def listar_imagenes():
@@ -599,6 +633,8 @@ class Manejador(SimpleHTTPRequestHandler):
                         guardar_tarea(con, ruta[len("/api/tareas/"):], self.leer_json())
                     elif metodo == "DELETE" and ruta.startswith("/api/tareas/"):
                         borrar_tarea(con, ruta[len("/api/tareas/"):])
+                    elif metodo == "PUT" and ruta.startswith("/api/notas/"):
+                        guardar_notas(con, ruta[len("/api/notas/"):], self.leer_json())
                     elif metodo == "POST" and ruta == "/api/importar":
                         importar(con, self.leer_json())
                     else:
