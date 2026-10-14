@@ -12,6 +12,58 @@ todo en una base de datos SQLite. No necesita internet ni instalar dependencias.
 - **Frase del día** y **imagen del día**, sin repetirse hasta agotar todas, con historial guardado.
 - **Copia de seguridad**: exportar e importar todos los datos en JSON.
 
+Además, hay varias funciones que no se ven a simple vista (ver más abajo).
+
+## Funciones ocultas
+
+Para mantener la página limpia, algunas funciones no tienen botón propio: se abren pulsando
+elementos que ya están en la página y que, a primera vista, parecen solo decorativos.
+
+| Dónde pulsar | Qué se abre |
+|---|---|
+| El título **«Ascenso»** | Los tableros |
+| La **fecha** bajo el título | El calendario con los eventos |
+| Las **comillas** de la frase del día | La reflexión y las notas del día |
+| El **marco** de la imagen del día | Otra imagen para ese día |
+
+Todas se cierran con <kbd>Esc</kbd>, pulsando fuera o volviendo a pulsar el mismo elemento
+(en los tableros, pulsando de nuevo «Ascenso» para volver al día).
+
+### Tableros (título «Ascenso»)
+
+Una vista propia, al estilo de Trello, que no depende del día: lo que hay en los tableros es igual
+hoy que dentro de un mes.
+
+- **Tableros**: varios, cada uno con su color (que tiñe su cabecera). Una página de inicio los muestra
+  todos; se pueden marcar como favoritos (★, aparecen primero) y ordenar arrastrándolos. Al crear uno,
+  se elige empezar vacío o con las listas «Por hacer · En proceso · Hecho». Ascenso recuerda el último
+  tablero abierto.
+- **Listas**: con el título que se quiera (se cambia haciendo clic en él), con contador de tarjetas.
+  Se ordenan arrastrándolas por la cabecera. Desde su menú ⋯ se pueden plegar, mover a otro tablero o
+  eliminar (eligiendo si sus tarjetas pasan a otra lista o se borran).
+- **Tarjetas**: se crean escribiendo al final de una lista y pulsando Intro, y se arrastran entre listas
+  o dentro de la misma. Al hacer clic se abre su ficha: prioridad (o sin prioridad), etiquetas propias
+  del tablero, fecha límite opcional (gris, naranja si vence hoy o mañana, roja si ya venció),
+  descripción y checklist. También se pueden duplicar.
+- **Buscador**: busca en todos los tableros, por título, descripción o checklist.
+- **Pasar entre tareas y tableros**: desde la ficha de una tarjeta, «Pasar a tareas del día»; desde la
+  ficha de una tarea, «Pasar a un tablero».
+
+### Calendario (la fecha)
+
+Calendario mensual con eventos de colores. Cada evento tiene título, color, hora opcional y puede durar
+uno o varios días (se dibuja como una barra que cruza las casillas). Al pulsar un día, toda la página
+salta a ese día. Los eventos solo aparecen dentro del calendario.
+
+### Reflexión y notas (las comillas de la frase)
+
+Una ventanita con dos pestañas, **Reflexión** y **Notas**, ligada al día seleccionado. Se guarda sola
+mientras escribes, sin botones. Los días en que hay algo escrito, las comillas se ven un poco más intensas.
+
+### Imagen del día (el marco)
+
+Al pulsar el marco se elige otra imagen para ese día, que queda guardada en el historial.
+
 ## Requisitos
 
 - Python 3.8 o superior (solo la biblioteca estándar).
@@ -63,7 +115,12 @@ Copia las imágenes en `assets/images/`. Si el nombre de un archivo contiene el 
 
 ## Base de datos
 
-Tablas de `ascenso.db`: `config`, `habitos`, `dias`, `marcas`, `historial`, `etiquetas`, `tareas` y `tarea_etiquetas`.
+Tablas de `ascenso.db`:
+
+- Día a día: `config`, `habitos`, `dias`, `marcas`, `historial`, `etiquetas`, `tareas`, `tarea_etiquetas` y `notas`.
+- Calendario: `eventos`.
+- Tableros: `tableros`, `listas`, `tarjetas`, `etiquetas_tablero`, `tarjeta_etiquetas_tablero` y `checklist`.
+
 Al arrancar, el servidor crea o actualiza las tablas sin tocar los datos existentes.
 
 ## Seguridad
