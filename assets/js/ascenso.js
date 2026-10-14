@@ -118,7 +118,7 @@ function renderWeek(){
     const d=addDays(m,i), b=document.createElement("button");
     b.className="day"+(key(d)===key(sel)?" sel":"");
     b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+TYPES[typeFor(d)].name);
-    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span><span class="wdots">${eventsOn(key(d)).slice(0,3).map(([,e])=>`<i style="--c:${e.color}"></i>`).join("")}</span>`;
+    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
     b.onclick=()=>{sel=d;render();};
     w.appendChild(b);
   }
@@ -129,9 +129,6 @@ function renderDay(){
   const isToday = key(sel)===key(today());
   document.getElementById("h-day").textContent = isToday ? "Hoy" :
     sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}).replace(/^./,c=>c.toUpperCase());
-  const evs=eventsOn(key(sel)), de=document.getElementById("dayevents");
-  de.hidden=!evs.length;
-  de.innerHTML=evs.map(([,e])=>`<button type="button" class="dev" style="--c:${e.color}"><span class="evdot"></span>${e.time?`<span class="evtime">${e.time}</span>`:""}${esc(e.title)}${evRange(e)?`<span class="evrange">${evRange(e)}</span>`:""}</button>`).join("");
   const p=document.getElementById("plan"); p.innerHTML="";
   const cur=typeFor(sel);
   for(const [id,t] of Object.entries(TYPES)){
@@ -530,8 +527,41 @@ function weekSegments(keys){
   }
   return segs;
 }
-// Carriles visibles por día: 2 en el ordenador (más compacto) y 3 en el móvil (líneas finas)
-const calLanes=()=>window.innerWidth>560?2:3;
+// En el ordenador, las casillas crecen hasta donde permita la altura de la ventana (sin barras de desplazamiento)
+const CAL_MIN=66, CAL_MAX=108;
+let calCellH=92;
+// Medidas de las barras (deben coincidir con --top0 y --bh del CSS)
+const calBars=()=>calpop.classList.contains("wide") ? {top0:28, bh:17} : {top0:26, bh:15};
+const calLanes=()=>{
+  if(window.innerWidth<=560) return 3;
+  const {top0,bh}=calBars();
+  return Math.max(1, Math.min(3, Math.floor((calCellH-top0-4)/(bh+2))));
+};
+// En pantallas anchas, el calendario se abre más grande, con la agenda del día a la derecha
+const CAL_WIDE=980, CAL_WIDE_W=960;
+function placeCal(){
+  const wide=window.innerWidth>=CAL_WIDE;
+  calpop.classList.toggle("wide",wide);
+  if(wide){
+    const w=Math.min(CAL_WIDE_W, window.innerWidth-40);
+    calpop.style.width=w+"px";
+    calpop.style.left=Math.max(20,(window.innerWidth-w)/2)+"px";
+    calpop.style.top=Math.round(hdateBtn.getBoundingClientRect().bottom+8)+"px";
+  } else calpop.style.removeProperty("width"), calpop.style.removeProperty("left"), calpop.style.removeProperty("top");
+}
+function fitCal(){
+  const grid=document.getElementById("cal-grid");
+  if(calpop.hidden || window.innerWidth<=560){ grid.style.removeProperty("--cellh"); return; }
+  const weeks=grid.children.length||6, before=calLanes();
+  const wide=calpop.classList.contains("wide"), cs=getComputedStyle(calpop);
+  const fixed=(wide ? document.querySelector(".cal-main").offsetHeight+parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom)+2
+                    : calpop.offsetHeight) - grid.offsetHeight;
+  const avail=window.innerHeight-calpop.getBoundingClientRect().top-16-fixed;
+  calCellH=Math.max(CAL_MIN, Math.min(CAL_MAX, Math.floor(avail/weeks)));
+  grid.style.setProperty("--cellh",calCellH+"px");
+  if(calLanes()!==before) renderCalGrid();
+}
+window.addEventListener("resize",()=>{ if(!calpop.hidden){ placeCal(); renderCalGrid(); fitCal(); } });
 function renderCalGrid(){
   const y=calMonth.getFullYear(), mo=calMonth.getMonth();
   document.getElementById("cal-title").textContent=cap(calMonth.toLocaleDateString("es-ES",{month:"long",year:"numeric"}));
@@ -581,10 +611,10 @@ function renderCalList(){
   document.getElementById("evnew-sw").innerHTML=swatches(evColor);
   const nw=document.getElementById("evnew"); if(nw.value!==evDraft) nw.value=evDraft;
 }
-function renderCal(){ if(calpop.hidden) return; renderCalGrid(); renderCalList(); }
+function renderCal(){ if(calpop.hidden) return; renderCalGrid(); renderCalList(); fitCal(); }
 function openCal(){
   calMonth=new Date(sel.getFullYear(),sel.getMonth(),1); calEditing=null;
-  calpop.hidden=false; hdateBtn.setAttribute("aria-expanded","true"); renderCal();
+  calpop.hidden=false; hdateBtn.setAttribute("aria-expanded","true"); placeCal(); renderCal();
 }
 function closeCal(){
   if(calpop.hidden) return;
@@ -611,14 +641,14 @@ calpop.addEventListener("click",e=>{
   if(t.closest("[data-nav]")){ flushEvTitle(); calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+(+t.closest("[data-nav]").dataset.nav),1); calEditing=null; renderCal(); return; }
   if(t.closest("[data-hoy]")){ flushEvTitle(); calSelect(today()); return; }
   const day=t.closest(".cday"); if(day){ flushEvTitle(); calSelect(parseKey(day.dataset.day)); return; }
-  const ev=t.closest(".ev"); if(ev){ flushEvTitle(); calEditing=ev.dataset.ev; renderCalList(); const f=calpop.querySelector(".ev-title"); if(f){ f.focus(); f.select(); } return; }
+  const ev=t.closest(".ev"); if(ev){ flushEvTitle(); calEditing=ev.dataset.ev; renderCalList(); fitCal(); const f=calpop.querySelector(".ev-title"); if(f){ f.focus(); f.select(); } return; }
   const sw=t.closest(".sw");
   if(sw){
     const ed=sw.closest(".evedit");
     if(ed){ const e=state.events[ed.dataset.ev]; if(e){ e.color=sw.dataset.color; evColor=e.color; } }
     else evColor=sw.dataset.color;
     try{ localStorage.setItem("ascenso-evcolor",evColor); }catch(err){}
-    if(ed){ flushEvTitle(); evChanged(); } else renderCalList();
+    if(ed){ flushEvTitle(); evChanged(); } else { renderCalList(); fitCal(); }
     return;
   }
   const del=t.closest(".ev-del");
@@ -652,11 +682,10 @@ calpop.addEventListener("focusout",e=>{
 });
 calpop.addEventListener("keydown",e=>{
   if(e.target.id==="evnew" && e.key==="Enter"){ e.preventDefault(); addEvent(); }
-  else if(e.target.matches(".ev-title") && e.key==="Enter"){ e.preventDefault(); flushEvTitle(); calEditing=null; renderCalList(); }
+  else if(e.target.matches(".ev-title") && e.key==="Enter"){ e.preventDefault(); flushEvTitle(); calEditing=null; renderCalList(); fitCal(); }
 });
 document.addEventListener("pointerdown",e=>{ if(!calpop.hidden && !calpop.contains(e.target) && !hdateBtn.contains(e.target)) closeCal(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !calpop.hidden){ closeCal(); hdateBtn.focus(); } });
-document.getElementById("dayevents").addEventListener("click",e=>{ if(e.target.closest(".dev")) openCal(); });
 function render(){ renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); renderCal(); }
 function renderAll(){ render(); renderCfg(); renderTagMgr(); }
 // Si la app queda abierta y cambia el día, salta al nuevo día y su frase

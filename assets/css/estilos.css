@@ -1504,13 +1504,13 @@ dialog.tdlg::backdrop {
   --wkend: rgba(128, 128, 128, 0.06);
   position: absolute;
   left: 0;
-  top: calc(100% + 6px);
-  width: min(560px, calc(100vw - 40px));
-  padding: 12px 12px 10px;
+  top: calc(100% + 8px);
+  width: min(680px, calc(100vw - 40px));
+  padding: 16px 16px 14px;
   background: linear-gradient(var(--surface2), var(--surface2)), var(--bg);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: 0 28px 60px -24px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 30px 70px -26px rgba(0, 0, 0, 0.5);
   animation: rise 0.3s both cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 .calpop[hidden] {
@@ -1521,12 +1521,12 @@ dialog.tdlg::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 2px 8px 4px;
+  margin: 0 2px 12px 4px;
 }
 .cal-title {
   font-family: var(--serif);
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1.45rem;
   line-height: 1;
 }
 .cal-navs {
@@ -1536,9 +1536,9 @@ dialog.tdlg::backdrop {
 }
 .cal-nav,
 .cal-hoy {
-  height: 28px;
+  height: 32px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: none;
   color: var(--muted);
   transition:
@@ -1546,13 +1546,13 @@ dialog.tdlg::backdrop {
     color 0.15s;
 }
 .cal-nav {
-  width: 28px;
-  font-size: 1.1rem;
+  width: 32px;
+  font-size: 1.2rem;
   line-height: 1;
 }
 .cal-hoy {
-  padding: 0 9px;
-  font-size: 0.8rem;
+  padding: 0 11px;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 .cal-nav:hover,
@@ -1563,24 +1563,25 @@ dialog.tdlg::backdrop {
 .cal-dow {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  padding: 0 0 4px;
-  font-size: 0.66rem;
+  padding: 0 0 6px;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--muted);
 }
 .cal-dow span {
-  padding-left: 6px;
+  padding-left: 8px;
 }
 .cal-grid {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
 }
-/* Cada semana: siete casillas y, encima, las barras de los eventos */
+/* Cada semana: siete casillas y, encima, las barras de los eventos.
+   En el ordenador, la altura de las casillas (--cellh) la ajusta el script a la ventana. */
 .cweek {
-  --top0: 20px;
-  --bh: 12px;
+  --top0: 26px;
+  --bh: 15px;
   position: relative;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1594,8 +1595,8 @@ dialog.tdlg::backdrop {
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
-  min-height: calc(var(--top0) + var(--lanes, 3) * (var(--bh) + 2px) + 3px);
-  padding: 2px 3px;
+  min-height: var(--cellh, calc(var(--top0) + var(--lanes, 3) * (var(--bh) + 2px) + 6px));
+  padding: 3px 4px;
   border: 0;
   border-left: 1px solid var(--line);
   background: none;
@@ -1615,10 +1616,10 @@ dialog.tdlg::backdrop {
 .cnum {
   display: inline-grid;
   place-items: center;
-  width: 19px;
-  height: 19px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1637,9 +1638,9 @@ dialog.tdlg::backdrop {
 }
 .cmore {
   position: absolute;
-  top: 4px;
-  right: 5px;
-  font-size: 0.62rem;
+  top: 5px;
+  right: 6px;
+  font-size: 0.68rem;
   font-weight: 600;
   color: var(--muted);
 }
@@ -1650,15 +1651,15 @@ dialog.tdlg::backdrop {
 }
 .cbar {
   position: absolute;
-  left: calc(var(--c0) * 100% / 7 + 2px);
-  width: calc(var(--span) * 100% / 7 - 4px);
+  left: calc(var(--c0) * 100% / 7 + 3px);
+  width: calc(var(--span) * 100% / 7 - 6px);
   top: calc(var(--top0) + var(--lane) * (var(--bh) + 2px));
   height: var(--bh);
-  padding: 0 4px;
-  border-radius: 3px;
+  padding: 0 6px;
+  border-radius: 4px;
   background: var(--c);
   color: var(--tc);
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   font-weight: 500;
   line-height: var(--bh);
   white-space: nowrap;
@@ -1670,12 +1671,12 @@ dialog.tdlg::backdrop {
 }
 .cbar.cont-l {
   left: calc(var(--c0) * 100% / 7);
-  width: calc(var(--span) * 100% / 7 - 2px);
+  width: calc(var(--span) * 100% / 7 - 3px);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }
 .cbar.cont-r {
-  width: calc(var(--span) * 100% / 7 - 2px);
+  width: calc(var(--span) * 100% / 7 - 3px);
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -1684,17 +1685,19 @@ dialog.tdlg::backdrop {
 }
 /* En el móvil no caben títulos: los eventos son finas líneas de color */
 @media (max-width: 560px) {
+  .calpop {
+    padding: 12px 12px 10px;
+  }
+  .cal-title {
+    font-size: 1.25rem;
+  }
   .cweek {
-    --top0: 26px;
+    --top0: 28px;
     --bh: 4px;
   }
   .cday {
     min-height: calc(var(--top0) + var(--lanes, 3) * (var(--bh) + 2px) + 6px);
-  }
-  .cnum {
-    width: 22px;
-    height: 22px;
-    font-size: 0.8rem;
+    padding: 2px 3px;
   }
   .cbar {
     padding: 0;
@@ -1709,11 +1712,11 @@ dialog.tdlg::backdrop {
 }
 /* Agenda del día seleccionado */
 .cal-agenda {
-  padding: 8px 2px 0;
+  padding: 12px 2px 0;
 }
 .cal-agenda h4 {
-  margin: 0 4px 4px;
-  font-size: 0.7rem;
+  margin: 0 6px 6px;
+  font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1727,21 +1730,21 @@ dialog.tdlg::backdrop {
   gap: 2px;
 }
 .cl-empty {
-  padding: 3px 4px;
-  font-size: 0.84rem;
+  padding: 4px 6px;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 .ev {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 6px;
+  gap: 10px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: none;
   text-align: left;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   transition: background 0.15s;
 }
 .ev:hover {
@@ -1749,13 +1752,13 @@ dialog.tdlg::backdrop {
 }
 .evdot {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--c);
 }
 .evtime {
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -1766,22 +1769,21 @@ dialog.tdlg::backdrop {
   overflow-wrap: anywhere;
 }
 .evrange {
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   color: var(--muted);
   white-space: nowrap;
 }
 .evedit {
   display: grid;
-  gap: 7px;
-  padding: 7px 10px 8px;
+  gap: 8px;
+  padding: 9px 12px 10px;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--c);
-  border-radius: 9px;
+  border-left: 4px solid var(--c);
+  border-radius: 10px;
 }
 .evedit .ev-title {
   font: inherit;
-  font-size: 0.92rem;
   font-weight: 600;
   color: var(--ink);
   background: transparent;
@@ -1797,14 +1799,14 @@ dialog.tdlg::backdrop {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
-  font-size: 0.78rem;
+  gap: 8px 14px;
+  font-size: 0.84rem;
   color: var(--muted);
 }
 .ev-row label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 .ev-row input {
   font: inherit;
@@ -1812,25 +1814,25 @@ dialog.tdlg::backdrop {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 2px 5px;
+  padding: 3px 6px;
 }
 .ev-del {
   margin-left: auto;
   border: 1px solid var(--line);
   background: none;
-  border-radius: 7px;
-  padding: 3px 9px;
-  font-size: 0.78rem;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
   color: var(--p-urgente);
 }
 .swatches {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
 }
 .sw {
-  width: 17px;
-  height: 17px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1848,54 +1850,65 @@ dialog.tdlg::backdrop {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+  gap: 12px;
+  margin-top: 8px;
 }
 .evnew input {
   flex: 1;
-  min-width: 160px;
+  min-width: 180px;
   font: inherit;
-  font-size: 0.88rem;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 6px 10px;
+  border-radius: 10px;
+  padding: 8px 12px;
 }
-/* Puntitos de eventos en la tira semanal */
-.wdots {
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-  height: 5px;
+
+/* Pantallas anchas: calendario grande y agenda del día a la derecha */
+.calpop.wide {
+  position: fixed;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 20px;
+  padding: 18px 18px 16px;
+  z-index: 30;
 }
-.wdots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c);
-}
-/* Eventos del día en "Hoy" */
-.dayevents {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: -4px 0 12px;
-}
-.dayevents[hidden] {
+.calpop.wide[hidden] {
   display: none;
 }
-.dev {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  font-size: 0.9rem;
-  color: var(--ink);
+.calpop.wide .cal-agenda {
+  align-self: start;
+  padding: 2px 0 0 18px;
+  border-left: 1px solid var(--line);
+  min-height: 100%;
 }
-.dev:hover {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
+.calpop.wide .cal-agenda h4 {
+  margin-top: 8px;
+}
+.calpop.wide .evnew {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.calpop.wide .evnew input {
+  min-width: 0;
+}
+.calpop.wide .ev-row label {
+  width: 100%;
+  justify-content: space-between;
+}
+.calpop.wide .ev-del {
+  margin-left: 0;
+}
+.calpop.wide .cweek {
+  --top0: 28px;
+  --bh: 17px;
+}
+.calpop.wide .cbar {
+  font-size: 0.74rem;
+}
+.calpop.wide .cnum {
+  width: 24px;
+  height: 24px;
+  font-size: 0.86rem;
 }

@@ -23,16 +23,18 @@
       <h1>Ascenso</h1>
       <button type="button" class="date" id="hdate" aria-haspopup="dialog" aria-expanded="false" aria-controls="calpop"></button>
       <div class="calpop" id="calpop" role="dialog" aria-label="Calendario y eventos" hidden>
-        <div class="cal-head">
-          <span class="cal-title" id="cal-title"></span>
-          <div class="cal-navs">
-            <button type="button" class="cal-nav" data-nav="-1" aria-label="Mes anterior">‹</button>
-            <button type="button" class="cal-hoy" data-hoy>Hoy</button>
-            <button type="button" class="cal-nav" data-nav="1" aria-label="Mes siguiente">›</button>
+        <div class="cal-main">
+          <div class="cal-head">
+            <span class="cal-title" id="cal-title"></span>
+            <div class="cal-navs">
+              <button type="button" class="cal-nav" data-nav="-1" aria-label="Mes anterior">‹</button>
+              <button type="button" class="cal-hoy" data-hoy>Hoy</button>
+              <button type="button" class="cal-nav" data-nav="1" aria-label="Mes siguiente">›</button>
+            </div>
           </div>
+          <div class="cal-dow" aria-hidden="true"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+          <div class="cal-grid" id="cal-grid"></div>
         </div>
-        <div class="cal-dow" aria-hidden="true"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
-        <div class="cal-grid" id="cal-grid"></div>
         <div class="cal-agenda">
           <h4 id="cal-day"></h4>
           <ul class="cal-list" id="cal-list"></ul>
@@ -80,7 +82,6 @@
         <button id="next" aria-label="Día siguiente">›</button>
       </div>
     </div>
-    <div class="dayevents" id="dayevents" hidden></div>
     <div class="plan" id="plan" role="group" aria-label="Entreno de este día"></div>
     <ul class="checks" id="checks"></ul>
     <div class="weight">
