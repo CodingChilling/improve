@@ -30,6 +30,7 @@ import threading
 import time
 import urllib.request
 import webbrowser
+from datetime import date
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, unquote, urlparse
@@ -48,6 +49,8 @@ UMBRALES = {0.5, 0.66, 0.75, 1.0}
 PRIORIDADES = {"urgente", "alta", "media", "baja"}
 LISTAS = {"pendiente", "proceso", "hecha"}
 COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+HORA_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+MAX_DIAS_EVENTO = 366
 MAX_BODY = 2 * 1024 * 1024
 PERFIL_APP = os.path.join(BASE, ".perfil-app")    # perfil propio de la ventana de la aplicación
 REGISTRO = os.path.join(BASE, "ascenso.log")      # errores cuando funciona sin consola
@@ -144,8 +147,20 @@ CREATE TABLE IF NOT EXISTS notas (
   notas       TEXT NOT NULL DEFAULT '',
   actualizado TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+CREATE TABLE IF NOT EXISTS eventos (
+  id          TEXT PRIMARY KEY,
+  inicio      TEXT NOT NULL,     -- AAAA-MM-DD
+  fin         TEXT NOT NULL,     -- igual a inicio si dura un solo día
+  hora        TEXT,              -- HH:MM, o vacío si es para todo el día
+  titulo      TEXT NOT NULL,
+  color       TEXT NOT NULL,     -- #RRGGBB
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  CHECK (fin >= inicio)
+);
+CREATE INDEX IF NOT EXISTS eventos_por_fechas ON eventos(inicio, fin);
 """
-VERSION_BD = 4
+VERSION_BD = 5
 
 
 class ErrorDatos(Exception):
@@ -217,7 +232,13 @@ def leer_estado(con):
         r["fecha"]: {"r": r["reflexion"], "n": r["notas"]}
         for r in con.execute("SELECT fecha, reflexion, notas FROM notas")
     }
-    vacia = not config and not habitos and not dias and not historial and not etiquetas and not tareas and not notas
+    eventos = {
+        r["id"]: {"start": r["inicio"], "end": r["fin"], "time": r["hora"] or "",
+                  "title": r["titulo"], "color": r["color"], "created": r["creado"]}
+        for r in con.execute("SELECT * FROM eventos")
+    }
+    vacia = (not config and not habitos and not dias and not historial and not etiquetas
+             and not tareas and not notas and not eventos)
     return {
         "plan": config.get("plan"),
         "thr": config.get("thr"),
@@ -227,6 +248,7 @@ def leer_estado(con):
         "tags": etiquetas,
         "tasks": tareas,
         "notes": notas,
+        "events": eventos,
         "vacia": vacia,
     }
 
@@ -440,9 +462,47 @@ def guardar_notas(con, fecha, datos):
     )
 
 
+def guardar_evento(con, eid, datos):
+    eid = comprobar_id(eid, "evento")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("evento no válido")
+    inicio, fin = str(datos.get("start") or ""), str(datos.get("end") or datos.get("start") or "")
+    if not FECHA_RE.match(inicio) or not FECHA_RE.match(fin):
+        raise ErrorDatos("fechas del evento no válidas")
+    try:
+        dias = (date.fromisoformat(fin) - date.fromisoformat(inicio)).days
+    except ValueError:
+        raise ErrorDatos("fechas del evento no válidas")
+    if dias < 0:
+        raise ErrorDatos("el evento termina antes de empezar")
+    if dias > MAX_DIAS_EVENTO:
+        raise ErrorDatos("el evento dura demasiado")
+    hora = str(datos.get("time") or "")
+    if hora and not HORA_RE.match(hora):
+        raise ErrorDatos("hora no válida")
+    titulo = str(datos.get("title") or "").strip()[:120]
+    if not titulo:
+        raise ErrorDatos("el evento necesita un título")
+    color = str(datos.get("color") or "")
+    if not COLOR_RE.match(color):
+        raise ErrorDatos("color no válido")
+    creado = str(datos.get("created") or "")[:40] or inicio
+    con.execute(
+        """INSERT INTO eventos (id, inicio, fin, hora, titulo, color, creado) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET inicio=excluded.inicio, fin=excluded.fin, hora=excluded.hora,
+             titulo=excluded.titulo, color=excluded.color, actualizado=datetime('now', 'localtime')""",
+        (eid, inicio, fin, hora or None, titulo, color.upper(), creado),
+    )
+
+
+def borrar_evento(con, eid):
+    con.execute("DELETE FROM eventos WHERE id = ?", (comprobar_id(eid, "evento"),))
+
+
 def importar(con, estado):
     if not isinstance(estado, dict) or not isinstance(estado.get("days"), dict):
         raise ErrorDatos("copia no válida")
+    con.execute("DELETE FROM eventos")
     con.execute("DELETE FROM notas")
     con.execute("DELETE FROM tarea_etiquetas")
     con.execute("DELETE FROM tareas")
@@ -472,6 +532,10 @@ def importar(con, estado):
     if isinstance(notas, dict):
         for fecha, n in notas.items():
             guardar_notas(con, str(fecha), n)
+    eventos = estado.get("events") or {}
+    if isinstance(eventos, dict):
+        for eid, e in eventos.items():
+            guardar_evento(con, eid, e)
 
 
 def listar_imagenes():
@@ -635,6 +699,10 @@ class Manejador(SimpleHTTPRequestHandler):
                         borrar_tarea(con, ruta[len("/api/tareas/"):])
                     elif metodo == "PUT" and ruta.startswith("/api/notas/"):
                         guardar_notas(con, ruta[len("/api/notas/"):], self.leer_json())
+                    elif metodo == "PUT" and ruta.startswith("/api/eventos/"):
+                        guardar_evento(con, ruta[len("/api/eventos/"):], self.leer_json())
+                    elif metodo == "DELETE" and ruta.startswith("/api/eventos/"):
+                        borrar_evento(con, ruta[len("/api/eventos/"):])
                     elif metodo == "POST" and ruta == "/api/importar":
                         importar(con, self.leer_json())
                     else:

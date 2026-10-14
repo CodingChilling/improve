@@ -25,8 +25,21 @@ const cleanState = (x,fallbackDays) => ({
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
-  notes:cleanNotes(x.notes)
+  notes:cleanNotes(x.notes),
+  events:cleanEvents(x.events)
 });
+// Eventos del calendario: {id: {start, end, time, title, color, created}}
+function cleanEvents(x){
+  const o={}, F=/^\d{4}-\d{2}-\d{2}$/;
+  if(x&&typeof x==="object") for(const [id,e] of Object.entries(x)){
+    if(!/^[A-Za-z0-9_-]{1,40}$/.test(id)||!e||!F.test(e.start||"")) continue;
+    const title=String(e.title||"").trim().slice(0,120); if(!title) continue;
+    const end=F.test(e.end||"")&&e.end>=e.start?e.end:e.start;
+    o[id]={start:e.start, end, time:/^([01]\d|2[0-3]):[0-5]\d$/.test(e.time||"")?e.time:"", title,
+      color:/^#[0-9A-Fa-f]{6}$/.test(e.color||"")?e.color.toUpperCase():"#2E86AB", created:String(e.created||e.start).slice(0,40)};
+  }
+  return o;
+}
 // Notas del día: {fecha: {r: reflexión, n: notas}}; los días sin nada escrito no se guardan
 function cleanNotes(x){
   const o={};
@@ -105,7 +118,7 @@ function renderWeek(){
     const d=addDays(m,i), b=document.createElement("button");
     b.className="day"+(key(d)===key(sel)?" sel":"");
     b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+TYPES[typeFor(d)].name);
-    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
+    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span><span class="wdots">${eventsOn(key(d)).slice(0,3).map(([,e])=>`<i style="--c:${e.color}"></i>`).join("")}</span>`;
     b.onclick=()=>{sel=d;render();};
     w.appendChild(b);
   }
@@ -116,6 +129,9 @@ function renderDay(){
   const isToday = key(sel)===key(today());
   document.getElementById("h-day").textContent = isToday ? "Hoy" :
     sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}).replace(/^./,c=>c.toUpperCase());
+  const evs=eventsOn(key(sel)), de=document.getElementById("dayevents");
+  de.hidden=!evs.length;
+  de.innerHTML=evs.map(([,e])=>`<button type="button" class="dev" style="--c:${e.color}"><span class="evdot"></span>${e.time?`<span class="evtime">${e.time}</span>`:""}${esc(e.title)}${evRange(e)?`<span class="evrange">${evRange(e)}</span>`:""}</button>`).join("");
   const p=document.getElementById("plan"); p.innerHTML="";
   const cur=typeFor(sel);
   for(const [id,t] of Object.entries(TYPES)){
@@ -479,7 +495,169 @@ document.addEventListener("pointerdown",e=>{ if(!pad.hidden && !pad.contains(e.t
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !pad.hidden){ closePad(); qmark.focus(); } });
 window.addEventListener("pagehide",persistPadNow);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) persistPadNow(); });
-function render(){ renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); }
+// ---------- Calendario (oculto: se abre pulsando la fecha) y eventos ----------
+const EV_COLORS=TAG_COLORS;
+const hdateBtn=document.getElementById("hdate"), calpop=document.getElementById("calpop");
+let calMonth=null, calEditing=null, evDraft="", evTitleTimer=null;
+let evColor=(()=>{ try{ const c=localStorage.getItem("ascenso-evcolor"); return EV_COLORS.includes(c)?c:EV_COLORS[4]; }catch(e){ return EV_COLORS[4]; } })();
+const parseKey=k=>{ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d); };
+const cap=t=>t.charAt(0).toUpperCase()+t.slice(1);
+const fmtShort=k=>parseKey(k).toLocaleDateString("es-ES",{day:"numeric",month:"short"});
+const evRange=e=>e.start===e.end?"":fmtShort(e.start)+" – "+fmtShort(e.end);
+// Orden dentro de un día: primero los de varios días, luego los de todo el día y después por hora
+function evSort(a,b){
+  const am=a.start!==a.end, bm=b.start!==b.end;
+  if(am!==bm) return am?-1:1;
+  if(!a.time!==!b.time) return a.time?1:-1;
+  return (a.time||"").localeCompare(b.time||"") || a.created.localeCompare(b.created);
+}
+function eventsOn(k){
+  return Object.entries(state.events).filter(([,e])=>e.start<=k&&e.end>=k).sort((x,y)=>evSort(x[1],y[1]));
+}
+// Reparte los eventos de una semana en carriles, para dibujar como barras los que duran varios días
+function weekSegments(keys){
+  const k0=keys[0], k6=keys[6], segs=[];
+  for(const [id,e] of Object.entries(state.events)){
+    if(e.end<k0||e.start>k6) continue;
+    segs.push({id,e, c0:e.start<k0?0:keys.indexOf(e.start), c1:e.end>k6?6:keys.indexOf(e.end),
+               first:e.start>=k0, contL:e.start<k0, contR:e.end>k6});
+  }
+  segs.sort((a,b)=>a.c0-b.c0 || (b.c1-b.c0)-(a.c1-a.c0) || evSort(a.e,b.e));
+  const occ=[];
+  for(const s of segs){
+    let l=0; while(occ[l] && occ[l].slice(s.c0,s.c1+1).some(Boolean)) l++;
+    occ[l]=occ[l]||Array(7).fill(false); for(let c=s.c0;c<=s.c1;c++) occ[l][c]=true; s.lane=l;
+  }
+  return segs;
+}
+// Carriles visibles por día: 2 en el ordenador (más compacto) y 3 en el móvil (líneas finas)
+const calLanes=()=>window.innerWidth>560?2:3;
+function renderCalGrid(){
+  const y=calMonth.getFullYear(), mo=calMonth.getMonth();
+  document.getElementById("cal-title").textContent=cap(calMonth.toLocaleDateString("es-ES",{month:"long",year:"numeric"}));
+  const first=monday(new Date(y,mo,1)), last=new Date(y,mo+1,0);
+  const weeks=Math.ceil((Math.round((last-first)/86400000)+1)/7);
+  const tk=key(today()), sk=key(sel), CAL_LANES=calLanes();
+  document.getElementById("cal-grid").style.setProperty("--lanes",CAL_LANES);
+  let html="";
+  for(let w=0;w<weeks;w++){
+    const keys=[...Array(7)].map((_,i)=>key(addDays(first,w*7+i)));
+    const segs=weekSegments(keys), over=Array(7).fill(0);
+    let bars="";
+    for(const s of segs){
+      if(s.lane>=CAL_LANES){ for(let c=s.c0;c<=s.c1;c++) over[c]++; continue; }
+      bars+=`<span class="cbar${s.contL?" cont-l":""}${s.contR?" cont-r":""}" style="--c:${s.e.color};--tc:${textOn(s.e.color)};--c0:${s.c0};--span:${s.c1-s.c0+1};--lane:${s.lane}">`+
+            `${s.e.time&&s.first?`<b>${s.e.time}</b> `:""}${esc(s.e.title)}</span>`;
+    }
+    const cells=keys.map((k,i)=>{
+      const d=parseKey(k), n=eventsOn(k).length;
+      const cls="cday"+(d.getMonth()!==mo?" out":"")+(k===tk?" today":"")+(k===sk?" sel":"");
+      return `<button type="button" class="${cls}" data-day="${k}" aria-label="${cap(d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}))}${n?`, ${n} ${n===1?"evento":"eventos"}`:""}">`+
+             `<span class="cnum">${d.getDate()}</span>${over[i]?`<span class="cmore">+${over[i]}</span>`:""}</button>`;
+    }).join("");
+    html+=`<div class="cweek">${cells}<div class="cbars" aria-hidden="true">${bars}</div></div>`;
+  }
+  document.getElementById("cal-grid").innerHTML=html;
+}
+const swatches=(cur)=>EV_COLORS.map((c,i)=>`<button type="button" class="sw" data-color="${c}" aria-pressed="${c===cur}" style="--c:${c}" aria-label="Color ${i+1}"></button>`).join("");
+function renderCalList(){
+  const k=key(sel), evs=eventsOn(k);
+  document.getElementById("cal-day").textContent=cap(sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}));
+  document.getElementById("cal-list").innerHTML = evs.map(([id,e])=> id===calEditing
+    ? `<li class="evedit" data-ev="${id}" style="--c:${e.color}">
+        <input type="text" class="ev-title" value="${esc(e.title)}" maxlength="120" aria-label="Título del evento">
+        <div class="ev-row swatches">${swatches(e.color)}</div>
+        <div class="ev-row">
+          <label>Hora <input type="time" class="ev-time" value="${e.time||""}"></label>
+          <label>Desde <input type="date" class="ev-start" value="${e.start}"></label>
+          <label>Hasta <input type="date" class="ev-end" value="${e.end}" min="${e.start}"></label>
+          <button type="button" class="ev-del">Borrar</button>
+        </div>
+      </li>`
+    : `<li><button type="button" class="ev" data-ev="${id}" style="--c:${e.color}"><span class="evdot"></span>`+
+      `${e.time?`<span class="evtime">${e.time}</span>`:""}<span class="evtitle">${esc(e.title)}</span>`+
+      `${evRange(e)?`<span class="evrange">${evRange(e)}</span>`:""}</button></li>`).join("")
+    || `<li class="cl-empty">Sin eventos.</li>`;
+  document.getElementById("evnew-sw").innerHTML=swatches(evColor);
+  const nw=document.getElementById("evnew"); if(nw.value!==evDraft) nw.value=evDraft;
+}
+function renderCal(){ if(calpop.hidden) return; renderCalGrid(); renderCalList(); }
+function openCal(){
+  calMonth=new Date(sel.getFullYear(),sel.getMonth(),1); calEditing=null;
+  calpop.hidden=false; hdateBtn.setAttribute("aria-expanded","true"); renderCal();
+}
+function closeCal(){
+  if(calpop.hidden) return;
+  flushEvTitle(); calpop.hidden=true; calEditing=null; hdateBtn.setAttribute("aria-expanded","false");
+}
+// Seleccionar un día desde el calendario mueve toda la página a ese día
+function calSelect(d){
+  sel=d; calEditing=null;
+  if(d.getMonth()!==calMonth.getMonth()||d.getFullYear()!==calMonth.getFullYear()) calMonth=new Date(d.getFullYear(),d.getMonth(),1);
+  render();
+}
+function evChanged(){ save(); render(); }
+function flushEvTitle(){ if(evTitleTimer){ clearTimeout(evTitleTimer); evTitleTimer=null; save(); renderWeek(); renderDay(); renderCalGrid(); } }
+function addEvent(){
+  const title=evDraft.trim(); if(!title) return;
+  const k=key(sel);
+  state.events[newId("v")]={start:k,end:k,time:"",title:title.slice(0,120),color:evColor,created:new Date().toISOString()};
+  evDraft=""; evChanged();
+  document.getElementById("evnew").focus();
+}
+hdateBtn.addEventListener("click",()=>{ calpop.hidden ? openCal() : closeCal(); });
+calpop.addEventListener("click",e=>{
+  const t=e.target;
+  if(t.closest("[data-nav]")){ flushEvTitle(); calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+(+t.closest("[data-nav]").dataset.nav),1); calEditing=null; renderCal(); return; }
+  if(t.closest("[data-hoy]")){ flushEvTitle(); calSelect(today()); return; }
+  const day=t.closest(".cday"); if(day){ flushEvTitle(); calSelect(parseKey(day.dataset.day)); return; }
+  const ev=t.closest(".ev"); if(ev){ flushEvTitle(); calEditing=ev.dataset.ev; renderCalList(); const f=calpop.querySelector(".ev-title"); if(f){ f.focus(); f.select(); } return; }
+  const sw=t.closest(".sw");
+  if(sw){
+    const ed=sw.closest(".evedit");
+    if(ed){ const e=state.events[ed.dataset.ev]; if(e){ e.color=sw.dataset.color; evColor=e.color; } }
+    else evColor=sw.dataset.color;
+    try{ localStorage.setItem("ascenso-evcolor",evColor); }catch(err){}
+    if(ed){ flushEvTitle(); evChanged(); } else renderCalList();
+    return;
+  }
+  const del=t.closest(".ev-del");
+  if(del){ const id=del.closest(".evedit").dataset.ev; armDelete(del,()=>{ delete state.events[id]; calEditing=null; evChanged(); },"Pulsa otra vez"); }
+});
+calpop.addEventListener("input",e=>{
+  if(e.target.id==="evnew"){ evDraft=e.target.value; return; }
+  if(e.target.matches(".ev-title")){
+    const ev=state.events[e.target.closest(".evedit").dataset.ev], v=e.target.value.trim();
+    if(ev && v){ ev.title=v.slice(0,120); clearTimeout(evTitleTimer); evTitleTimer=setTimeout(flushEvTitle,500); }
+  }
+});
+calpop.addEventListener("change",e=>{
+  const ed=e.target.closest(".evedit"); if(!ed) return;
+  const ev=state.events[ed.dataset.ev]; if(!ev) return;
+  const v=e.target.value;
+  if(e.target.matches(".ev-time")){ ev.time=/^([01]\d|2[0-3]):[0-5]\d$/.test(v)?v:""; }
+  else if(e.target.matches(".ev-start") && /^\d{4}-\d{2}-\d{2}$/.test(v)){
+    const dur=Math.round((parseKey(ev.end)-parseKey(ev.start))/86400000);   // se conserva la duración
+    ev.start=v; ev.end=key(addDays(parseKey(v),dur));
+  }
+  else if(e.target.matches(".ev-end") && /^\d{4}-\d{2}-\d{2}$/.test(v)){ ev.end=v<ev.start?ev.start:v; }
+  else return;
+  // Si el evento deja de cubrir el día seleccionado, la página salta a su primer día (y se sigue editando)
+  const k=key(sel);
+  if(!(ev.start<=k&&ev.end>=k)){ sel=parseKey(ev.start); calMonth=new Date(sel.getFullYear(),sel.getMonth(),1); }
+  flushEvTitle(); evChanged();
+});
+calpop.addEventListener("focusout",e=>{
+  if(e.target.matches(".ev-title")){ const ev=state.events[e.target.closest(".evedit")?.dataset.ev]; if(ev) e.target.value=ev.title; flushEvTitle(); }
+});
+calpop.addEventListener("keydown",e=>{
+  if(e.target.id==="evnew" && e.key==="Enter"){ e.preventDefault(); addEvent(); }
+  else if(e.target.matches(".ev-title") && e.key==="Enter"){ e.preventDefault(); flushEvTitle(); calEditing=null; renderCalList(); }
+});
+document.addEventListener("pointerdown",e=>{ if(!calpop.hidden && !calpop.contains(e.target) && !hdateBtn.contains(e.target)) closeCal(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !calpop.hidden){ closeCal(); hdateBtn.focus(); } });
+document.getElementById("dayevents").addEventListener("click",e=>{ if(e.target.closest(".dev")) openCal(); });
+function render(){ renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); renderCal(); }
 function renderAll(){ render(); renderCfg(); renderTagMgr(); }
 // Si la app queda abierta y cambia el día, salta al nuevo día y su frase
 let openDay=key(today());
@@ -806,7 +984,7 @@ const API=/^https?:$/.test(location.protocol) ? "api/" : null;
 let online=false, synced=null, syncTimer=null, syncing=false, syncAgain=false, retryTimer=null;
 const setStatus=t=>document.getElementById("status").textContent=t;
 function saveLocal(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); return true; }catch(e){ return false; } }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes})); }
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events})); }
 async function api(method,path,body){
   const opt={method, headers:{"X-Ascenso":"1"}};
   if(body!==undefined){ opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
@@ -852,6 +1030,10 @@ async function sync(){
     }
     for(const id of Object.keys(synced.tasks)) if(!now.tasks[id]){ await api("DELETE","tareas/"+id); delete synced.tasks[id]; }
     for(const id of Object.keys(synced.tags)) if(!now.tags[id]){ await api("DELETE","etiquetas/"+id); delete synced.tags[id]; }
+    for(const [id,e] of Object.entries(now.events)){
+      if(JSON.stringify(e)!==JSON.stringify(synced.events[id]||null)){ await api("PUT","eventos/"+id,e); synced.events[id]=e; }
+    }
+    for(const id of Object.keys(synced.events)) if(!now.events[id]){ await api("DELETE","eventos/"+id); delete synced.events[id]; }
     for(const k of new Set([...Object.keys(now.notes),...Object.keys(synced.notes)])){
       const v=now.notes[k]||null;
       if(JSON.stringify(v)!==JSON.stringify(synced.notes[k]||null)){
