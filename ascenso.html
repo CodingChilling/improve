@@ -20,7 +20,7 @@
 <main>
   <header class="head no-img" id="head">
     <div class="titleblock">
-      <h1>Ascenso</h1>
+      <h1><button type="button" class="brand" id="brand" aria-label="Ascenso. Abrir tableros">Ascenso</button></h1>
       <button type="button" class="date" id="hdate" aria-haspopup="dialog" aria-expanded="false" aria-controls="calpop"></button>
       <div class="calpop" id="calpop" role="dialog" aria-label="Calendario y eventos" hidden>
         <div class="cal-main">
@@ -163,6 +163,23 @@
   <p class="status" id="status"></p>
   <p class="status status-img" id="imgstatus"></p>
 </main>
+
+<div class="boards" id="boardsview" hidden>
+  <header class="bv-top">
+    <button type="button" class="bv-brand" id="bv-back" aria-label="Ascenso. Volver al día">Ascenso</button>
+    <div class="bv-pick">
+      <button type="button" class="bv-current" id="bv-current" aria-haspopup="menu" aria-expanded="false"></button>
+      <div class="bv-menu" id="bv-menu" role="menu" hidden></div>
+    </div>
+    <span class="bv-sync" id="bv-sync" role="status"></span>
+    <div class="bv-search">
+      <input type="search" id="bv-q" placeholder="Buscar tarjetas…" aria-label="Buscar tarjetas en todos los tableros" autocomplete="off">
+      <div class="bv-results" id="bv-results" hidden></div>
+    </div>
+  </header>
+  <div class="bv-body" id="bv-body"></div>
+</div>
+<dialog id="carddlg" class="tdlg cdlg" aria-label="Tarjeta"></dialog>
 
 <script src="assets/js/ascenso.js"></script>
 </body>

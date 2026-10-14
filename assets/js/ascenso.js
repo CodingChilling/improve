@@ -26,7 +26,8 @@ const cleanState = (x,fallbackDays) => ({
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
   notes:cleanNotes(x.notes),
-  events:cleanEvents(x.events)
+  events:cleanEvents(x.events),
+  ...cleanBoardData(x)
 });
 // Eventos del calendario: {id: {start, end, time, title, color, created}}
 function cleanEvents(x){
@@ -92,6 +93,46 @@ function cleanTasks(x){
       created:String(t.created||t.date).slice(0,40)};
   }
   return o;
+}
+// ---------- Tableros: datos ----------
+// boards {id: {name, color, fav, order, created}}
+// blabels {id: {board, name, color}}             etiquetas propias de cada tablero
+// blists {id: {board, title, order, collapsed}}
+// cards {id: {list, title, desc, prio, due, labels:[ids], check:[{id,t,d}], order, created}}
+const B_PRIOS=[["urgente","Urgente"],["alta","Alta"],["media","Media"],["baja","Baja"],["ninguna","Sin prioridad"]];
+const B_PRIO_OK=new Set(B_PRIOS.map(p=>p[0]));
+const B_COLORS=["#2E86AB","#3D9468","#D9822B","#C0392B","#5B5FC7","#9B59B6","#D4AC0D","#7F8C8D"];
+function cleanBoardData(x){
+  const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, F=/^\d{4}-\d{2}-\d{2}$/;
+  const num=v=>Number.isFinite(+v)?Math.round(+v):0, obj=v=>v&&typeof v==="object"?v:{};
+  const boards={}, blabels={}, blists={}, cards={};
+  for(const [id,b] of Object.entries(obj(x.boards))){
+    if(!ID.test(id)||!b) continue;
+    const name=String(b.name||"").trim().slice(0,60); if(!name) continue;
+    boards[id]={name, color:HEX.test(b.color||"")?b.color.toUpperCase():B_COLORS[0], fav:!!b.fav, order:num(b.order), created:String(b.created||"").slice(0,40)};
+  }
+  for(const [id,l] of Object.entries(obj(x.blabels))){
+    if(!ID.test(id)||!l||!boards[l.board]) continue;
+    const name=String(l.name||"").trim().slice(0,30); if(!name) continue;
+    blabels[id]={board:l.board, name, color:HEX.test(l.color||"")?l.color.toUpperCase():B_COLORS[0]};
+  }
+  for(const [id,l] of Object.entries(obj(x.blists))){
+    if(!ID.test(id)||!l||!boards[l.board]) continue;
+    const title=String(l.title||"").trim().slice(0,60); if(!title) continue;
+    blists[id]={board:l.board, title, order:num(l.order), collapsed:!!l.collapsed};
+  }
+  for(const [id,c] of Object.entries(obj(x.cards))){
+    if(!ID.test(id)||!c||!blists[c.list]) continue;
+    const title=String(c.title||"").trim().slice(0,200); if(!title) continue;
+    const bid=blists[c.list].board;
+    cards[id]={list:c.list, title, desc:String(c.desc||"").slice(0,10000), prio:B_PRIO_OK.has(c.prio)?c.prio:"ninguna",
+      due:F.test(c.due||"")?c.due:"",
+      labels:Array.isArray(c.labels)?c.labels.filter((l,i,a)=>blabels[l]&&blabels[l].board===bid&&a.indexOf(l)===i):[],
+      check:Array.isArray(c.check)?c.check.filter(k=>k&&ID.test(k.id||"")&&String(k.t||"").trim()).slice(0,100)
+        .map(k=>({id:k.id, t:String(k.t).trim().slice(0,300), d:!!k.d})):[],
+      order:num(c.order), created:String(c.created||"").slice(0,40)};
+  }
+  return {boards, blabels, blists, cards};
 }
 const DOW = ["L","M","X","J","V","S","D"];
 const DEFAULT_PLAN = ["climb","strength","climb","climb","rest","strength","climb"];
@@ -686,7 +727,617 @@ calpop.addEventListener("keydown",e=>{
 });
 document.addEventListener("pointerdown",e=>{ if(!calpop.hidden && !calpop.contains(e.target) && !hdateBtn.contains(e.target)) closeCal(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !calpop.hidden){ closeCal(); hdateBtn.focus(); } });
-function render(){ renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); renderCal(); }
+// ======================================================================
+// ---------- Tableros (al estilo de Trello): vista propia, oculta tras el título ----------
+// ======================================================================
+const ICON_CAL='<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>';
+const ICON_CHECK='<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const boardsView=document.getElementById("boardsview"), dayMain=document.querySelector("main");
+const bvBody=document.getElementById("bv-body"), bvQ=document.getElementById("bv-q"), bvResults=document.getElementById("bv-results");
+let curBoard=(()=>{ try{ return localStorage.getItem("ascenso-tablero")||"home"; }catch(e){ return "home"; } })();
+let openMenuKey=null, pickerOpen=false, editingBoardName=false, editingList=null, addingList=false;
+let nbOpen=false, nbDraft={name:"", tpl:"basic", color:B_COLORS[0]};
+
+const boardLists=bid=>Object.entries(state.blists).filter(([,l])=>l.board===bid).sort((a,b)=>a[1].order-b[1].order);
+const listCards=lid=>Object.entries(state.cards).filter(([,c])=>c.list===lid).sort((a,b)=>a[1].order-b[1].order);
+const boardLabels=bid=>Object.entries(state.blabels).filter(([,l])=>l.board===bid).sort((a,b)=>a[1].name.localeCompare(b[1].name,"es"));
+const boardsSorted=()=>Object.entries(state.boards).sort((a,b)=>(b[1].fav-a[1].fav)||(a[1].order-b[1].order));
+const renumber=(entries,coll)=>entries.forEach(([id],i)=>{ coll[id].order=i; });
+const nextColor=used=>B_COLORS.find(c=>!used.includes(c))||B_COLORS[used.length%B_COLORS.length];
+
+// ---- mostrar / ocultar ----
+function showBoards(){
+  closeCal(); closePad();
+  dayMain.hidden=true; boardsView.hidden=false;
+  if(curBoard!=="home" && !state.boards[curBoard]) curBoard="home";
+  renderBoards(); window.scrollTo(0,0);
+}
+function showDay(){
+  openMenuKey=null; pickerOpen=false; bvQ.value=""; bvResults.hidden=true;
+  boardsView.hidden=true; dayMain.hidden=false; window.scrollTo(0,0); render();
+}
+function setBoard(id){
+  curBoard=id; try{ localStorage.setItem("ascenso-tablero",id); }catch(e){}
+  openMenuKey=null; pickerOpen=false; editingBoardName=false; editingList=null; addingList=false;
+  renderBoards(); window.scrollTo(0,0);
+}
+function boardsChanged(){ save(); renderBoards(); }
+
+// ---- pintar ----
+function renderBoards(){
+  if(boardsView.hidden) return;
+  const b=state.boards[curBoard];
+  if(!b && curBoard!=="home") curBoard="home";
+  document.getElementById("bv-current").textContent=b?b.name:"Todos los tableros";
+  boardsView.style.setProperty("--bc", b?b.color:"var(--gold)");
+  renderPicker();
+  const lists=document.getElementById("bd-lists"), sx=lists?lists.scrollLeft:0;
+  bvBody.innerHTML=b?boardHTML(curBoard,b):homeHTML();
+  const nl=document.getElementById("bd-lists"); if(nl) nl.scrollLeft=sx;
+  placeMenus();
+  if(cardOpen) renderCardDlg();
+}
+// Los menús ⋯ se colocan respecto a su botón, pero siempre dentro de la ventana
+// (y fuera del área con desplazamiento de las listas, para que nada los recorte)
+function placeMenus(){
+  const M=8;
+  for(const menu of bvBody.querySelectorAll(".bmenu")){
+    const btn=menu.parentElement.querySelector(":scope > button"); if(!btn) continue;
+    const b=btn.getBoundingClientRect();
+    menu.style.position="fixed"; menu.style.right="auto"; menu.style.maxHeight=(window.innerHeight-2*M)+"px"; menu.style.overflowY="auto";
+    const w=menu.offsetWidth, h=menu.offsetHeight;
+    // Preferencia: alineado a la derecha del botón; si no cabe, se desplaza lo justo
+    let left=Math.min(Math.max(M, b.right-w), window.innerWidth-w-M);
+    let top=b.bottom+6;
+    if(top+h>window.innerHeight-M) top = b.top-6-h>=M ? b.top-6-h : Math.max(M, window.innerHeight-h-M);
+    menu.style.left=Math.round(left)+"px"; menu.style.top=Math.round(top)+"px";
+  }
+}
+window.addEventListener("resize",()=>{ if(!boardsView.hidden) placeMenus(); });
+document.addEventListener("scroll",()=>{ if(!boardsView.hidden && openMenuKey) placeMenus(); },true);
+function renderPicker(){
+  const m=document.getElementById("bv-menu");
+  document.getElementById("bv-current").setAttribute("aria-expanded",String(pickerOpen));
+  m.hidden=!pickerOpen; if(!pickerOpen) return;
+  m.innerHTML=boardsSorted().map(([id,b])=>
+    `<button type="button" class="pk-item${id===curBoard?" on":""}" data-goboard="${id}" style="--c:${b.color}"><span class="pk-dot"></span>${esc(b.name)}${b.fav?'<span class="pk-star">★</span>':""}</button>`).join("")+
+    `<hr><button type="button" class="pk-item" data-gohome>Todos los tableros</button><button type="button" class="pk-item" data-gonew>+ Nuevo tablero</button>`;
+}
+function homeHTML(){
+  const items=boardsSorted().map(([id,b])=>{
+    const ls=boardLists(id), n=ls.reduce((s,[lid])=>s+listCards(lid).length,0);
+    return `<article class="bcard" data-board="${id}" style="--bc:${b.color}" tabindex="0">
+      <span class="bcard-band"></span>
+      <h3>${esc(b.name)}</h3>
+      <p>${ls.length} ${ls.length===1?"lista":"listas"} · ${n} ${n===1?"tarjeta":"tarjetas"}</p>
+      <button type="button" class="bfav" data-fav="${id}" aria-pressed="${b.fav}" aria-label="${b.fav?"Quitar de favoritos":"Marcar como favorito"}">★</button>
+    </article>`;
+  }).join("");
+  const nb = nbOpen
+    ? `<div class="bcard bnew-form" style="--bc:${nbDraft.color}">
+        <input type="text" id="nb-name" maxlength="60" placeholder="Nombre del tablero" value="${esc(nbDraft.name)}" aria-label="Nombre del tablero">
+        <div class="nb-tpl" role="group" aria-label="Plantilla">
+          <button type="button" data-tpl="basic" aria-pressed="${nbDraft.tpl==="basic"}">Por hacer · En proceso · Hecho</button>
+          <button type="button" data-tpl="empty" aria-pressed="${nbDraft.tpl==="empty"}">Vacío</button>
+        </div>
+        <div class="swatches">${B_COLORS.map(c=>`<button type="button" class="sw" data-nbcolor="${c}" aria-pressed="${c===nbDraft.color}" style="--c:${c}" aria-label="Color"></button>`).join("")}</div>
+        <div class="eacts"><button type="button" class="add" data-nbcreate>Crear tablero</button><button type="button" class="add alt" data-nbcancel>Cancelar</button></div>
+      </div>`
+    : `<button type="button" class="bcard bnew" data-newboard>+ Nuevo tablero</button>`;
+  return `<div class="bh"><h2>Tableros</h2>
+    ${Object.keys(state.boards).length?"":`<p class="bh-empty">Todavía no tienes tableros. Crea el primero.</p>`}
+    <div class="bh-grid" id="bh-grid">${items}${nb}</div>
+    <p class="hint">Arrastra los tableros para ordenarlos. Los favoritos (★) aparecen primero.</p></div>`;
+}
+function boardHTML(bid,b){
+  const lists=boardLists(bid);
+  return `<div class="bd">
+    <div class="bd-head">
+      ${editingBoardName
+        ? `<input type="text" class="bd-name-in" id="bd-name-in" maxlength="60" value="${esc(b.name)}" aria-label="Nombre del tablero">`
+        : `<h2 class="bd-name" data-rename-board tabindex="0" title="Cambiar el nombre">${esc(b.name)}</h2>`}
+      <button type="button" class="bfav" data-fav="${bid}" aria-pressed="${b.fav}" aria-label="${b.fav?"Quitar de favoritos":"Marcar como favorito"}">★</button>
+      <span class="bd-sp"></span>
+      <div class="menu-wrap">
+        <button type="button" class="bd-more" data-menu="board" aria-label="Opciones del tablero" aria-expanded="${openMenuKey==="board"||openMenuKey==="labels"}">⋯</button>
+        ${openMenuKey==="board"?boardMenuHTML(bid,b):openMenuKey==="labels"?labelsMenuHTML(bid):""}
+      </div>
+    </div>
+    <div class="bd-lists" id="bd-lists">${lists.map(([lid,l])=>listHTML(lid,l)).join("")}
+      <div class="bl-add">${addingList
+        ? `<input type="text" id="bl-new" maxlength="60" placeholder="Título de la lista" aria-label="Título de la nueva lista">`
+        : `<button type="button" class="bl-addbtn" data-addlist>+ Añadir lista</button>`}</div>
+    </div>
+  </div>`;
+}
+function boardMenuHTML(bid,b){
+  return `<div class="bmenu" role="menu">
+    <p class="bm-h">Color del tablero</p>
+    <div class="swatches">${B_COLORS.map(c=>`<button type="button" class="sw" data-bcolor="${c}" aria-pressed="${c===b.color}" style="--c:${c}" aria-label="Color"></button>`).join("")}</div>
+    <button type="button" class="bm-item" data-menu="labels">Etiquetas del tablero…</button>
+    <button type="button" class="bm-item danger" data-delboard>Eliminar tablero</button>
+  </div>`;
+}
+function labelsMenuHTML(bid){
+  const labs=boardLabels(bid), used=labs.map(([,l])=>l.color);
+  const uses=id=>Object.values(state.cards).filter(c=>c.labels.includes(id)).length;
+  return `<div class="bmenu bm-labels" role="menu">
+    <p class="bm-h">Etiquetas de este tablero</p>
+    ${labs.map(([id,l])=>`<div class="tagrow" data-blabel="${id}">
+        <input type="color" class="blab-color" value="${l.color.toLowerCase()}" aria-label="Color de ${esc(l.name)}">
+        <input type="text" class="blab-name" value="${esc(l.name)}" maxlength="30" aria-label="Nombre de la etiqueta">
+        <span class="tg-uses">${uses(id)}</span>
+        <button type="button" class="tg-del" data-delblabel="${id}">Quitar</button>
+      </div>`).join("") || `<p class="bm-note">Aún no hay etiquetas.</p>`}
+    <div class="tagnew">
+      <input type="color" id="blab-color" value="${nextColor(used).toLowerCase()}" aria-label="Color de la nueva etiqueta">
+      <input type="text" id="blab-name" maxlength="30" placeholder="Nueva etiqueta" aria-label="Nombre de la nueva etiqueta">
+      <button type="button" class="add" data-addblabel>Crear</button>
+    </div>
+  </div>`;
+}
+function listHTML(lid,l){
+  const cards=listCards(lid);
+  if(l.collapsed) return `<section class="bl collapsed" data-list="${lid}">
+      <button type="button" class="bl-expand" data-expand="${lid}" title="Desplegar la lista"><span class="bl-vt">${esc(l.title)}</span><span class="bl-count">${cards.length}</span></button>
+    </section>`;
+  return `<section class="bl" data-list="${lid}">
+    <div class="bl-head">
+      ${editingList===lid
+        ? `<input type="text" class="bl-title-in" id="bl-title-in" maxlength="60" value="${esc(l.title)}" aria-label="Título de la lista">`
+        : `<h3 class="bl-title" data-rename-list="${lid}" title="Cambiar el título">${esc(l.title)}</h3>`}
+      <span class="bl-count">${cards.length}</span>
+      <div class="menu-wrap">
+        <button type="button" class="bl-more" data-menu="list:${lid}" aria-label="Opciones de la lista" aria-expanded="${openMenuKey==="list:"+lid}">⋯</button>
+        ${openMenuKey==="list:"+lid?listMenuHTML(lid,l,cards.length):""}
+      </div>
+    </div>
+    <ul class="bl-cards">${cards.map(([cid,c])=>cardHTML(cid,c)).join("")}</ul>
+    <div class="bl-new"><input type="text" class="bl-newcard" data-newcard="${lid}" maxlength="200" placeholder="+ Añadir tarjeta" aria-label="Nueva tarjeta en ${esc(l.title)}"></div>
+  </section>`;
+}
+function listMenuHTML(lid,l,n){
+  const others=boardsSorted().filter(([id])=>id!==l.board);
+  const siblings=boardLists(l.board).filter(([id])=>id!==lid);
+  return `<div class="bmenu" role="menu">
+    <button type="button" class="bm-item" data-collapse="${lid}">Plegar lista</button>
+    <p class="bm-h">Mover a otro tablero</p>
+    ${others.length
+      ? `<div class="bm-row"><select id="lm-board" aria-label="Tablero de destino">${others.map(([id,b])=>`<option value="${id}">${esc(b.name)}</option>`).join("")}</select>
+         <button type="button" class="add" data-movelist="${lid}">Mover</button></div>`
+      : `<p class="bm-note">No hay otros tableros.</p>`}
+    <p class="bm-h">Eliminar lista</p>
+    ${n ? `<select id="lm-dest" class="bm-select" aria-label="Qué hacer con sus tarjetas">
+             ${siblings.map(([id,s])=>`<option value="${id}">Pasar sus ${n} tarjetas a «${esc(s.title)}»</option>`).join("")}
+             <option value="">Borrar también sus ${n} tarjetas</option></select>` : ""}
+    <button type="button" class="bm-item danger" data-dellist="${lid}">Eliminar lista</button>
+  </div>`;
+}
+function dueInfo(due){
+  if(!due) return null;
+  const t=key(today()), tm=key(addDays(today(),1));
+  return { cls: due<t?"late":(due===t||due===tm)?"soon":"ok",
+           label: due===t?"Hoy":due===tm?"Mañana":fmtShort(due),
+           long: due<t?"Vencida":due===t?"Vence hoy":due===tm?"Vence mañana":"" };
+}
+function cardHTML(cid,c){
+  const labs=c.labels.map(id=>state.blabels[id]).filter(Boolean);
+  const d=dueInfo(c.due), done=c.check.filter(k=>k.d).length, tot=c.check.length;
+  return `<li class="bc p-${c.prio}" data-card="${cid}" tabindex="0" aria-label="${esc(c.title)}. Abrir tarjeta">
+    ${labs.length?`<span class="bc-labels">${labs.map(l=>`<span class="tag" style="--c:${l.color};--tc:${textOn(l.color)}">${esc(l.name)}</span>`).join("")}</span>`:""}
+    <span class="bc-title">${esc(c.title)}</span>
+    ${d||tot||c.desc?`<span class="bc-badges">${d?`<span class="due ${d.cls}" title="Fecha límite">${ICON_CAL}${d.label}</span>`:""}${tot?`<span class="ckb${done===tot?" full":""}" title="Checklist">${ICON_CHECK}${done}/${tot}</span>`:""}${c.desc?`<span class="tnote-ico" title="Tiene descripción">≡</span>`:""}</span>`:""}
+  </li>`;
+}
+
+// ---- acciones ----
+// Al abrir el formulario, se propone un color que aún no use ningún tablero
+function openNewBoard(){
+  if(!nbOpen && !nbDraft.name) nbDraft.color=nextColor(Object.values(state.boards).map(b=>b.color));
+  nbOpen=true;
+}
+function createBoard(){
+  const name=nbDraft.name.trim(); if(!name){ const f=document.getElementById("nb-name"); if(f) f.focus(); return; }
+  const id=newId("b");
+  state.boards[id]={name:name.slice(0,60), color:nbDraft.color, fav:false,
+    order:Math.max(-1,...Object.values(state.boards).map(b=>b.order))+1, created:new Date().toISOString()};
+  if(nbDraft.tpl==="basic") ["Por hacer","En proceso","Hecho"].forEach((t,i)=>{ state.blists[newId("l")]={board:id,title:t,order:i,collapsed:false}; });
+  nbOpen=false; nbDraft={name:"", tpl:"basic", color:nextColor(Object.values(state.boards).map(b=>b.color))};
+  save(); setBoard(id);
+}
+function deleteBoard(bid){
+  const lids=Object.keys(state.blists).filter(l=>state.blists[l].board===bid);
+  for(const [cid,c] of Object.entries(state.cards)) if(lids.includes(c.list)) delete state.cards[cid];
+  lids.forEach(l=>delete state.blists[l]);
+  for(const [id,l] of Object.entries(state.blabels)) if(l.board===bid) delete state.blabels[id];
+  delete state.boards[bid];
+  save(); setBoard("home");
+}
+// Etiqueta equivalente (por nombre) en otro tablero; si no existe, se crea con el mismo color
+function labelInBoard(bid,name,color){
+  const low=name.toLowerCase();
+  let id=Object.keys(state.blabels).find(x=>state.blabels[x].board===bid && state.blabels[x].name.toLowerCase()===low);
+  if(!id){ id=newId("k"); state.blabels[id]={board:bid, name, color}; }
+  return id;
+}
+function moveListToBoard(lid,bid){
+  const l=state.blists[lid];
+  l.board=bid; l.order=boardLists(bid).filter(([id])=>id!==lid).length;
+  for(const [,c] of listCards(lid)) c.labels=c.labels.map(x=>{ const L=state.blabels[x]; return L?labelInBoard(bid,L.name,L.color):null; }).filter(Boolean);
+}
+function deleteList(lid,dest){
+  const bid=state.blists[lid].board, cards=listCards(lid);
+  if(dest && state.blists[dest]){
+    let n=listCards(dest).length;
+    for(const [cid] of cards){ state.cards[cid].list=dest; state.cards[cid].order=n++; }
+  } else for(const [cid] of cards) delete state.cards[cid];
+  delete state.blists[lid];
+  renumber(boardLists(bid),state.blists);
+}
+function addCard(lid,title){
+  state.cards[newId("c")]={list:lid, title:title.slice(0,200), desc:"", prio:"ninguna", due:"", labels:[], check:[],
+    order:listCards(lid).length, created:new Date().toISOString()};
+}
+function commitBoardName(input){
+  if(!editingBoardName) return; editingBoardName=false;
+  const v=input.value.trim(); if(v && state.boards[curBoard]) state.boards[curBoard].name=v.slice(0,60);
+  boardsChanged();
+}
+function commitListTitle(input){
+  const lid=editingList; if(!lid) return; editingList=null;
+  const v=input.value.trim(); if(v && state.blists[lid]) state.blists[lid].title=v.slice(0,60);
+  boardsChanged();
+}
+
+// ---- eventos de la vista de tableros ----
+document.getElementById("brand").addEventListener("click",showBoards);
+document.getElementById("bv-back").addEventListener("click",showDay);
+document.getElementById("bv-current").addEventListener("click",()=>{ pickerOpen=!pickerOpen; renderPicker(); });
+document.getElementById("bv-menu").addEventListener("click",e=>{
+  const b=e.target.closest("[data-goboard]"); if(b){ setBoard(b.dataset.goboard); return; }
+  if(e.target.closest("[data-gohome]")){ setBoard("home"); return; }
+  if(e.target.closest("[data-gonew]")){ openNewBoard(); setBoard("home"); const f=document.getElementById("nb-name"); if(f) f.focus(); }
+});
+bvBody.addEventListener("click",e=>{
+  if(bJustDragged) return;
+  const t=e.target, q=s=>t.closest(s);
+  let el;
+  if((el=q("[data-fav]"))){ const b=state.boards[el.dataset.fav]; b.fav=!b.fav; boardsChanged(); return; }
+  if(q("[data-newboard]")){ openNewBoard(); renderBoards(); document.getElementById("nb-name").focus(); return; }
+  if((el=q("[data-tpl]"))){ nbDraft.tpl=el.dataset.tpl; renderBoards(); return; }
+  if((el=q("[data-nbcolor]"))){ nbDraft.color=el.dataset.nbcolor; renderBoards(); return; }
+  if(q("[data-nbcreate]")){ createBoard(); return; }
+  if(q("[data-nbcancel]")){ nbOpen=false; renderBoards(); return; }
+  if((el=q(".bcard[data-board]"))){ setBoard(el.dataset.board); return; }
+  if(q("[data-rename-board]")){ editingBoardName=true; renderBoards(); const f=document.getElementById("bd-name-in"); f.focus(); f.select(); return; }
+  if((el=q("[data-menu]"))){ const k=el.dataset.menu; openMenuKey = openMenuKey===k||(k==="board"&&openMenuKey==="labels") ? null : k; renderBoards(); return; }
+  if((el=q("[data-bcolor]"))){ state.boards[curBoard].color=el.dataset.bcolor; boardsChanged(); return; }
+  if((el=q("[data-delboard]"))){ armDelete(el,()=>deleteBoard(curBoard),"Pulsa otra vez para eliminar el tablero"); return; }
+  if(q("[data-addlist]")){ addingList=true; renderBoards(); document.getElementById("bl-new").focus(); return; }
+  if((el=q("[data-rename-list]"))){ editingList=el.dataset.renameList; renderBoards(); const f=document.getElementById("bl-title-in"); f.focus(); f.select(); return; }
+  if((el=q("[data-collapse]"))){ state.blists[el.dataset.collapse].collapsed=true; openMenuKey=null; boardsChanged(); return; }
+  if((el=q("[data-expand]"))){ state.blists[el.dataset.expand].collapsed=false; boardsChanged(); return; }
+  if((el=q("[data-movelist]"))){ moveListToBoard(el.dataset.movelist, document.getElementById("lm-board").value); openMenuKey=null; boardsChanged(); return; }
+  if((el=q("[data-dellist]"))){ const lid=el.dataset.dellist, sel=document.getElementById("lm-dest");
+    armDelete(el,()=>{ deleteList(lid, sel?sel.value:""); openMenuKey=null; boardsChanged(); },"Pulsa otra vez para eliminar"); return; }
+  if(q("[data-addblabel]")){ addBoardLabel(); return; }
+  if((el=q("[data-delblabel]"))){ const id=el.dataset.delblabel;
+    armDelete(el,()=>{ delete state.blabels[id]; for(const c of Object.values(state.cards)) c.labels=c.labels.filter(x=>x!==id); boardsChanged(); },"Pulsa otra vez"); return; }
+  if((el=q(".bc"))){ openCard(el.dataset.card); return; }
+});
+function addBoardLabel(){
+  const n=document.getElementById("blab-name"), name=n.value.trim(); if(!name){ n.focus(); return; }
+  state.blabels[newId("k")]={board:curBoard, name:name.slice(0,30), color:document.getElementById("blab-color").value.toUpperCase()};
+  boardsChanged(); document.getElementById("blab-name").focus();
+}
+bvBody.addEventListener("keydown",e=>{
+  const t=e.target;
+  if(t.id==="nb-name"){ if(e.key==="Enter"){ e.preventDefault(); createBoard(); } else if(e.key==="Escape"){ nbOpen=false; renderBoards(); } return; }
+  if(t.id==="bd-name-in"){ if(e.key==="Enter"){ e.preventDefault(); commitBoardName(t); } else if(e.key==="Escape"){ editingBoardName=false; renderBoards(); } return; }
+  if(t.id==="bl-title-in"){ if(e.key==="Enter"){ e.preventDefault(); commitListTitle(t); } else if(e.key==="Escape"){ editingList=null; renderBoards(); } return; }
+  if(t.id==="bl-new"){
+    if(e.key==="Enter"){ e.preventDefault(); const v=t.value.trim(); if(!v) return;
+      state.blists[newId("l")]={board:curBoard, title:v.slice(0,60), order:boardLists(curBoard).length, collapsed:false};
+      boardsChanged(); const f=document.getElementById("bl-new"); f.focus(); const w=document.getElementById("bd-lists"); w.scrollLeft=w.scrollWidth; }
+    else if(e.key==="Escape"){ addingList=false; renderBoards(); }
+    return;
+  }
+  if(t.matches(".bl-newcard") && e.key==="Enter"){
+    e.preventDefault(); const v=t.value.trim(), lid=t.dataset.newcard; if(!v) return;
+    addCard(lid,v); boardsChanged();
+    const f=bvBody.querySelector(`.bl-newcard[data-newcard="${lid}"]`); if(f) f.focus();
+    return;
+  }
+  if(t.id==="blab-name" && e.key==="Enter"){ e.preventDefault(); addBoardLabel(); return; }
+  if(t.matches("[data-rename-board]") && e.key==="Enter"){ e.preventDefault(); t.click(); return; }
+  if((t.matches(".bc")||t.matches(".bcard[data-board]")) && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); t.click(); }
+});
+bvBody.addEventListener("input",e=>{ if(e.target.id==="nb-name") nbDraft.name=e.target.value; });
+bvBody.addEventListener("change",e=>{
+  const row=e.target.closest("[data-blabel]"); if(!row) return;
+  const L=state.blabels[row.dataset.blabel]; if(!L) return;
+  if(e.target.matches(".blab-color")) L.color=e.target.value.toUpperCase();
+  else if(e.target.matches(".blab-name")){ const v=e.target.value.trim(); if(v) L.name=v.slice(0,30); }
+  boardsChanged();
+});
+bvBody.addEventListener("focusout",e=>{
+  const t=e.target;
+  if(t.id==="bd-name-in") commitBoardName(t);
+  else if(t.id==="bl-title-in") commitListTitle(t);
+  else if(t.id==="bl-new" && !t.value.trim() && !(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest(".bl-add"))){ addingList=false; setTimeout(renderBoards,0); }
+});
+// Cerrar menús y resultados al pulsar fuera
+document.addEventListener("pointerdown",e=>{
+  if(boardsView.hidden) return;
+  if(openMenuKey && !e.target.closest(".menu-wrap")){ openMenuKey=null; renderBoards(); }
+  if(pickerOpen && !e.target.closest(".bv-pick")){ pickerOpen=false; renderPicker(); }
+  if(!bvResults.hidden && !e.target.closest(".bv-search")) bvResults.hidden=true;
+});
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Escape" || boardsView.hidden || cdlg.open) return;
+  if(bdrag){ bEnd(false); return; }
+  if(openMenuKey||pickerOpen){ openMenuKey=null; pickerOpen=false; renderBoards(); }
+});
+
+// ---- buscador de tarjetas (en todos los tableros) ----
+const fold=t=>String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+function renderSearch(){
+  const q=fold(bvQ.value.trim());
+  if(!q){ bvResults.hidden=true; return; }
+  const res=Object.entries(state.cards)
+    .filter(([,c])=>fold(c.title).includes(q)||fold(c.desc).includes(q)||c.check.some(k=>fold(k.t).includes(q)))
+    .sort((a,b)=>(fold(b[1].title).includes(q))-(fold(a[1].title).includes(q))).slice(0,30);
+  bvResults.innerHTML = res.length ? res.map(([id,c])=>{ const l=state.blists[c.list], b=state.boards[l.board];
+      return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")
+    : `<p class="sr-empty">No hay tarjetas con «${esc(bvQ.value.trim())}».</p>`;
+  bvResults.hidden=false;
+}
+bvQ.addEventListener("input",renderSearch);
+bvQ.addEventListener("focus",renderSearch);
+bvQ.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){ bvQ.value=""; bvResults.hidden=true; }
+  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr]"); if(f) f.click(); }
+});
+bvResults.addEventListener("click",e=>{
+  const r=e.target.closest("[data-sr]"); if(!r) return;
+  const c=state.cards[r.dataset.sr]; if(!c) return;
+  bvQ.value=""; bvResults.hidden=true;
+  setBoard(state.blists[c.list].board); openCard(r.dataset.sr);
+});
+
+// ---- arrastrar tarjetas, listas y tableros ----
+let bdrag=null, bJustDragged=false;
+bvBody.addEventListener("pointerdown",e=>{
+  if(e.pointerType==="mouse" && e.button!==0) return;
+  const t=e.target; if(t.closest("input,textarea,select,.menu-wrap,.bfav")) return;
+  let el=null, kind=null;
+  if((el=t.closest(".bc"))) kind="card";
+  else if((el=t.closest(".bl.collapsed"))) kind="list";
+  else if(t.closest(".bl-head") && !t.closest("button")){ el=t.closest(".bl"); kind="list"; }
+  else if((el=t.closest(".bcard[data-board]"))) kind="board";
+  if(!kind) return;
+  const r=el.getBoundingClientRect();
+  bdrag={kind, el, id:el.dataset.card||el.dataset.list||el.dataset.board, x0:e.clientX, y0:e.clientY,
+         offX:e.clientX-r.left, offY:e.clientY-r.top, w:r.width, h:r.height, active:false, pid:e.pointerId, mouse:e.pointerType==="mouse"};
+  if(bdrag.mouse) e.preventDefault();
+  else bdrag.timer=setTimeout(()=>{ if(bdrag && !bdrag.active) bStart(bdrag.x0,bdrag.y0); },300);
+});
+window.addEventListener("pointermove",e=>{
+  if(!bdrag || e.pointerId!==bdrag.pid) return;
+  if(!bdrag.active){
+    const moved=Math.hypot(e.clientX-bdrag.x0,e.clientY-bdrag.y0);
+    if(bdrag.mouse){ if(moved<5) return; bStart(e.clientX,e.clientY); }
+    else { if(moved>8){ clearTimeout(bdrag.timer); bdrag=null; } return; }
+  }
+  bMove(e.clientX,e.clientY);
+});
+window.addEventListener("pointerup",e=>{ if(bdrag && e.pointerId===bdrag.pid) bEnd(true); });
+window.addEventListener("pointercancel",e=>{ if(bdrag && e.pointerId===bdrag.pid) bEnd(false); });
+document.addEventListener("touchmove",e=>{ if(bdrag && bdrag.active) e.preventDefault(); },{passive:false});
+function bStart(x,y){
+  const d=bdrag; d.active=true;
+  const g=d.el.cloneNode(true); g.classList.add("bghost"); g.style.width=d.w+"px"; g.style.height=d.h+"px"; g.setAttribute("aria-hidden","true");
+  document.body.appendChild(g); d.ghost=g;
+  d.ph=document.createElement(d.kind==="card"?"li":"div"); d.ph.className="bph bph-"+d.kind;
+  d.ph.style.height=d.h+"px"; if(d.kind!=="card") d.ph.style.width=d.w+"px";
+  d.el.after(d.ph); d.el.style.display="none";
+  document.body.classList.add("is-dragging");
+  if(!d.mouse && navigator.vibrate) navigator.vibrate(12);
+  bMove(x,y);
+}
+function bMove(x,y){
+  const d=bdrag;
+  d.ghost.style.transform=`translate(${x-d.offX}px,${y-d.offY}px) rotate(${d.kind==="card"?2:1}deg)`;
+  document.querySelectorAll(".drop-over").forEach(n=>n.classList.remove("drop-over")); d.toCollapsed=null;
+  if(d.kind==="card"){
+    const hit=document.elementFromPoint(x,y), list=hit&&hit.closest(".bl");
+    if(list && list.classList.contains("collapsed")){ list.classList.add("drop-over"); d.toCollapsed=list.dataset.list; }
+    else if(list){
+      const ul=list.querySelector(".bl-cards");
+      const before=[...ul.children].find(n=>n!==d.ph && n!==d.el && n.classList.contains("bc") && y<n.getBoundingClientRect().top+n.getBoundingClientRect().height/2);
+      if(before) ul.insertBefore(d.ph,before); else ul.appendChild(d.ph);
+    }
+  } else if(d.kind==="list"){
+    const wrap=document.getElementById("bd-lists");
+    const before=[...wrap.children].find(n=>n!==d.ph && n!==d.el && n.classList.contains("bl") && x<n.getBoundingClientRect().left+n.getBoundingClientRect().width/2);
+    wrap.insertBefore(d.ph, before||wrap.querySelector(".bl-add"));
+  } else {
+    const grid=document.getElementById("bh-grid");
+    let best=null, bd=Infinity;
+    for(const n of grid.querySelectorAll(".bcard[data-board]")){
+      if(n===d.el) continue;
+      const r=n.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2, dist=Math.hypot(x-cx,y-cy);
+      if(dist<bd){ bd=dist; best={n, after:x>cx}; }
+    }
+    if(best){ if(best.after) best.n.after(d.ph); else best.n.before(d.ph); }
+  }
+  const wrap=document.getElementById("bd-lists");
+  if(wrap){ const r=wrap.getBoundingClientRect(); if(x<r.left+50) wrap.scrollLeft-=16; else if(x>r.right-50) wrap.scrollLeft+=16; }
+  if(y<60) window.scrollBy(0,-14); else if(y>window.innerHeight-60) window.scrollBy(0,14);
+}
+function bEnd(drop){
+  const d=bdrag; bdrag=null; clearTimeout(d.timer);
+  if(!d.active) return;
+  d.ghost.remove(); document.body.classList.remove("is-dragging");
+  if(drop){
+    if(d.kind==="card"){
+      const c=state.cards[d.id], from=c.list;
+      if(d.toCollapsed){ c.list=d.toCollapsed; c.order=listCards(d.toCollapsed).filter(([id])=>id!==d.id).length; }
+      else { const ul=d.ph.parentElement, lst=ul&&ul.closest(".bl");
+        if(lst){ c.list=lst.dataset.list;
+          [...ul.children].filter(n=>n!==d.el).map(n=>n===d.ph?d.id:n.dataset.card).filter(Boolean).forEach((id,i)=>{ state.cards[id].order=i; }); } }
+      if(from!==c.list) renumber(listCards(from),state.cards);
+    } else if(d.kind==="list"){
+      [...document.getElementById("bd-lists").children].filter(n=>n!==d.el).map(n=>n===d.ph?d.id:n.dataset.list).filter(Boolean).forEach((id,i)=>{ state.blists[id].order=i; });
+    } else {
+      [...document.getElementById("bh-grid").children].filter(n=>n!==d.el).map(n=>n===d.ph?d.id:n.dataset.board).filter(Boolean).forEach((id,i)=>{ state.boards[id].order=i; });
+    }
+    save();
+  }
+  bJustDragged=true; setTimeout(()=>{ bJustDragged=false; },0);
+  renderBoards();
+}
+
+// ---- ficha de la tarjeta ----
+const cdlg=document.getElementById("carddlg");
+let cardOpen=null, cdescEditing=false, ctaskOpen=false;
+function openCard(id){
+  if(!state.cards[id]) return;
+  cardOpen=id; cdescEditing=false; ctaskOpen=false; renderCardDlg();
+  if(!cdlg.open) cdlg.showModal();
+  cdlg.querySelector(".dlg-x").focus();
+}
+cdlg.addEventListener("close",()=>{ cardOpen=null; cdescEditing=false; ctaskOpen=false; cdlg.innerHTML=""; });
+cdlg.addEventListener("mousedown",e=>{ cdlg._downOnBackdrop = e.target===cdlg; });
+cdlg.addEventListener("click",e=>{ if(e.target===cdlg && cdlg._downOnBackdrop) cdlg.close(); });
+function renderCardDlg(){
+  const c=state.cards[cardOpen]; if(!c){ if(cdlg.open) cdlg.close(); return; }
+  const l=state.blists[c.list], bid=l.board, b=state.boards[bid];
+  const lists=boardLists(bid), labs=boardLabels(bid), d=dueInfo(c.due);
+  const done=c.check.filter(k=>k.d).length, tot=c.check.length, created=fmtCreated(c.created);
+  cdlg.className="tdlg cdlg p-"+c.prio;
+  cdlg.innerHTML=`
+    <div class="dlg-head">
+      <textarea class="dlg-title" rows="1" maxlength="200" aria-label="Título de la tarjeta" spellcheck="false">${esc(c.title)}</textarea>
+      <button type="button" class="dlg-x" aria-label="Cerrar">×</button>
+    </div>
+    <p class="dlg-where">en la lista <select class="c-list" aria-label="Lista">${lists.map(([id,x])=>`<option value="${id}"${id===c.list?" selected":""}>${esc(x.title)}</option>`).join("")}</select>
+      del tablero <b style="color:${b.color}">${esc(b.name)}</b></p>
+    <div class="dlg-body">
+      <div class="dlg-main">
+        <h4>Prioridad</h4>
+        <div class="d-prio" role="group" aria-label="Prioridad">${B_PRIOS.map(([id,n])=>
+          `<button type="button" data-cprio="${id}" class="pp-${id}" aria-pressed="${id===c.prio}">${n}</button>`).join("")}</div>
+        <h4>Etiquetas</h4>
+        <div class="tagpick c-labels">${labs.map(([id,x])=>`<button type="button" class="tp" data-clabel="${id}" aria-pressed="${c.labels.includes(id)}" style="--c:${x.color};--tc:${textOn(x.color)}">${esc(x.name)}</button>`).join("")}
+          <input type="text" class="c-newlabel" id="c-newlabel" maxlength="30" placeholder="+ Nueva etiqueta" aria-label="Nueva etiqueta"></div>
+        <h4>Fecha límite</h4>
+        <div class="c-due-row"><input type="date" class="c-due" value="${c.due}" aria-label="Fecha límite">
+          ${c.due?`<span class="due ${d.cls}">${d.long||ICON_CAL+fmtShort(c.due)}</span><button type="button" class="linklike" data-cdue-clear>Quitar</button>`:""}</div>
+        <h4>Descripción</h4>
+        ${cdescEditing
+          ? `<textarea class="d-desc-edit" rows="5" maxlength="10000" placeholder="Añade una descripción más detallada…">${esc(c.desc)}</textarea>
+             <div class="eacts"><button type="button" class="add c-desc-save">Guardar</button><button type="button" class="add alt c-desc-cancel">Cancelar</button></div>`
+          : `<div class="d-desc${c.desc?"":" empty"}" role="button" tabindex="0">${c.desc?esc(c.desc):"Añade una descripción más detallada…"}</div>`}
+        <h4>Checklist ${tot?`<span class="ck-count">${done}/${tot}</span>`:""}</h4>
+        ${tot?`<div class="ck-bar"><i style="width:${Math.round(done/tot*100)}%"></i></div>`:""}
+        <ul class="ck">${c.check.map(k=>`<li data-ck="${k.id}"><input type="checkbox" class="ck-box" ${k.d?"checked":""} aria-label="Hecho">
+          <input type="text" class="ck-t${k.d?" done":""}" value="${esc(k.t)}" maxlength="300" aria-label="Elemento"><button type="button" class="ck-del" aria-label="Quitar elemento">×</button></li>`).join("")}</ul>
+        <input type="text" class="ck-new" id="ck-new" maxlength="300" placeholder="+ Añadir elemento" aria-label="Nuevo elemento de la checklist">
+      </div>
+      <aside class="dlg-side">
+        <h4>Acciones</h4>
+        <button type="button" class="side-btn" data-cdup>Duplicar</button>
+        <button type="button" class="side-btn" data-ctask aria-expanded="${ctaskOpen}">Pasar a tareas del día</button>
+        ${ctaskOpen?`<div class="move-panel"><label>Día <input type="date" id="ct-date" value="${c.due||key(today())}"></label>
+          <button type="button" class="add" data-ctask-go>Pasar</button></div>`:""}
+        <button type="button" class="side-btn d-del" data-cdel>Eliminar tarjeta</button>
+        ${created?`<p class="d-meta">Creada el ${created}</p>`:""}
+      </aside>
+    </div>`;
+  autoGrow(cdlg.querySelector(".dlg-title"));
+}
+function cardChanged(){ save(); renderBoards(); }
+function duplicateCard(cid){
+  const c=state.cards[cid], ids=listCards(c.list).map(([id])=>id), nid=newId("c");
+  state.cards[nid]={...JSON.parse(JSON.stringify(c)), title:(c.title+" (copia)").slice(0,200), created:new Date().toISOString(),
+    check:c.check.map(k=>({...k, id:newId("i")}))};
+  ids.splice(ids.indexOf(cid)+1,0,nid); ids.forEach((id,i)=>{ state.cards[id].order=i; });
+}
+// Pasar una tarjeta a las tareas de un día (y al revés, desde la ficha de una tarea)
+function cardToTask(cid,date){
+  const c=state.cards[cid], lid=c.list;
+  const tags=c.labels.map(x=>state.blabels[x]).filter(Boolean).map(L=>{
+    let id=Object.keys(state.tags).find(t=>state.tags[t].name.toLowerCase()===L.name.toLowerCase());
+    if(!id){ id=newId("e"); state.tags[id]={name:L.name, color:L.color}; }
+    return id;
+  });
+  const lista=c.check.map(k=>(k.d?"☑ ":"☐ ")+k.t).join("\n");
+  state.tasks[newId("t")]={date, title:c.title.slice(0,120), notes:[c.desc,lista].filter(Boolean).join("\n\n").slice(0,2000),
+    prio:c.prio==="ninguna"?"media":c.prio, list:"pendiente", tags, created:new Date().toISOString()};
+  delete state.cards[cid]; renumber(listCards(lid),state.cards);
+  cdlg.close(); save(); renderBoards();
+}
+function taskToCard(tid,lid){
+  const t=state.tasks[tid], bid=state.blists[lid].board;
+  const labels=t.tags.map(g=>state.tags[g]).filter(Boolean).map(G=>labelInBoard(bid,G.name,G.color));
+  state.cards[newId("c")]={list:lid, title:t.title, desc:t.notes, prio:t.prio, due:"", labels, check:[],
+    order:listCards(lid).length, created:new Date().toISOString()};
+  delete state.tasks[tid];
+  closeTask(); save(); renderTasks(); renderTagMgr();
+}
+cdlg.addEventListener("click",e=>{
+  const c=state.cards[cardOpen]; if(!c) return;
+  const t=e.target, q=s=>t.closest(s); let el;
+  if(q(".dlg-x")){ cdlg.close(); return; }
+  if((el=q("[data-cprio]"))){ c.prio=el.dataset.cprio; cardChanged(); return; }
+  if((el=q("[data-clabel]"))){ const id=el.dataset.clabel; c.labels=c.labels.includes(id)?c.labels.filter(x=>x!==id):[...c.labels,id]; cardChanged(); return; }
+  if(q("[data-cdue-clear]")){ c.due=""; cardChanged(); return; }
+  if(q(".d-desc")){ cdescEditing=true; renderCardDlg(); const ta=cdlg.querySelector(".d-desc-edit"); ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); return; }
+  if(q(".c-desc-save")){ c.desc=cdlg.querySelector(".d-desc-edit").value; cdescEditing=false; cardChanged(); return; }
+  if(q(".c-desc-cancel")){ cdescEditing=false; renderCardDlg(); return; }
+  if((el=q(".ck-del"))){ const id=el.closest("[data-ck]").dataset.ck; c.check=c.check.filter(k=>k.id!==id); cardChanged(); return; }
+  if(q("[data-cdup]")){ duplicateCard(cardOpen); cardChanged(); return; }
+  if(q("[data-ctask]")){ ctaskOpen=!ctaskOpen; renderCardDlg(); return; }
+  if(q("[data-ctask-go]")){ const v=document.getElementById("ct-date").value; if(/^\d{4}-\d{2}-\d{2}$/.test(v)) cardToTask(cardOpen,v); return; }
+  if((el=q("[data-cdel]"))){ armDelete(el,()=>{ const lid=c.list; delete state.cards[cardOpen]; renumber(listCards(lid),state.cards); cdlg.close(); save(); renderBoards(); },"Pulsa otra vez para eliminar"); }
+});
+cdlg.addEventListener("change",e=>{
+  const c=state.cards[cardOpen]; if(!c) return; const t=e.target;
+  if(t.matches(".c-list") && state.blists[t.value] && t.value!==c.list){
+    const from=c.list; c.list=t.value; c.order=listCards(t.value).filter(([id])=>id!==cardOpen).length;
+    renumber(listCards(from),state.cards); cardChanged();
+  }
+  else if(t.matches(".c-due")){ c.due=/^\d{4}-\d{2}-\d{2}$/.test(t.value)?t.value:""; cardChanged(); }
+  else if(t.matches(".ck-box")){ const k=c.check.find(k=>k.id===t.closest("[data-ck]").dataset.ck); if(k){ k.d=t.checked; cardChanged(); } }
+  else if(t.matches(".ck-t")){ const id=t.closest("[data-ck]").dataset.ck, v=t.value.trim();
+    c.check = v ? c.check.map(k=>k.id===id?{...k, t:v.slice(0,300)}:k) : c.check.filter(k=>k.id!==id); cardChanged(); }
+});
+cdlg.addEventListener("input",e=>{ if(e.target.matches(".dlg-title")) autoGrow(e.target); });
+cdlg.addEventListener("keydown",e=>{
+  const c=state.cards[cardOpen]; if(!c) return; const t=e.target;
+  if(t.matches(".dlg-title") && e.key==="Enter"){ e.preventDefault(); t.blur(); }
+  else if(t.matches(".d-desc-edit") && e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); cdlg.querySelector(".c-desc-save").click(); }
+  else if(t.matches(".d-desc") && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); t.click(); }
+  else if(t.matches(".ck-t") && e.key==="Enter"){ e.preventDefault(); t.blur(); }
+  else if(t.id==="ck-new" && e.key==="Enter"){
+    e.preventDefault(); const v=t.value.trim(); if(!v || c.check.length>=100) return;
+    c.check=[...c.check,{id:newId("i"), t:v.slice(0,300), d:false}]; cardChanged(); document.getElementById("ck-new").focus();
+  }
+  else if(t.id==="c-newlabel" && e.key==="Enter"){
+    e.preventDefault(); const v=t.value.trim(); if(!v) return;
+    const bid=state.blists[c.list].board, used=boardLabels(bid).map(([,l])=>l.color);
+    const id=labelInBoard(bid, v.slice(0,30), nextColor(used));
+    if(!c.labels.includes(id)) c.labels=[...c.labels,id];
+    cardChanged(); document.getElementById("c-newlabel").focus();
+  }
+});
+cdlg.addEventListener("focusout",e=>{
+  const c=state.cards[cardOpen]; if(!c || !e.target.matches(".dlg-title")) return;
+  const v=e.target.value.replace(/\s+/g," ").trim();
+  if(v && v!==c.title){ c.title=v.slice(0,200); cardChanged(); } else e.target.value=c.title;
+});
+function render(){ if(!boardsView.hidden){ renderBoards(); return; } renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); renderCal(); }
 function renderAll(){ render(); renderCfg(); renderTagMgr(); }
 // Si la app queda abierta y cambia el día, salta al nuevo día y su frase
 let openDay=key(today());
@@ -900,7 +1551,7 @@ function openTask(id){
   dlg.querySelector(".dlg-x").focus();
 }
 function closeTask(){ if(dlg.open) dlg.close(); }
-dlg.addEventListener("close",()=>{ openTaskId=null; descEditing=false; dlg.innerHTML=""; });
+dlg.addEventListener("close",()=>{ openTaskId=null; descEditing=false; toBoardOpen=false; dlg.innerHTML=""; });
 // Clic fuera de la ficha (en el fondo oscuro) para cerrarla
 dlg.addEventListener("mousedown",e=>{ dlg._downOnBackdrop = e.target===dlg; });
 dlg.addEventListener("click",e=>{ if(e.target===dlg && dlg._downOnBackdrop) closeTask(); });
@@ -937,6 +1588,8 @@ function renderTaskDlg(){
       <aside class="dlg-side">
         <h4>Acciones</h4>
         <button type="button" class="side-btn d-done">${t.list==="hecha"?"↺ Reabrir":"✓ Marcar como hecha"}</button>
+        <button type="button" class="side-btn d-toboard" aria-expanded="${toBoardOpen}">Pasar a un tablero</button>
+        ${toBoardOpen?toBoardPanel():""}
         <button type="button" class="side-btn d-del">Eliminar tarea</button>
         ${created?`<p class="d-meta">Creada el ${created}</p>`:""}
       </aside>
@@ -944,6 +1597,18 @@ function renderTaskDlg(){
   const ti=dlg.querySelector(".dlg-title"); autoGrow(ti);
 }
 function taskChanged(){ save(); renderTasks(); renderTaskDlg(); }
+let toBoardOpen=false, toBoardSel=null;
+function toBoardPanel(){
+  const boards=boardsSorted();
+  if(!boards.length) return `<p class="d-meta">Aún no tienes tableros.</p>`;
+  if(!state.boards[toBoardSel]) toBoardSel=boards[0][0];
+  const lists=boardLists(toBoardSel);
+  return `<div class="move-panel">
+    <select class="tb-board" aria-label="Tablero">${boards.map(([id,b])=>`<option value="${id}"${id===toBoardSel?" selected":""}>${esc(b.name)}</option>`).join("")}</select>
+    ${lists.length?`<select class="tb-list" aria-label="Lista">${lists.map(([id,l])=>`<option value="${id}">${esc(l.title)}</option>`).join("")}</select>
+      <button type="button" class="add tb-go">Pasar</button>`:`<p class="d-meta">Ese tablero no tiene listas.</p>`}
+  </div>`;
+}
 function commitTitle(el){
   const t=state.tasks[openTaskId]; if(!t) return;
   const v=el.value.replace(/\s+/g," ").trim();
@@ -961,6 +1626,8 @@ dlg.addEventListener("click",e=>{
   if(e.target.closest(".d-desc-save")){ t.notes=dlg.querySelector(".d-desc-edit").value; descEditing=false; taskChanged(); return; }
   if(e.target.closest(".d-desc-cancel")){ descEditing=false; renderTaskDlg(); return; }
   if(e.target.closest(".d-done")){ t.list = t.list==="hecha" ? "pendiente" : "hecha"; taskChanged(); return; }
+  if(e.target.closest(".d-toboard")){ toBoardOpen=!toBoardOpen; renderTaskDlg(); return; }
+  if(e.target.closest(".tb-go")){ const l=dlg.querySelector(".tb-list"); if(l&&state.blists[l.value]) taskToCard(openTaskId,l.value); return; }
   if(e.target.closest(".d-mgr")){
     closeTask(); const m=document.querySelector("details.tagmgr"); m.open=true;
     m.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>document.getElementById("tagname").focus(),400); return;
@@ -969,6 +1636,7 @@ dlg.addEventListener("click",e=>{
   if(del) armDelete(del,()=>{ delete state.tasks[openTaskId]; closeTask(); save(); renderTasks(); renderTagMgr(); },"Pulsa otra vez para eliminar");
 });
 dlg.addEventListener("change",e=>{
+  if(e.target.matches(".tb-board")){ toBoardSel=e.target.value; renderTaskDlg(); return; }
   const t=state.tasks[openTaskId]; if(!t) return;
   if(e.target.matches(".d-list")){ t.list=e.target.value; taskChanged(); }
   else if(e.target.matches(".d-date") && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)){ t.date=e.target.value; taskChanged(); }
@@ -1010,10 +1678,20 @@ tagBox.addEventListener("click",e=>{
 // ---------- Guardado: base de datos local (servidor.py) o, si no hay, este navegador ----------
 const STORE="ascenso-v1";
 const API=/^https?:$/.test(location.protocol) ? "api/" : null;
+let serverMsg=null;
 let online=false, synced=null, syncTimer=null, syncing=false, syncAgain=false, retryTimer=null;
-const setStatus=t=>document.getElementById("status").textContent=t;
+function setStatus(t,nivel="ok"){
+  document.getElementById("status").textContent=t;
+  const b=document.getElementById("bv-sync");
+  if(b){
+    b.dataset.nivel=nivel; b.title=t;
+    b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso" ? "Solo en este navegador" : "Sin guardar";
+  }
+}
+const VERSION_NECESARIA=7;
 function saveLocal(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); return true; }catch(e){ return false; } }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events})); }
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
+  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards})); }
 async function api(method,path,body){
   const opt={method, headers:{"X-Ascenso":"1"}};
   if(body!==undefined){ opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
@@ -1032,8 +1710,9 @@ function save(){
   const okLocal=saveLocal();
   if(!online){
     if(okLocal) document.dispatchEvent(new Event("ascenso:guardado"));
+    if(serverMsg){ setStatus(serverMsg,"error"); return; }
     setStatus(okLocal ? (API?"Sin conexión con la base de datos: guardado en este navegador.":"Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.")
-                      : "Este navegador no permite guardar datos. Exporta una copia de seguridad para no perderlos.");
+                      : "Este navegador no permite guardar datos. Exporta una copia de seguridad para no perderlos.", okLocal?"aviso":"error");
     return;
   }
   clearTimeout(syncTimer); syncTimer=setTimeout(sync,350);
@@ -1042,51 +1721,47 @@ function save(){
 async function sync(){
   if(syncing){ syncAgain=true; return; }
   syncing=true; clearTimeout(retryTimer);
+  const errores=[];
+  // Cada envío es independiente: si uno falla, se sigue con el resto y se reintenta después
+  const enviar=async(metodo,ruta,datos)=>{ try{ await api(metodo,ruta,datos); return true; }catch(e){ errores.push(e); return false; } };
   try{
     const now=snapshot();
     if(JSON.stringify([now.plan,now.thr])!==JSON.stringify([synced.plan,synced.thr])){
-      await api("PUT","config",{plan:now.plan,thr:now.thr}); synced.plan=now.plan; synced.thr=now.thr;
+      if(await enviar("PUT","config",{plan:now.plan,thr:now.thr})){ synced.plan=now.plan; synced.thr=now.thr; }
     }
     if(JSON.stringify(now.habits)!==JSON.stringify(synced.habits)){
-      await api("PUT","habitos",now.habits); synced.habits=now.habits;
+      if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;
     }
-    // Etiquetas antes que tareas, para que las tareas puedan usarlas
-    for(const [id,t] of Object.entries(now.tags)){
-      if(JSON.stringify(t)!==JSON.stringify(synced.tags[id]||null)){ await api("PUT","etiquetas/"+id,t); synced.tags[id]=t; }
+    // Colecciones con identificador: primero se crean o actualizan (en orden de dependencia) y luego se borran (al revés)
+    const COLS=[["tags","etiquetas"],["tasks","tareas"],["boards","tableros"],["blabels","etiquetas-tablero"],["blists","listas"],["cards","tarjetas"],["events","eventos"]];
+    for(const [k,ruta] of COLS) for(const [id,v] of Object.entries(now[k])){
+      if(JSON.stringify(v)!==JSON.stringify(synced[k][id]||null) && await enviar("PUT",ruta+"/"+id,v)) synced[k][id]=v;
     }
-    for(const [id,t] of Object.entries(now.tasks)){
-      if(JSON.stringify(t)!==JSON.stringify(synced.tasks[id]||null)){ await api("PUT","tareas/"+id,t); synced.tasks[id]=t; }
+    for(const [k,ruta] of [...COLS].reverse()) for(const id of Object.keys(synced[k])){
+      if(!now[k][id] && await enviar("DELETE",ruta+"/"+id)) delete synced[k][id];
     }
-    for(const id of Object.keys(synced.tasks)) if(!now.tasks[id]){ await api("DELETE","tareas/"+id); delete synced.tasks[id]; }
-    for(const id of Object.keys(synced.tags)) if(!now.tags[id]){ await api("DELETE","etiquetas/"+id); delete synced.tags[id]; }
-    for(const [id,e] of Object.entries(now.events)){
-      if(JSON.stringify(e)!==JSON.stringify(synced.events[id]||null)){ await api("PUT","eventos/"+id,e); synced.events[id]=e; }
-    }
-    for(const id of Object.keys(synced.events)) if(!now.events[id]){ await api("DELETE","eventos/"+id); delete synced.events[id]; }
     for(const k of new Set([...Object.keys(now.notes),...Object.keys(synced.notes)])){
       const v=now.notes[k]||null;
-      if(JSON.stringify(v)!==JSON.stringify(synced.notes[k]||null)){
-        await api("PUT","notas/"+k, v||{r:"",n:""});
+      if(JSON.stringify(v)!==JSON.stringify(synced.notes[k]||null) && await enviar("PUT","notas/"+k, v||{r:"",n:""})){
         if(v) synced.notes[k]=v; else delete synced.notes[k];
       }
     }
     for(const [k,v] of Object.entries(now.hist)){
-      if(JSON.stringify(v)!==JSON.stringify(synced.hist[k]||null)){
-        await api("PUT","historial/"+k,v); synced.hist[k]=v;
-      }
+      if(JSON.stringify(v)!==JSON.stringify(synced.hist[k]||null) && await enviar("PUT","historial/"+k,v)) synced.hist[k]=v;
     }
     for(const k of new Set([...Object.keys(now.days),...Object.keys(synced.days)])){
       const p=dayPayload(now.days[k]);
-      if(JSON.stringify(p)!==JSON.stringify(dayPayload(synced.days[k]))){
-        await api("PUT","dias/"+k,p); synced.days[k]=now.days[k];
-      }
+      if(JSON.stringify(p)!==JSON.stringify(dayPayload(synced.days[k])) && await enviar("PUT","dias/"+k,p)) synced.days[k]=now.days[k];
     }
-    setStatus("Guardado en la base de datos (ascenso.db).");
-    document.dispatchEvent(new Event("ascenso:guardado"));
-  }catch(e){
-    const why = e instanceof TypeError ? "el servidor no está en marcha" : e.message;
-    setStatus("No se pudo guardar en la base de datos ("+why+"). Queda guardado en este navegador y se reintentará.");
-    retryTimer=setTimeout(sync,5000);
+    if(!errores.length){
+      setStatus("Guardado en la base de datos (ascenso.db).");
+      document.dispatchEvent(new Event("ascenso:guardado"));
+    } else {
+      const e=errores[0];
+      const why = e instanceof TypeError ? "el servidor no está en marcha" : e.message;
+      setStatus("No se pudo guardar todo en la base de datos ("+why+"). Queda guardado en este navegador y se reintentará.","error");
+      retryTimer=setTimeout(sync,5000);
+    }
   }finally{
     syncing=false;
     if(syncAgain){ syncAgain=false; sync(); }
@@ -1121,12 +1796,30 @@ async function init(){
         await api("POST","importar",snapshot());
         remote=await api("GET","estado");
       }
+      if((remote.version||0)<VERSION_NECESARIA){
+        // El servidor que responde es de una versión anterior: no conoce las funciones nuevas
+        serverMsg="El servidor de Ascenso que está en marcha es de una versión anterior y no puede guardar todo. Cierra Ascenso, espera un minuto y vuelve a abrirlo.";
+        throw new Error("servidor antiguo");
+      }
       state=cleanState(remote);
-      synced=snapshot(); online=true; saveLocal();
+      synced=snapshot(); online=true;
+      // Tableros que solo están en este navegador (creados mientras no se guardaban en la base de datos):
+      // se recuperan, con sus listas, tarjetas y etiquetas, y se suben
+      if(local){
+        const loc=cleanBoardData(local), nuevos=new Set(Object.keys(loc.boards).filter(id=>!state.boards[id]));
+        if(nuevos.size){
+          for(const id of nuevos) state.boards[id]=loc.boards[id];
+          for(const [id,l] of Object.entries(loc.blabels)) if(nuevos.has(l.board) && !state.blabels[id]) state.blabels[id]=l;
+          for(const [id,l] of Object.entries(loc.blists)) if(nuevos.has(l.board) && !state.blists[id]) state.blists[id]=l;
+          for(const [id,c] of Object.entries(loc.cards)) if(loc.blists[c.list] && nuevos.has(loc.blists[c.list].board) && !state.cards[id]) state.cards[id]=c;
+          save();
+        }
+      }
+      saveLocal();
       setStatus("Conectado a la base de datos (ascenso.db).");
-    }catch(e){ setStatus("Sin conexión con la base de datos: guardado en este navegador."); }
+    }catch(e){ setStatus(serverMsg||"Sin conexión con la base de datos: guardado en este navegador.", serverMsg?"error":"aviso"); }
   } else {
-    setStatus("Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.");
+    setStatus("Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.","aviso");
   }
   renderAll();
   discoverImages();

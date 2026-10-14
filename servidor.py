@@ -50,6 +50,7 @@ PRIORIDADES = {"urgente", "alta", "media", "baja"}
 LISTAS = {"pendiente", "proceso", "hecha"}
 COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 HORA_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+PRIORIDADES_TARJETA = PRIORIDADES | {"ninguna"}
 MAX_DIAS_EVENTO = 366
 MAX_BODY = 2 * 1024 * 1024
 PERFIL_APP = os.path.join(BASE, ".perfil-app")    # perfil propio de la ventana de la aplicación
@@ -159,8 +160,57 @@ CREATE TABLE IF NOT EXISTS eventos (
   CHECK (fin >= inicio)
 );
 CREATE INDEX IF NOT EXISTS eventos_por_fechas ON eventos(inicio, fin);
+
+-- Tableros (al estilo de Trello): no dependen del día
+CREATE TABLE IF NOT EXISTS tableros (
+  id       TEXT PRIMARY KEY,
+  nombre   TEXT NOT NULL,
+  color    TEXT NOT NULL,
+  favorito INTEGER NOT NULL DEFAULT 0,
+  orden    INTEGER NOT NULL DEFAULT 0,
+  creado   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS etiquetas_tablero (
+  id         TEXT PRIMARY KEY,
+  tablero_id TEXT NOT NULL REFERENCES tableros(id) ON DELETE CASCADE,
+  nombre     TEXT NOT NULL,
+  color      TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS listas (
+  id         TEXT PRIMARY KEY,
+  tablero_id TEXT NOT NULL REFERENCES tableros(id) ON DELETE CASCADE,
+  titulo     TEXT NOT NULL,
+  orden      INTEGER NOT NULL DEFAULT 0,
+  plegada    INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS tarjetas (
+  id           TEXT PRIMARY KEY,
+  lista_id     TEXT NOT NULL REFERENCES listas(id) ON DELETE CASCADE,
+  titulo       TEXT NOT NULL,
+  descripcion  TEXT NOT NULL DEFAULT '',
+  prioridad    TEXT NOT NULL CHECK (prioridad IN ('urgente', 'alta', 'media', 'baja', 'ninguna')),
+  fecha_limite TEXT,              -- AAAA-MM-DD, o vacío si no tiene
+  orden        INTEGER NOT NULL DEFAULT 0,
+  creada       TEXT NOT NULL,
+  actualizada  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS tarjetas_por_lista ON tarjetas(lista_id, orden);
+CREATE TABLE IF NOT EXISTS tarjeta_etiquetas_tablero (
+  tarjeta_id  TEXT NOT NULL REFERENCES tarjetas(id) ON DELETE CASCADE,
+  etiqueta_id TEXT NOT NULL REFERENCES etiquetas_tablero(id) ON DELETE CASCADE,
+  PRIMARY KEY (tarjeta_id, etiqueta_id)
+);
+CREATE TABLE IF NOT EXISTS checklist (
+  id         TEXT PRIMARY KEY,
+  tarjeta_id TEXT NOT NULL REFERENCES tarjetas(id) ON DELETE CASCADE,
+  texto      TEXT NOT NULL,
+  hecho      INTEGER NOT NULL DEFAULT 0,
+  orden      INTEGER NOT NULL DEFAULT 0
+);
 """
-VERSION_BD = 5
+VERSION_BD = 6
+# Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
+VERSION_APP = 7
 
 
 class ErrorDatos(Exception):
@@ -237,8 +287,33 @@ def leer_estado(con):
                   "title": r["titulo"], "color": r["color"], "created": r["creado"]}
         for r in con.execute("SELECT * FROM eventos")
     }
+    tableros = {
+        r["id"]: {"name": r["nombre"], "color": r["color"], "fav": bool(r["favorito"]),
+                  "order": r["orden"], "created": r["creado"]}
+        for r in con.execute("SELECT * FROM tableros")
+    }
+    etiquetas_t = {
+        r["id"]: {"board": r["tablero_id"], "name": r["nombre"], "color": r["color"]}
+        for r in con.execute("SELECT * FROM etiquetas_tablero")
+    }
+    listas = {
+        r["id"]: {"board": r["tablero_id"], "title": r["titulo"], "order": r["orden"], "collapsed": bool(r["plegada"])}
+        for r in con.execute("SELECT * FROM listas")
+    }
+    tarjetas = {}
+    for r in con.execute("SELECT * FROM tarjetas"):
+        tarjetas[r["id"]] = {
+            "list": r["lista_id"], "title": r["titulo"], "desc": r["descripcion"], "prio": r["prioridad"],
+            "due": r["fecha_limite"] or "", "labels": [], "check": [], "order": r["orden"], "created": r["creada"],
+        }
+    for r in con.execute("SELECT tarjeta_id, etiqueta_id FROM tarjeta_etiquetas_tablero ORDER BY rowid"):
+        if r["tarjeta_id"] in tarjetas:
+            tarjetas[r["tarjeta_id"]]["labels"].append(r["etiqueta_id"])
+    for r in con.execute("SELECT * FROM checklist ORDER BY orden, rowid"):
+        if r["tarjeta_id"] in tarjetas:
+            tarjetas[r["tarjeta_id"]]["check"].append({"id": r["id"], "t": r["texto"], "d": bool(r["hecho"])})
     vacia = (not config and not habitos and not dias and not historial and not etiquetas
-             and not tareas and not notas and not eventos)
+             and not tareas and not notas and not eventos and not tableros)
     return {
         "plan": config.get("plan"),
         "thr": config.get("thr"),
@@ -249,7 +324,12 @@ def leer_estado(con):
         "tasks": tareas,
         "notes": notas,
         "events": eventos,
+        "boards": tableros,
+        "blabels": etiquetas_t,
+        "blists": listas,
+        "cards": tarjetas,
         "vacia": vacia,
+        "version": VERSION_APP,
     }
 
 
@@ -499,9 +579,140 @@ def borrar_evento(con, eid):
     con.execute("DELETE FROM eventos WHERE id = ?", (comprobar_id(eid, "evento"),))
 
 
+# ---- tableros ------------------------------------------------------------
+
+def entero(valor, que):
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        raise ErrorDatos("%s no válido" % que)
+
+
+def guardar_tablero(con, bid, datos):
+    bid = comprobar_id(bid, "tablero")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("tablero no válido")
+    nombre = str(datos.get("name") or "").strip()[:60]
+    color = str(datos.get("color") or "")
+    if not nombre:
+        raise ErrorDatos("el tablero necesita un nombre")
+    if not COLOR_RE.match(color):
+        raise ErrorDatos("color no válido")
+    con.execute(
+        """INSERT INTO tableros (id, nombre, color, favorito, orden, creado) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET nombre=excluded.nombre, color=excluded.color,
+             favorito=excluded.favorito, orden=excluded.orden""",
+        (bid, nombre, color.upper(), int(bool(datos.get("fav"))), entero(datos.get("order", 0), "orden"),
+         str(datos.get("created") or "")[:40]),
+    )
+
+
+def guardar_etiqueta_tablero(con, eid, datos):
+    eid = comprobar_id(eid, "etiqueta")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("etiqueta no válida")
+    nombre = str(datos.get("name") or "").strip()[:30]
+    color = str(datos.get("color") or "")
+    if not nombre:
+        raise ErrorDatos("la etiqueta necesita un nombre")
+    if not COLOR_RE.match(color):
+        raise ErrorDatos("color no válido")
+    con.execute(
+        """INSERT INTO etiquetas_tablero (id, tablero_id, nombre, color) VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET tablero_id=excluded.tablero_id, nombre=excluded.nombre, color=excluded.color""",
+        (eid, comprobar_id(datos.get("board"), "tablero"), nombre, color.upper()),
+    )
+
+
+def guardar_lista(con, lid, datos):
+    lid = comprobar_id(lid, "lista")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("lista no válida")
+    titulo = str(datos.get("title") or "").strip()[:60]
+    if not titulo:
+        raise ErrorDatos("la lista necesita un título")
+    con.execute(
+        """INSERT INTO listas (id, tablero_id, titulo, orden, plegada) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET tablero_id=excluded.tablero_id, titulo=excluded.titulo,
+             orden=excluded.orden, plegada=excluded.plegada""",
+        (lid, comprobar_id(datos.get("board"), "tablero"), titulo, entero(datos.get("order", 0), "orden"),
+         int(bool(datos.get("collapsed")))),
+    )
+
+
+def guardar_tarjeta(con, cid, datos):
+    cid = comprobar_id(cid, "tarjeta")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("tarjeta no válida")
+    lista = comprobar_id(datos.get("list"), "lista")
+    titulo = str(datos.get("title") or "").strip()[:200]
+    if not titulo:
+        raise ErrorDatos("la tarjeta necesita un título")
+    prioridad = datos.get("prio")
+    if prioridad not in PRIORIDADES_TARJETA:
+        raise ErrorDatos("prioridad no válida")
+    limite = str(datos.get("due") or "")
+    if limite and not FECHA_RE.match(limite):
+        raise ErrorDatos("fecha límite no válida")
+    etiquetas = datos.get("labels") or []
+    checklist = datos.get("check") or []
+    if not isinstance(etiquetas, list) or not isinstance(checklist, list) or len(checklist) > 100:
+        raise ErrorDatos("tarjeta no válida")
+    con.execute(
+        """INSERT INTO tarjetas (id, lista_id, titulo, descripcion, prioridad, fecha_limite, orden, creada)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET lista_id=excluded.lista_id, titulo=excluded.titulo,
+             descripcion=excluded.descripcion, prioridad=excluded.prioridad, fecha_limite=excluded.fecha_limite,
+             orden=excluded.orden, actualizada=datetime('now', 'localtime')""",
+        (cid, lista, titulo, str(datos.get("desc") or "")[:10000], prioridad, limite or None,
+         entero(datos.get("order", 0), "orden"), str(datos.get("created") or "")[:40]),
+    )
+    con.execute("DELETE FROM tarjeta_etiquetas_tablero WHERE tarjeta_id = ?", (cid,))
+    for eid in etiquetas:
+        if ID_RE.match(str(eid)):
+            # Solo etiquetas que existen y son del mismo tablero que la tarjeta
+            con.execute(
+                """INSERT OR IGNORE INTO tarjeta_etiquetas_tablero (tarjeta_id, etiqueta_id)
+                   SELECT ?, e.id FROM etiquetas_tablero e JOIN listas l ON l.tablero_id = e.tablero_id
+                   WHERE e.id = ? AND l.id = ?""",
+                (cid, str(eid), lista),
+            )
+    con.execute("DELETE FROM checklist WHERE tarjeta_id = ?", (cid,))
+    for orden, punto in enumerate(checklist):
+        if not isinstance(punto, dict):
+            raise ErrorDatos("elemento de la checklist no válido")
+        texto = str(punto.get("t") or "").strip()[:300]
+        if texto:
+            con.execute(
+                "INSERT OR REPLACE INTO checklist (id, tarjeta_id, texto, hecho, orden) VALUES (?, ?, ?, ?, ?)",
+                (comprobar_id(punto.get("id"), "elemento"), cid, texto, int(bool(punto.get("d"))), orden),
+            )
+
+
+def borrar_de(tabla, que):
+    def borrar(con, ident):
+        con.execute("DELETE FROM %s WHERE id = ?" % tabla, (comprobar_id(ident, que),))
+    return borrar
+
+
+borrar_tablero = borrar_de("tableros", "tablero")
+borrar_etiqueta_tablero = borrar_de("etiquetas_tablero", "etiqueta")
+borrar_lista = borrar_de("listas", "lista")
+borrar_tarjeta = borrar_de("tarjetas", "tarjeta")
+
+
+RUTAS_TABLEROS = {
+    "/api/tableros/": (guardar_tablero, borrar_tablero),
+    "/api/etiquetas-tablero/": (guardar_etiqueta_tablero, borrar_etiqueta_tablero),
+    "/api/listas/": (guardar_lista, borrar_lista),
+    "/api/tarjetas/": (guardar_tarjeta, borrar_tarjeta),
+}
+
+
 def importar(con, estado):
     if not isinstance(estado, dict) or not isinstance(estado.get("days"), dict):
         raise ErrorDatos("copia no válida")
+    con.execute("DELETE FROM tableros")   # en cascada: listas, tarjetas, etiquetas y checklist
     con.execute("DELETE FROM eventos")
     con.execute("DELETE FROM notas")
     con.execute("DELETE FROM tarea_etiquetas")
@@ -536,6 +747,12 @@ def importar(con, estado):
     if isinstance(eventos, dict):
         for eid, e in eventos.items():
             guardar_evento(con, eid, e)
+    for clave, guardar in (("boards", guardar_tablero), ("blabels", guardar_etiqueta_tablero),
+                           ("blists", guardar_lista), ("cards", guardar_tarjeta)):
+        coleccion = estado.get(clave) or {}
+        if isinstance(coleccion, dict):
+            for ident, datos in coleccion.items():
+                guardar(con, ident, datos)
 
 
 def listar_imagenes():
@@ -673,7 +890,7 @@ class Manejador(SimpleHTTPRequestHandler):
             if metodo == "GET" and ruta == "/api/ping":
                 global ultimo_latido
                 ultimo_latido = time.time()
-                return self.responder(200, {"app": "ascenso"})
+                return self.responder(200, {"app": "ascenso", "version": VERSION_APP})
             if metodo == "GET" and ruta == "/api/imagenes":
                 return self.responder(200, listar_imagenes())
             con = conectar()
@@ -703,6 +920,14 @@ class Manejador(SimpleHTTPRequestHandler):
                         guardar_evento(con, ruta[len("/api/eventos/"):], self.leer_json())
                     elif metodo == "DELETE" and ruta.startswith("/api/eventos/"):
                         borrar_evento(con, ruta[len("/api/eventos/"):])
+                    elif ruta.startswith(tuple(RUTAS_TABLEROS)) and metodo in ("PUT", "DELETE"):
+                        prefijo = next(p for p in RUTAS_TABLEROS if ruta.startswith(p))
+                        guardar, borrar = RUTAS_TABLEROS[prefijo]
+                        ident = ruta[len(prefijo):]
+                        guardar(con, ident, self.leer_json()) if metodo == "PUT" else borrar(con, ident)
+                    elif metodo == "POST" and ruta == "/api/apagar" and self.es_local():
+                        # Lo usa una versión más nueva de Ascenso para sustituir a esta sin esperar
+                        threading.Thread(target=apagar, args=(self.server,), daemon=True).start()
                     elif metodo == "POST" and ruta == "/api/importar":
                         importar(con, self.leer_json())
                     else:
@@ -770,13 +995,37 @@ def abrir_ventana(navegador, url):
     )
 
 
-def ya_en_marcha(puerto):
-    """¿Hay ya un Ascenso funcionando en ese puerto? (por ejemplo, si se pulsa el icono dos veces)"""
+def apagar(servidor):
+    global ultimo_latido
+    ultimo_latido = 0              # termina también la espera del modo aplicación
+    servidor.shutdown()
+    servidor.server_close()        # libera el puerto al momento
+
+
+def ascenso_en_marcha(puerto):
+    """Si hay un Ascenso funcionando en ese puerto, devuelve su versión (0 si es antiguo); si no, None."""
     try:
         with urllib.request.urlopen("http://127.0.0.1:%d/api/ping" % puerto, timeout=1) as r:
-            return json.loads(r.read()).get("app") == "ascenso"
+            datos = json.loads(r.read())
+            return int(datos.get("version") or 0) if datos.get("app") == "ascenso" else None
     except Exception:
-        return False
+        return None
+
+
+def sustituir_antiguo(puerto):
+    """Pide a un Ascenso más antiguo que se cierre y espera a que deje libre el puerto."""
+    try:
+        peticion = urllib.request.Request(
+            "http://127.0.0.1:%d/api/apagar" % puerto, data=b"{}", method="POST",
+            headers={"X-Ascenso": "1", "Content-Type": "application/json"})
+        urllib.request.urlopen(peticion, timeout=2).close()
+    except Exception:
+        pass
+    for _ in range(30):
+        if ascenso_en_marcha(puerto) is None:
+            return True
+        time.sleep(0.2)
+    return False
 
 
 def main():
@@ -790,14 +1039,22 @@ def main():
     if not os.path.exists(os.path.join(BASE, PAGINA)):
         sys.exit(f"No encuentro {PAGINA} junto a servidor.py.")
 
-    if args.app and ya_en_marcha(args.puerto):
-        navegador = buscar_navegador()
-        url = "http://127.0.0.1:%d/" % args.puerto
-        try:
-            abrir_ventana(navegador, url) if navegador else webbrowser.open(url)
-        except OSError:
-            webbrowser.open(url)
-        return
+    if args.app:
+        version = ascenso_en_marcha(args.puerto)
+        if version is not None and version >= VERSION_APP:
+            # Ya está en marcha y es esta misma versión: solo se abre otra ventana
+            navegador = buscar_navegador()
+            url = "http://127.0.0.1:%d/" % args.puerto
+            try:
+                abrir_ventana(navegador, url) if navegador else webbrowser.open(url)
+            except OSError:
+                webbrowser.open(url)
+            return
+        if version is not None and not sustituir_antiguo(args.puerto):
+            # Un servidor de una versión anterior que no sabe cerrarse a petición
+            sys.exit("Hay una versión anterior de Ascenso todavía en marcha.\n\n"
+                     "Cierra su ventana, espera un minuto y vuelve a abrir Ascenso.\n"
+                     "(O cierra «pythonw.exe» desde el Administrador de tareas.)")
 
     iniciar_bd()
 
