@@ -57,6 +57,9 @@ MAX_IMPORTAR = 256 * 1024 * 1024    # una copia de seguridad completa
 LIMITE_LIBRETA = 1_000_000          # caracteres por libreta (de un mapa o de un nodo)
 DIR_COPIAS = os.path.join(BASE, "copias")          # copias diarias automáticas de ascenso.db
 COPIAS_A_CONSERVAR = 14
+MAX_IMAGEN = 15 * 1024 * 1024       # bytes por imagen (ya comprimida suele ocupar 100-500 KB)
+DIAS_HUERFANAS = 30                 # días que se conserva una imagen que ya no está en ninguna libreta
+TIPOS_IMAGEN = {"image/webp", "image/png", "image/jpeg", "image/gif"}
 PERFIL_APP = os.path.join(BASE, ".perfil-app")    # perfil propio de la ventana de la aplicación
 REGISTRO = os.path.join(BASE, "ascenso.log")      # errores cuando funciona sin consola
 ultimo_latido = time.time()                        # la página avisa periódicamente de que sigue abierta
@@ -241,10 +244,23 @@ CREATE TABLE IF NOT EXISTS conexiones (
   hasta TEXT NOT NULL REFERENCES nodos(id) ON DELETE CASCADE,
   CHECK (desde <> hasta)
 );
+
+-- Imágenes de las libretas (comprimidas al pegarlas). Las que ya no aparecen en ninguna libreta
+-- se marcan como huérfanas y se borran solas a los 30 días
+CREATE TABLE IF NOT EXISTS adjuntos (
+  id             TEXT PRIMARY KEY,
+  tipo           TEXT NOT NULL,
+  ancho          INTEGER NOT NULL,
+  alto           INTEGER NOT NULL,
+  bytes          INTEGER NOT NULL,
+  datos          BLOB NOT NULL,
+  creado         TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  huerfano_desde TEXT
+);
 """
-VERSION_BD = 7
+VERSION_BD = 8
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 8
+VERSION_APP = 9
 
 
 class ErrorDatos(Exception):
@@ -357,6 +373,8 @@ def leer_estado(con):
         for r in con.execute("SELECT * FROM nodos")
     }
     conexiones = {r["id"]: {"a": r["desde"], "b": r["hasta"]} for r in con.execute("SELECT * FROM conexiones")}
+    adjuntos = {r["id"]: {"t": r["tipo"], "w": r["ancho"], "h": r["alto"]}
+                for r in con.execute("SELECT id, tipo, ancho, alto FROM adjuntos")}
     vacia = (not config and not habitos and not dias and not historial and not etiquetas
              and not tareas and not notas and not eventos and not tableros and not mapas)
     return {
@@ -376,6 +394,7 @@ def leer_estado(con):
         "maps": mapas,
         "mnodes": nodos,
         "mlinks": conexiones,
+        "att": adjuntos,
         "vacia": vacia,
         "version": VERSION_APP,
     }
@@ -825,6 +844,69 @@ def guardar_conexion(con, cid, datos):
     con.execute("INSERT OR REPLACE INTO conexiones (id, desde, hasta) VALUES (?, ?, ?)", (cid, a, b))
 
 
+def guardar_adjunto(con, aid, datos):
+    """Guarda una imagen. Se comprueba que el contenido es de verdad una imagen del tipo indicado."""
+    import base64
+    import binascii
+    aid = comprobar_id(aid, "imagen")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("imagen no válida")
+    tipo = str(datos.get("tipo") or "")
+    if tipo not in TIPOS_IMAGEN:
+        raise ErrorDatos("tipo de imagen no admitido")
+    try:
+        crudo = base64.b64decode(str(datos.get("datos") or ""), validate=True)
+    except (binascii.Error, ValueError):
+        raise ErrorDatos("imagen no válida")
+    if not 0 < len(crudo) <= MAX_IMAGEN:
+        raise ErrorDatos("imagen demasiado grande")
+    firmas = {"image/png": crudo[:8] == b"\x89PNG\r\n\x1a\n",
+              "image/jpeg": crudo[:3] == b"\xff\xd8\xff",
+              "image/gif": crudo[:6] in (b"GIF87a", b"GIF89a"),
+              "image/webp": crudo[:4] == b"RIFF" and crudo[8:12] == b"WEBP"}
+    if not firmas[tipo]:
+        raise ErrorDatos("el contenido no es una imagen válida")
+    ancho, alto = entero(datos.get("ancho"), "ancho"), entero(datos.get("alto"), "alto")
+    if not (0 < ancho <= 20000 and 0 < alto <= 20000):
+        raise ErrorDatos("tamaño de imagen no válido")
+    con.execute(
+        """INSERT INTO adjuntos (id, tipo, ancho, alto, bytes, datos) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET tipo=excluded.tipo, ancho=excluded.ancho, alto=excluded.alto,
+             bytes=excluded.bytes, datos=excluded.datos, huerfano_desde=NULL""",
+        (aid, tipo, ancho, alto, len(crudo), sqlite3.Binary(crudo)),
+    )
+
+
+def copia_adjuntos(con):
+    """Todas las imágenes, para la copia de seguridad que se descarga desde la aplicación."""
+    import base64
+    return {r["id"]: {"tipo": r["tipo"], "ancho": r["ancho"], "alto": r["alto"],
+                      "datos": base64.b64encode(r["datos"]).decode("ascii")}
+            for r in con.execute("SELECT id, tipo, ancho, alto, datos FROM adjuntos")}
+
+
+def limpiar_adjuntos():
+    """Marca las imágenes que ya no están en ninguna libreta y borra las que llevan 30 días así."""
+    con = conectar()
+    try:
+        with con:
+            hoy = date.today()
+            for r in con.execute("SELECT id, huerfano_desde FROM adjuntos").fetchall():
+                marcas = ("imagen:%s)" % r["id"], "imagen:%s|" % r["id"])
+                usada = con.execute(
+                    "SELECT 1 FROM nodos WHERE instr(notas, ?) > 0 OR instr(notas, ?) > 0 "
+                    "UNION ALL SELECT 1 FROM mapas WHERE instr(notas, ?) > 0 OR instr(notas, ?) > 0 LIMIT 1",
+                    marcas * 2).fetchone()
+                if usada and r["huerfano_desde"]:
+                    con.execute("UPDATE adjuntos SET huerfano_desde = NULL WHERE id = ?", (r["id"],))
+                elif not usada and not r["huerfano_desde"]:
+                    con.execute("UPDATE adjuntos SET huerfano_desde = ? WHERE id = ?", (hoy.isoformat(), r["id"]))
+                elif not usada and (hoy - date.fromisoformat(r["huerfano_desde"])).days >= DIAS_HUERFANAS:
+                    con.execute("DELETE FROM adjuntos WHERE id = ?", (r["id"],))
+    finally:
+        con.close()
+
+
 borrar_mapa = borrar_de("mapas", "mapa")
 borrar_nodo = borrar_de("nodos", "nodo")
 borrar_conexion = borrar_de("conexiones", "conexión")
@@ -894,6 +976,10 @@ def importar(con, estado):
         if isinstance(coleccion, dict):
             for ident, datos in coleccion.items():
                 guardar(con, ident, datos)
+    adjuntos = estado.get("adjuntos") or {}
+    if isinstance(adjuntos, dict):
+        for ident, datos in adjuntos.items():
+            guardar_adjunto(con, ident, datos)
     nodos = estado.get("mnodes") or {}
     if isinstance(nodos, dict):
         for ident, datos in nodos_por_profundidad(nodos):
@@ -1027,6 +1113,25 @@ class Manejador(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             raise ErrorDatos("JSON no válido")
 
+    def enviar_adjunto(self, aid):
+        """Devuelve una imagen tal cual. Su id no cambia nunca, así que el navegador puede guardarla en caché."""
+        if not ID_RE.match(aid):
+            return self.responder(404, {"error": "imagen no encontrada"})
+        con = conectar()
+        try:
+            fila = con.execute("SELECT tipo, datos FROM adjuntos WHERE id = ?", (aid,)).fetchone()
+        finally:
+            con.close()
+        if not fila:
+            return self.responder(404, {"error": "imagen no encontrada"})
+        datos = bytes(fila["datos"])
+        self.send_response(200)
+        self.send_header("Content-Type", fila["tipo"])
+        self.send_header("Content-Length", str(len(datos)))
+        self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+        self.end_headers()
+        self.wfile.write(datos)
+
     def responder(self, codigo, datos):
         cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")
         self.send_response(codigo)
@@ -1043,9 +1148,16 @@ class Manejador(SimpleHTTPRequestHandler):
                 return self.responder(200, {"app": "ascenso", "version": VERSION_APP})
             if metodo == "GET" and ruta == "/api/imagenes":
                 return self.responder(200, listar_imagenes())
+            if metodo == "GET" and ruta.startswith("/api/adjuntos/"):
+                return self.enviar_adjunto(ruta[len("/api/adjuntos/"):])
             con = conectar()
             try:
                 with con:  # una transacción por petición
+                    if metodo == "GET" and ruta == "/api/adjuntos-copia":
+                        return self.responder(200, copia_adjuntos(con))
+                    if metodo == "PUT" and ruta.startswith("/api/adjuntos/"):
+                        guardar_adjunto(con, ruta[len("/api/adjuntos/"):], self.leer_json())
+                        return self.responder(200, {"ok": True})
                     if metodo == "GET" and ruta == "/api/estado":
                         return self.responder(200, leer_estado(con))
                     if metodo == "PUT" and ruta == "/api/config":
@@ -1281,6 +1393,7 @@ def vigilar_copias():
     while True:
         try:
             copia_diaria()
+            limpiar_adjuntos()          # después de la copia: lo que se borre sigue en las copias de los últimos días
         except Exception as e:          # una copia fallida nunca debe parar Ascenso
             try:
                 apuntar("No se pudo hacer la copia diaria: %s" % e)

@@ -289,7 +289,7 @@ const QUOTES = [
   ["El mérito es de quien está de verdad en la arena, con el rostro cubierto de polvo, sudor y sangre.","Theodore Roosevelt","Discurso en la Sorbona, 1910","f09"],
   ["Al amanecer, cuando te cueste levantarte, piensa: me levanto para hacer el trabajo de un ser humano.","Marco Aurelio","Meditaciones, V 1","f10"],
   ["Primero dite a ti mismo quién quieres ser; después haz lo que tengas que hacer.","Epicteto","Disertaciones, III 23","f11"],
-  ["Un viaje de mil millas empieza bajo tus pies.","Lao Tse","Tao Te Ching, 64","f12"],
+  ["Un viaje de mil li empieza bajo tus pies.","Lao Tse","Tao Te Ching, 64","f12"],
   ["No dejamos de atrevernos porque las cosas sean difíciles; son difíciles porque no nos atrevemos.","Séneca","Cartas a Lucilio, 104","f13"],
   ["Nos hacemos valientes realizando actos valientes.","Aristóteles","Ética a Nicómaco, II","f14"],
   ["Muy poco hace falta para una vida feliz: todo está dentro de ti, en tu manera de pensar.","Marco Aurelio","Meditaciones, VII 67","f15"],
@@ -1179,7 +1179,7 @@ const levelNodes=(mid,lvl)=>Object.entries(state.mnodes).filter(([,n])=>n.map===
 function childrenIndex(){ const ch={}; for(const [id,n] of Object.entries(state.mnodes)) if(n.parent) (ch[n.parent]=ch[n.parent]||[]).push(id); return ch; }
 function descCount(id,ch){ let c=0; for(const k of ch[id]||[]) c+=1+descCount(k,ch); return c; }
 // Carga de un nodo: los nodos que contiene (en todos sus niveles) más su texto (cada 250 caracteres cuentan como uno)
-const nodeLoad=(id,ch)=>descCount(id,ch)+(state.mnodes[id].notes.length/250);
+const nodeLoad=(id,ch)=>{ const t=state.mnodes[id].notes; return descCount(id,ch)+t.length/250+countImages(t); };
 const glowLevel=l=>l<1?0:l<4?1:l<10?2:3;
 const GLOW_NAMES=["ninguno","suave","medio","intenso"];
 function levelPath(){ const p=[]; let n=mapLevel; while(n&&state.mnodes[n]){ p.unshift(n); n=state.mnodes[n].parent; } return p; }
@@ -1328,6 +1328,10 @@ function helpHTML(){
       ["Rueda del ratón","Acercar y alejar"],["Arrastrar el fondo","Desplazarse"],["Botón ⤢","Ajustar a la pantalla"]]],
     ["Libreta",[[K("F2"),"Cambiar el nombre"],["Clic en el texto","Escribir justo ahí"],[K("Ctrl+I"),"Índice de títulos"],["Rueda o segmentos de la barra","Pasar de tramo; el número de arriba, de página"],
       ["<code># título</code> · <code>- lista</code> · <code>- [ ] casilla</code> · <code>**negrita**</code>","Formato"]]],
+    ["Imágenes",[[K("Ctrl+V")+" con una captura o imagen copiada","Pegarla en la libreta"],["Arrastrar archivos a la libreta","Añadirlos donde los sueltes"],["Botón «+ Imagen»","Elegir archivos (en el móvil, también la cámara)"],
+      ["Varias a la vez","Quedan en fila"],["Arrastrar la imagen","Moverla a cualquier sitio de la libreta"],["Arrastrar su esquina","Hacerla más grande o más pequeña"],
+      ["Barra sobre la imagen","Pie de foto, ver en grande y quitar"],["Clic en la imagen","Verla en grande (rueda: zoom)"],
+      [K("Retroceso")+" justo detrás","Quitar la imagen ("+K("Ctrl+Z")+" la devuelve)"]]],
   ];
   return `<div class="mv-help" role="dialog" aria-label="Comandos y atajos">
     <div class="mh-head"><b>Comandos y atajos</b><span>${K("?")} para abrir y cerrar</span></div>
@@ -1356,6 +1360,7 @@ function mdRender(t){
   const lines=t.split("\n");
   lines.forEach((l,i)=>{
     let m;
+    if(isImgLine(l)){ closePara(); closeList(); h+=`<div class="mn-img" data-line="${i}" data-src="${esc(l)}"></div>`; return; }
     if((m=l.match(/^\s*[-*] \[( |x|X)\] (.*)$/))){ closePara(); if(list!=="ul"){ closeList(); h+='<ul class="mn-ul">'; list="ul"; }
       h+=`<li class="mn-ck" data-line="${i}"><input type="checkbox" data-ckline="${i}"${m[1]===" "?"":" checked"} aria-label="Hecho"><span${m[1]===" "?"":' class="done"'}>${inline(m[2])}</span></li>`; return; }
     if((m=l.match(/^\s*[-*] (.*)$/))){ closePara(); if(list!=="ul"){ closeList(); h+='<ul class="mn-ul">'; list="ul"; } h+=`<li data-line="${i}">${inline(m[1])}</li>`; return; }
@@ -1370,7 +1375,447 @@ function mdRender(t){
   closePara(); closeList();
   return h || '<p class="mn-empty">Escribe aquí tus apuntes…</p>';
 }
+// ======================================================================
+// ---------- Imágenes en las libretas ----------
+// En los apuntes, una imagen es una línea propia: ![pie de foto](imagen:ID) (o |p, |m, |g para el tamaño;
+// varias en la misma línea forman una fila). Se ve igual al leer y al escribir: ocupa un número exacto de líneas
+// de la rejilla, nunca más que un tramo, y si no cabe en lo que queda del tramo pasa entera al siguiente.
+// Al escribir, la caja de texto reserva su sitio con líneas invisibles (PAD) que no forman parte de los apuntes.
+// Tamaño y posición son libres: ![pie](imagen:ID|w=0.45,x=0.2) (ancho y posición, en fracción del ancho de la libreta).
+// ======================================================================
+let attMeta={};                                   // datos de cada imagen: {t: tipo, w: ancho, h: alto}
+const PAD="\u2063";                               // carácter invisible de las líneas reservadas
+const IMG_REF=/!\[([^\]\n]*)\]\(imagen:([A-Za-z0-9_-]{1,40})(?:\|([A-Za-z0-9=.,]*))?\)/g;
+const IMG_LINE=/^\s*(?:!\[[^\]\n]*\]\(imagen:[A-Za-z0-9_-]{1,40}(?:\|[A-Za-z0-9=.,]*)?\)\s*)+$/;
+const isImgLine=l=>IMG_LINE.test(l);
+function imgOpts(o){
+  const r={}; if(!o) return r;
+  const old={p:1/3, m:2/3, g:1}; if(old[o]) { r.w=old[o]; return r; }          // formato anterior (P, M, G)
+  for(const kv of o.split(",")){ const [k,v]=kv.split("="), n=parseFloat(v); if((k==="w"||k==="x")&&isFinite(n)) r[k]=Math.min(1,Math.max(0,n)); }
+  return r;
+}
+const imgRefs=l=>[...l.matchAll(IMG_REF)].map(m=>({cap:m[1], id:m[2], ...imgOpts(m[3])}));
+const fmt3=n=>String(Math.round(n*1000)/1000);
+const imgRefText=r=>{ const o=[]; if(r.w!=null&&r.w<0.999) o.push("w="+fmt3(r.w)); if(r.x!=null) o.push("x="+fmt3(r.x));
+  return `![${(r.cap||"").replace(/[\]\n]/g,"")}](imagen:${r.id}${o.length?"|"+o.join(","):""})`; };
+const imgLineText=refs=>refs.map(imgRefText).join(" ");
+const imgURL=id=>API?API+"adjuntos/"+encodeURIComponent(id):"";
+const countImages=t=>t.indexOf("imagen:")<0?0:(t.match(IMG_REF)||[]).length;
+const toSource=v=>v.indexOf(PAD)<0?v:v.split("\n").filter(l=>l!==PAD).join("\n").split(PAD).join("");
+
+// Medidas de un bloque de imagen: filas que ocupa y tamaño y posición de cada imagen
+function imgBlock(line, W, lh, L){
+  const refs=imgRefs(line), n=Math.max(1,refs.length), gap=10;
+  const capRows=refs.some(r=>r.cap.trim())?1:0;
+  const maxH=Math.max(lh*2,(L-capRows)*lh-12);                 // nunca más alta que un tramo
+  const meta=r=>attMeta[r.id]||{w:4,h:3};
+  const fit=(r,w)=>{ const m=meta(r); let h=w*m.h/m.w; if(h>maxH){ w*=maxH/h; h=maxH; } return [Math.min(w,W),h]; };
+  let cells;
+  if(n>1 && refs.every(r=>r.w==null&&r.x==null)){              // varias recién pegadas: en fila, a partes iguales
+    const w=(W-gap*(n-1))/n; cells=refs.map((r,k)=>{ const [cw,h]=fit(r,w); return {...r, w:cw, h, x:k*(w+gap)}; });
+  } else cells=refs.map(r=>{ const [w,h]=fit(r,W*(r.w??1)); const x=r.x!=null?Math.min(r.x*W,W-w):(W-w)/2; return {...r, w, h, x:Math.max(0,x)}; });
+  const imgH=Math.max(...cells.map(c=>c.h));
+  return {cells, imgH, rows:Math.ceil((imgH+12)/lh)+capRows, capRows, maxH, W};
+}
+function imgBlockHTML(b, srcLine, lh){
+  return `<div class="mi-row" style="height:${b.rows*lh}px">${b.cells.map((c,k)=>`
+    <figure class="mi-cell${NP.newImgs&&NP.newImgs.has(c.id)?" mi-new":""}" data-ref="${k}" style="left:${c.x}px;width:${c.w}px">
+      ${attMeta[c.id]?`<img src="${imgURL(c.id)}" alt="${esc(c.cap)}" style="height:${c.h}px" draggable="false" loading="lazy" title="Arrastra para moverla · clic para verla en grande">`
+                     :`<div class="mi-missing" style="height:${c.h}px">Imagen no disponible</div>`}
+      ${b.capRows?`<figcaption style="height:${lh}px">${esc(c.cap)}</figcaption>`:""}
+      <div class="mi-tb">
+        <button type="button" data-icap title="Pie de foto">Pie</button>
+        <button type="button" data-izoom title="Ver en grande">⤢</button>
+        <button type="button" data-idel title="Quitar la imagen" class="danger">×</button>
+      </div>
+      <span class="mi-rs" title="Arrastra para cambiar el tamaño" aria-hidden="true"></span>
+    </figure>`).join("")}</div>`;
+}
+
+// ---- Lectura: el bloque se coloca en la rejilla y, si no cabe en el tramo, pasa al siguiente ----
+function layoutImagesRead(el){
+  const blocks=el.querySelectorAll(".mn-img"); if(!blocks.length) return;
+  const lh=parseFloat(getComputedStyle(el).lineHeight)||24, L=Math.round(NP.pageH/lh), W=el.clientWidth;
+  blocks.forEach(d=>{ d.style.marginTop="0px"; const b=imgBlock(d.dataset.src,W,lh,L);
+    d.style.height=b.rows*lh+"px"; d.innerHTML=imgBlockHTML(b,+d.dataset.line,lh); d._rows=b.rows; });
+  for(const d of blocks){
+    const row=Math.round(d.offsetTop/lh), inT=row%L;
+    if(inT && inT+d._rows>L) d.style.marginTop=(L-inT)*lh+"px";
+  }
+}
+
+// ---- Escritura: el texto de la caja lleva líneas reservadas donde va cada imagen ----
+function buildDisplay(src, ta){
+  if(src.indexOf("imagen:")<0) return {text:src, zones:[]};
+  const lh=parseFloat(getComputedStyle(ta).lineHeight)||24, L=Math.max(3,Math.round(NP.pageH/lh)), W=ta.clientWidth;
+  const lines=src.split("\n"), blocks={};
+  lines.forEach((l,i)=>{ if(isImgLine(l)) blocks[i]=imgBlock(l,W,lh,L); });
+  // 1) Sin saltos de tramo, para medir dónde cae cada imagen y cuántas filas ocupa su línea
+  const t0=[]; const at0={};
+  lines.forEach((l,i)=>{ at0[i]=t0.length; t0.push(l); if(blocks[i]) for(let k=1;k<blocks[i].rows;k++) t0.push(PAD); });
+  const offs=lineOffsetsOf(ta,t0);
+  let shift=0; const plan={};
+  for(const i of Object.keys(blocks).map(Number).sort((a,b)=>a-b)){
+    const b=blocks[i], li=at0[i], markerRows=Math.max(1,Math.round(((offs[li+1]??(offs[li]+lh))-offs[li])/lh));
+    const extra=Math.max(0,markerRows-1);                        // si la propia línea ocupa más de una fila
+    const start=Math.round(offs[li]/lh)+shift, inT=start%L;
+    const push=(inT && inT+b.rows>L)?L-inT:0;
+    plan[i]={push, pads:Math.max(0,b.rows-markerRows), block:b, row:start+push};
+    shift+=push-extra;
+  }
+  // 2) Texto final y zonas (filas que ocupa cada imagen en la caja)
+  const out=[], zones=[];
+  lines.forEach((l,i)=>{ const p=plan[i];
+    if(!p){ out.push(l); return; }
+    const first=out.length; for(let k=0;k<p.push;k++) out.push(PAD);
+    const marker=out.length; out.push(l); for(let k=0;k<p.pads;k++) out.push(PAD);
+    zones.push({firstLine:first, markerLine:marker, lastLine:out.length-1, srcLine:i, block:p.block, row:p.row});
+  });
+  const text=out.join("\n");
+  // Posiciones de carácter de cada zona (de su primera a su última línea, incluido el salto final)
+  const starts=[]; let pos=0; for(const l of out){ starts.push(pos); pos+=l.length+1; }
+  zones.forEach(z=>{ z.zs=starts[z.firstLine]; z.ze=starts[z.lastLine]+out[z.lastLine].length; });
+  return {text, zones, lh};
+}
+function lineOffsetsOf(ta,lines){
+  const cs=getComputedStyle(ta), d=document.createElement("div");
+  for(const p of ["fontFamily","fontSize","fontWeight","lineHeight","letterSpacing","paddingLeft","paddingRight","paddingTop","tabSize"]) d.style[p]=cs[p];
+  Object.assign(d.style,{position:"absolute",visibility:"hidden",left:"-9999px",top:"0",boxSizing:"border-box",width:ta.clientWidth+"px",whiteSpace:"pre-wrap",overflowWrap:"break-word"});
+  d.innerHTML=lines.map((l,i)=>`<span data-l="${i}"></span>${esc(l)}`).join("\n");
+  document.body.appendChild(d); const offs=[...d.querySelectorAll("span[data-l]")].map(s=>s.offsetTop); d.remove(); return offs;
+}
+// Posición en el texto de la caja ⇄ posición en los apuntes
+function dispToSrcPos(disp,pos){
+  let removed=0, i=0; const lines=disp.split("\n");
+  for(const l of lines){ const end=i+l.length;
+    if(l===PAD){ if(pos>end) removed+=l.length+1; else { return i-removed; } }
+    else if(l.indexOf(PAD)>=0){ const before=Math.min(pos,end)-i; removed+=(l.slice(0,Math.max(0,before)).split(PAD).length-1); }
+    if(pos<=end) break; i=end+1; }
+  return Math.max(0,pos-removed);
+}
+function srcToDispPos(disp,spos){
+  let i=0, s=0; const lines=disp.split("\n");
+  for(const l of lines){ if(l===PAD){ i+=l.length+1; continue; }
+    const len=l.split(PAD).join("").length;
+    if(spos<=s+len) return i+(spos-s);
+    s+=len+1; i+=l.length+1; }
+  return disp.length;
+}
+const srcLineToDisp=(disp,line)=>{ let n=-1; const lines=disp.split("\n"); for(let i=0;i<lines.length;i++){ if(lines[i]!==PAD){ n++; if(n===line) return i; } } return lines.length-1; };
+const dispLineToSrc=(disp,li)=>{ const lines=disp.split("\n"); let n=0; for(let i=0;i<Math.min(li,lines.length);i++) if(lines[i]!==PAD) n++; return n; };
+
+// Pone al día el texto de la caja (líneas reservadas) y la capa con las imágenes
+function imgEditSync(force){
+  const ta=NP.el; if(!ta||!mNoteEditing||ta.tagName!=="TEXTAREA"||NP.syncing) return;
+  const val=ta.value, src=toSource(val);
+  if(src.indexOf("imagen:")<0 && val.indexOf(PAD)<0){ NP.zones=[]; imgOverlay(); return; }
+  const d=buildDisplay(src,ta); NP.zones=d.zones;
+  if(d.text!==val){
+    const a=ta.selectionStart, srcCaret=dispToSrcPos(val,a), top=ta.scrollTop;
+    NP.syncing=true;
+    if(!force && document.activeElement===ta){
+      // Solo se sustituye el trozo que cambia, y como una edición normal: así Ctrl+Z sigue funcionando
+      let p=0; while(p<val.length&&p<d.text.length&&val[p]===d.text[p]) p++;
+      let sa=val.length, sb=d.text.length; while(sa>p&&sb>p&&val[sa-1]===d.text[sb-1]){ sa--; sb--; }
+      ta.setSelectionRange(p,sa);
+      if(!document.execCommand("insertText",false,d.text.slice(p,sb))) ta.value=d.text;
+    } else ta.value=d.text;
+    const c=srcToDispPos(d.text,srcCaret); ta.setSelectionRange(c,c); ta.scrollTop=top;
+    NP.syncing=false;
+  }
+  imgOverlay();
+}
+function imgOverlay(){
+  const ta=NP.el; if(!ta) return;
+  let ov=document.getElementById("mn-ov");
+  if(!NP.zones||!NP.zones.length){ if(ov) ov.remove(); return; }
+  if(!ov){ ov=document.createElement("div"); ov.id="mn-ov"; ov.className="mn-ov"; ov.innerHTML='<div class="mn-ov-in"></div>'; ta.parentElement.appendChild(ov); }
+  ov.style.height=NP.pageH+"px";
+  const lh=parseFloat(getComputedStyle(ta).lineHeight)||24;
+  ov.firstChild.innerHTML=NP.zones.map(z=>`<div class="mn-img" data-line="${z.srcLine}" style="top:${z.row*lh}px;height:${z.block.rows*lh}px">${imgBlockHTML(z.block,z.srcLine,lh)}</div>`).join("");
+  imgOverlayScroll();
+}
+function imgOverlayScroll(){ const ov=document.getElementById("mn-ov"); if(ov&&NP.el) ov.firstChild.style.transform=`translateY(${-NP.el.scrollTop}px)`; }
+// El cursor nunca se queda dentro del sitio de una imagen: salta delante o detrás
+function imgGuardCaret(){
+  const ta=NP.el; if(!ta||!NP.zones||!NP.zones.length||ta.selectionStart!==ta.selectionEnd) { if(ta) NP.lastCaret=ta.selectionStart; return; }
+  const p=ta.selectionStart, z=NP.zones.find(z=>p>=z.zs&&p<=z.ze);
+  if(z){ const after=z.ze+1<=ta.value.length?z.ze+1:null, before=z.zs>0?z.zs-1:null;
+    const to=(NP.lastCaret!=null&&NP.lastCaret>z.ze&&before!=null)?before:(after??before??p);
+    ta.setSelectionRange(to,to); }
+  NP.lastCaret=ta.selectionStart;
+}
+function imgKeydown(e){
+  const ta=NP.el; if(!NP.zones||!NP.zones.length||ta.selectionStart!==ta.selectionEnd) return;
+  const p=ta.selectionStart;
+  // Retroceso justo después de una imagen, o Supr justo antes: se quita la imagen entera (Ctrl+Z la devuelve)
+  const z=e.key==="Backspace"?NP.zones.find(z=>p===z.ze+1):e.key==="Delete"?NP.zones.find(z=>p===z.zs-1):null;
+  if(!z) return;
+  e.preventDefault();
+  ta.setSelectionRange(e.key==="Backspace"?z.zs:z.zs-1, e.key==="Backspace"?z.ze+1:z.ze);
+  document.execCommand("delete");
+}
+
+// ---- Añadir imágenes: comprimir, guardar y colocar en los apuntes ----
+async function compressImage(file){
+  const bmp=await createImageBitmap(file);
+  if(file.type==="image/gif" && file.size<8e6) return {blob:file, type:"image/gif", w:bmp.width, h:bmp.height};
+  const k=Math.min(1,2000/Math.max(bmp.width,bmp.height)), w=Math.max(1,Math.round(bmp.width*k)), h=Math.max(1,Math.round(bmp.height*k));
+  const cv=document.createElement("canvas"); cv.width=w; cv.height=h; cv.getContext("2d").drawImage(bmp,0,0,w,h);
+  let blob=await new Promise(r=>cv.toBlob(r,"image/webp",0.9));
+  if(!blob||blob.type!=="image/webp") blob=await new Promise(r=>cv.toBlob(r,"image/jpeg",0.9));
+  return {blob, type:blob.type, w, h};
+}
+const blobToBase64=b=>new Promise((ok,ko)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(",")[1]); r.onerror=ko; r.readAsDataURL(b); });
+async function uploadImages(files){
+  const ids=[];
+  for(const f of files){
+    const c=await compressImage(f), id=newId("i");
+    await api("PUT","adjuntos/"+id,{tipo:c.type, ancho:c.w, alto:c.h, datos:await blobToBase64(c.blob)});
+    attMeta[id]={t:c.type, w:c.w, h:c.h}; ids.push(id);
+  }
+  return ids;
+}
+// where: {line: línea de los apuntes tras la que va la imagen} o {caret: posición en los apuntes}
+async function addImagesToNote(files, where){
+  files=[...files].filter(f=>/^image\/(png|jpeg|webp|gif|bmp)$/.test(f.type)); if(!files.length) return false;
+  if(!online||!API){ mvToast("Para añadir imágenes, abre Ascenso con su servidor (necesitan la base de datos)."); return true; }
+  const s=noteSubject(); if(!s.o) return true;
+  let ids; try{ ids=await uploadImages(files); }catch(err){ mvToast("No se pudo guardar la imagen: "+err.message); return true; }
+  // Una sola imagen se pega a su tamaño natural (una captura pequeña no se agranda); varias, en fila
+  const Wn=(NP.el&&NP.el.clientWidth)||700, dpr=window.devicePixelRatio||1;
+  const marker=ids.length===1
+    ? imgRefText({cap:"", id:ids[0], w:Math.min(1,(attMeta[ids[0]].w/dpr)/Wn), x:where&&where.x!=null?Math.min(Math.max(0,where.x-(attMeta[ids[0]].w/dpr)/Wn/2),1):undefined})
+    : ids.map(id=>`![](imagen:${id})`).join(" ");
+  const lines=s.o.notes.split("\n");
+  let at;                                                  // índice de la línea nueva
+  if(where && where.caret!=null){
+    let rest=where.caret, li=0; while(li<lines.length-1 && rest>lines[li].length){ rest-=lines[li].length+1; li++; }
+    if(rest===0 && lines[li].trim()){ at=li; }             // al principio de una línea con texto: delante
+    else if(rest>=lines[li].length){ at=li+1; }            // al final de una línea: detrás
+    else { lines.splice(li,1,lines[li].slice(0,rest),lines[li].slice(rest)); at=li+1; }
+  } else at=where&&where.line!=null?Math.min(lines.length,where.line+1):lines.length;
+  if(lines.length===1&&lines[0]==="") { lines[0]=marker; at=0; } else lines.splice(at,0,marker);
+  // Siempre hay una línea de texto antes y después, para poder escribir alrededor de la imagen
+  if(at===0){ lines.unshift(""); at=1; }
+  if(at===lines.length-1) lines.push("");
+  mRemember(); s.o.notes=lines.join("\n").slice(0,LIMITE_LIBRETA); save();
+  NP.pendingCaret={line:at+1, col:0};
+  NP.newImgs=new Set(ids); setTimeout(()=>{ NP.newImgs=null; },1600);   // un destello para ver dónde ha quedado
+  renderMapNote(); if(MG) mgDraw();
+  mvToast(ids.length===1?"Imagen añadida":ids.length+" imágenes añadidas");
+  return true;
+}
+// Pegar (Ctrl+V) una captura o una imagen copiada
+bvBody.addEventListener("paste",e=>{
+  if(!curMapId()||!e.target.closest||!e.target.closest("#mv-note")) return;
+  const files=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>f.type.startsWith("image/"));
+  if(!files.length) return;
+  e.preventDefault(); e.stopPropagation();
+  const ta=document.getElementById("mn-text");
+  const where=ta&&document.activeElement===ta?{caret:dispToSrcPos(ta.value,ta.selectionStart)}:{line:hoverSrcLine()??lastVisibleSrcLine()};
+  addImagesToNote(files,where);
+});
+// Con el foco en el mapa, una imagen pegada va a la libreta que se ve al lado
+document.addEventListener("paste",e=>{
+  if(!mapActive()||isTyping()) return;
+  const files=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>f.type.startsWith("image/"));
+  if(!files.length) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  addImagesToNote(files,{line:hoverSrcLine()??lastVisibleSrcLine()});
+},true);
+// Línea de los apuntes bajo el ratón, si está sobre la libreta (para pegar justo ahí)
+let noteHover=null;
+bvBody.addEventListener("pointermove",e=>{ const b=e.target.closest&&e.target.closest("#mn-body"); noteHover=b?{y:e.clientY, t:performance.now()}:null; });
+function hoverSrcLine(){
+  if(!noteHover||performance.now()-noteHover.t>8000||!NP.el) return null;
+  const c=lineTops().filter(t=>t.top-NP.el.scrollTop<=noteHover.y-NP.el.getBoundingClientRect().top);
+  return c.length?c[c.length-1].line:null;
+}
+function lastVisibleSrcLine(){
+  const el=NP.el; if(!el) return null;
+  if(el.tagName==="TEXTAREA"){ const offs=lineOffsets(el), bottom=el.scrollTop+NP.pageH; let li=-1; offs.forEach((o,i)=>{ if(o<bottom) li=i; }); return li<0?null:dispLineToSrc(el.value,li); }
+  let line=null; for(const n of el.querySelectorAll("[data-line]")){ if(n.offsetTop<el.scrollTop+NP.pageH) line=+n.dataset.line; } return line;
+}
+// Arrastrar imágenes desde el Explorador hasta la libreta
+bvBody.addEventListener("dragover",e=>{
+  if(!curMapId()||!e.target.closest("#mn-body")||![...e.dataTransfer.types].includes("Files")) return;
+  e.preventDefault(); e.dataTransfer.dropEffect="copy"; document.getElementById("mn-body").classList.add("dropping");
+});
+bvBody.addEventListener("dragleave",e=>{ const b=document.getElementById("mn-body"); if(b&&!b.contains(e.relatedTarget)) b.classList.remove("dropping"); });
+bvBody.addEventListener("drop",e=>{
+  const body=e.target.closest&&e.target.closest("#mn-body"); if(!curMapId()||!body) return;
+  e.preventDefault(); body.classList.remove("dropping");
+  const el=NP.el; let line=null;
+  if(el.tagName==="TEXTAREA"){ const y=e.clientY-el.getBoundingClientRect().top+el.scrollTop, offs=lineOffsets(el); let li=0; offs.forEach((o,i)=>{ if(o<=y) li=i; }); line=dispLineToSrc(el.value,li); }
+  else { for(const n of el.querySelectorAll("[data-line]")){ if(n.getBoundingClientRect().top<=e.clientY) line=+n.dataset.line; } }
+  const W=el.clientWidth; addImagesToNote(e.dataTransfer.files,{line, x:W?(e.clientX-el.getBoundingClientRect().left)/W:null});
+});
+// Botón «Imagen» de la libreta (en el móvil abre también la cámara)
+bvBody.addEventListener("change",e=>{
+  if(e.target.id!=="mn-file") return;
+  const ta=document.getElementById("mn-text");
+  addImagesToNote(e.target.files, ta?{caret:dispToSrcPos(ta.value,NP.lastCaret??ta.value.length)}:{line:lastVisibleSrcLine()});
+  e.target.value="";
+});
+
+// ---- Barra de cada imagen: pie, ampliar y quitar ----
+function editImageRef(srcLine, k, fn){
+  const s=noteSubject(); if(!s.o) return;
+  const lines=s.o.notes.split("\n"), refs=imgRefs(lines[srcLine]||""); if(!refs[k]) return;
+  const r=fn(refs[k]); if(r===null) refs.splice(k,1); else refs[k]=r;
+  mRemember();
+  if(refs.length) lines[srcLine]=imgLineText(refs); else lines.splice(srcLine,1);
+  s.o.notes=lines.join("\n"); save(); renderMapNote(); if(MG) mgDraw();
+}
+bvBody.addEventListener("click",e=>{
+  const tb=e.target.closest&&e.target.closest(".mi-tb"), cell=e.target.closest&&e.target.closest(".mi-cell");
+  if(!cell) return;
+  e.stopImmediatePropagation();
+  if(!tb) return;                        // pulsar la imagen se gestiona al soltar el ratón (ampliar o mover)
+  const host=cell.closest(".mn-img"), srcLine=+host.dataset.line, k=+cell.dataset.ref;
+  if(e.target.closest("[data-idel]")){ editImageRef(srcLine,k,()=>null); mvToast("Imagen quitada"); return; }
+  if(e.target.closest("[data-izoom]")){ const img=cell.querySelector("img"); if(img) openLightbox(img.src,img.alt); return; }
+  if(e.target.closest("[data-icap]")){
+    const cur=imgRefs(noteSubject().o.notes.split("\n")[srcLine]||"")[k]; if(!cur) return;
+    const inp=document.createElement("input"); inp.type="text"; inp.className="mi-capin"; inp.value=cur.cap; inp.placeholder="Pie de foto…"; inp.maxLength=200;
+    cell.appendChild(inp); inp.focus();
+    let done=false; const fin=ok=>{ if(done) return; done=true; const v=inp.value.trim(); inp.remove(); if(ok && v!==cur.cap) editImageRef(srcLine,k,r=>({...r,cap:v})); };
+    inp.addEventListener("keydown",ev=>{ ev.stopPropagation(); if(ev.key==="Enter"){ ev.preventDefault(); fin(true); } else if(ev.key==="Escape"){ ev.preventDefault(); fin(false); } });
+    inp.addEventListener("blur",()=>fin(true));
+  }
+},true);
+
+// ---- Mover y cambiar el tamaño con el ratón ----
+// Arrastrar la imagen la lleva a cualquier sitio de la libreta (a cualquier línea y a cualquier altura horizontal);
+// arrastrar su esquina cambia el tamaño, sin pasar nunca del ancho de la libreta ni del alto de un tramo.
+// Sitios posibles donde dejar una imagen: el principio de cada línea de los apuntes (y el final)
+function lineTops(){
+  const el=NP.el; if(!el) return [];
+  const out=[], seen=new Set();
+  if(el.tagName==="TEXTAREA"){
+    const lines=el.value.split("\n"), offs=lineOffsets(el); let src=0;
+    lines.forEach((l,i)=>{ if(l===PAD) return; out.push({line:src, top:offs[i]}); src++; });
+    out.push({line:src, top:el.scrollHeight-(parseFloat(el.style.paddingBottom)||0)});
+  } else {
+    const base=el.getBoundingClientRect().top-el.scrollTop;
+    for(const n of el.querySelectorAll("[data-line]")){ const ln=+n.dataset.line; if(seen.has(ln)) continue; seen.add(ln);
+      out.push({line:ln, top:n.getBoundingClientRect().top-base}); }
+    const last=el.lastElementChild; out.push({line:noteSubject().o.notes.split("\n").length, top:last?last.getBoundingClientRect().bottom-base:0});
+  }
+  return out.sort((a,b)=>a.top-b.top);
+}
+let IMGD=null;
+bvBody.addEventListener("pointerdown",e=>{
+  const t=e.target;
+  // En escritura, pulsar una imagen o el botón «+ Imagen» no debe sacar el foco de la caja de texto
+  if(t.closest&&(t.closest(".mn-ov .mn-img")||t.closest(".mn-addimg"))&&!t.closest("input")) e.preventDefault();
+  const cell=t.closest&&t.closest(".mi-cell"); if(!cell||e.button!==0||t.closest(".mi-tb")||t.closest("input")) return;
+  const host=cell.closest(".mn-img"), body=document.getElementById("mn-body"); if(!host||!body||!NP.el) return;
+  e.preventDefault();
+  const r=cell.getBoundingClientRect(), img=cell.querySelector("img,.mi-missing"), a=attMeta[imgRefs(host.dataset.src||noteSubject().o.notes.split("\n")[+host.dataset.line]||"")[+cell.dataset.ref]?.id]||{w:4,h:3};
+  IMGD={mode:t.closest(".mi-rs")?"resize":"move", cell, img, host, srcLine:+host.dataset.line, k:+cell.dataset.ref,
+        x0:e.clientX, y0:e.clientY, gx:e.clientX-r.left, gy:e.clientY-r.top, w0:r.width, left0:r.left-host.getBoundingClientRect().left,
+        ratio:a.h/a.w, moved:false, edgeT:0};
+  document.addEventListener("pointermove",imgDragMove);
+  document.addEventListener("pointerup",imgDragEnd,{once:true});
+},true);
+function noteGeom(){ const el=NP.el, lh=parseFloat(getComputedStyle(el).lineHeight)||24; return {el, W:el.clientWidth, lh, L:Math.round(NP.pageH/lh), maxH:(Math.round(NP.pageH/lh))*lh-12-lh}; }
+function imgDragMove(e){
+  const d=IMGD; if(!d) return;
+  if(!d.moved){ if(Math.hypot(e.clientX-d.x0,e.clientY-d.y0)<4) return; d.moved=true; document.body.classList.add("img-dragging");
+    if(d.mode==="move"){
+      d.ghost=d.cell.cloneNode(true); d.ghost.classList.add("mi-ghost"); d.ghost.querySelectorAll(".mi-tb,.mi-rs").forEach(n=>n.remove());
+      Object.assign(d.ghost.style,{left:"0",top:"0",width:d.w0+"px"}); document.body.appendChild(d.ghost);
+      d.cell.classList.add("mi-moving");
+      d.mark=document.createElement("div"); d.mark.className="mi-drop"; document.getElementById("mn-body").appendChild(d.mark);
+      d.tops=lineTops();
+    } }
+  const g=noteGeom();
+  if(d.mode==="resize"){
+    // Mantiene la proporción; no pasa del ancho libre a su derecha ni del alto de un tramo
+    const maxW=Math.min(g.W-d.left0, g.maxH/d.ratio), w=Math.max(60,Math.min(maxW,d.w0+(e.clientX-d.x0)));
+    d.w=w; d.cell.style.width=w+"px"; if(d.img) d.img.style.height=w*d.ratio+"px";
+    d.cell.classList.add("mi-resizing"); return;
+  }
+  // Mover: la imagen sigue al ratón; la marca muestra dónde quedará (al principio de la línea más cercana)
+  d.ghost.style.transform=`translate(${e.clientX-d.gx}px,${e.clientY-d.gy}px)`;
+  const er=g.el.getBoundingClientRect(), topY=e.clientY-d.gy-er.top+g.el.scrollTop;
+  let best=d.tops[0]; for(const t of d.tops) if(Math.abs(t.top-topY)<Math.abs(best.top-topY)) best=t;
+  d.target=best.line; d.x=Math.max(0,Math.min(g.W-d.w0,e.clientX-d.gx-er.left));
+  Object.assign(d.mark.style,{top:(best.top-g.el.scrollTop)+"px", left:d.x+"px", width:d.w0+"px"});
+  d.mark.hidden=best.top-g.el.scrollTop<0||best.top-g.el.scrollTop>NP.pageH;
+  // Si el borde de arriba de la imagen sale por debajo del tramo (o por encima), pasa al siguiente (o al anterior)
+  const now=performance.now(), gt=e.clientY-d.gy-er.top, edge=gt<-g.lh?-1:gt>NP.pageH-4?1:0;
+  if(edge && now-d.edgeT>750){ d.edgeT=now; npGoScreen(NP.screen+edge); setTimeout(()=>{ if(IMGD===d) d.tops=lineTops(); },450); }
+}
+function imgDragEnd(e){
+  const d=IMGD; IMGD=null; document.removeEventListener("pointermove",imgDragMove); document.body.classList.remove("img-dragging");
+  if(!d) return;
+  if(!d.moved){ if(d.mode==="move"&&d.img&&d.img.tagName==="IMG") openLightbox(d.img.src,d.img.alt); return; }
+  const g=noteGeom();
+  if(d.mode==="resize"){
+    const cells=currentCells(d.srcLine,g);
+    cells.forEach((c,i)=>{ c.w=c.w/g.W; c.x=c.x/g.W; if(i===d.k){ c.w=d.w/g.W; c.x=Math.min(c.x,1-c.w); } });
+    commitCells(d.srcLine,cells); return;
+  }
+  if(d.ghost) d.ghost.remove(); if(d.mark) d.mark.remove();
+  if(d.target==null){ renderMapNote(); return; }
+  moveImage(d.srcLine,d.k,d.target,d.x/g.W,d.w0/g.W);
+}
+// Posiciones actuales (en píxeles) de las imágenes de una línea
+function currentCells(srcLine,g){
+  const line=noteSubject().o.notes.split("\n")[srcLine]||"";
+  return imgBlock(line,g.W,g.lh,g.L).cells.map(c=>({cap:c.cap, id:c.id, w:c.w, x:c.x}));
+}
+function commitCells(srcLine,cells){
+  const s=noteSubject(), lines=s.o.notes.split("\n");
+  mRemember(); lines[srcLine]=imgLineText(cells); s.o.notes=lines.join("\n"); save(); renderMapNote();
+}
+function moveImage(srcLine,k,before,xFrac,wFrac){
+  const s=noteSubject(), lines=s.o.notes.split("\n"), g=noteGeom();
+  // Las demás imágenes de esa línea conservan su sitio
+  const cells=currentCells(srcLine,g).map(c=>({...c, w:c.w/g.W, x:c.x/g.W}));
+  const moved={...cells[k], w:wFrac, x:Math.min(xFrac,1-wFrac)}; cells.splice(k,1);
+  if(lines.length>1 && (before===srcLine||before===srcLine+1) && !cells.length){   // misma línea: solo cambia de lado
+    mRemember(); lines[srcLine]=imgLineText([moved]); s.o.notes=lines.join("\n"); save(); renderMapNote(); return;
+  }
+  mRemember();
+  if(cells.length) lines[srcLine]=imgLineText(cells); else { lines.splice(srcLine,1); if(before>srcLine) before--; }
+  before=Math.max(0,Math.min(before,lines.length));
+  lines.splice(before,0,imgLineText([moved]));
+  if(before===0){ lines.unshift(""); before++; }
+  if(before===lines.length-1) lines.push("");
+  s.o.notes=lines.join("\n"); save();
+  NP.newImgs=new Set([moved.id]); setTimeout(()=>{ NP.newImgs=null; },1600);
+  renderMapNote(); if(MG) mgDraw();
+}
+
+// ---- Ver una imagen en grande: rueda para el zoom, arrastrar para moverla, Esc para cerrar ----
+function openLightbox(src,alt){
+  const lb=document.createElement("div"); lb.className="lbx"; lb.setAttribute("role","dialog"); lb.setAttribute("aria-label","Imagen ampliada");
+  lb.innerHTML=`<img alt=""><p class="lbx-cap"></p><button type="button" class="lbx-x" aria-label="Cerrar">×</button>`;
+  const im=lb.querySelector("img"); im.src=src; im.alt=alt||""; lb.querySelector(".lbx-cap").textContent=alt||"";
+  let z=1, x=0, y=0, drag=null;
+  const apply=()=>{ im.style.transform=`translate(${x}px,${y}px) scale(${z})`; };
+  lb.addEventListener("wheel",e=>{ e.preventDefault(); z=Math.min(8,Math.max(1,z*(e.deltaY<0?1.15:1/1.15))); if(z===1){ x=0; y=0; } apply(); },{passive:false});
+  im.addEventListener("pointerdown",e=>{ e.preventDefault(); drag={sx:e.clientX-x, sy:e.clientY-y, moved:false}; im.setPointerCapture(e.pointerId); });
+  im.addEventListener("pointermove",e=>{ if(!drag) return; x=e.clientX-drag.sx; y=e.clientY-drag.sy; drag.moved=true; apply(); });
+  im.addEventListener("pointerup",()=>{ drag=null; });
+  im.addEventListener("dblclick",()=>{ z=z>1?1:2.5; if(z===1){ x=0; y=0; } apply(); });
+  const close=()=>{ lb.remove(); document.removeEventListener("keydown",onKey,true); };
+  // Mientras está abierta, el teclado no escribe en la libreta de detrás; Esc la cierra
+  const onKey=e=>{ e.stopPropagation(); e.preventDefault(); if(e.key==="Escape") close(); };
+  document.addEventListener("keydown",onKey,true);
+  lb.addEventListener("click",e=>{ if(e.target===lb||e.target.closest(".lbx-x")) close(); });
+  document.body.appendChild(lb);   // sin mover el foco: si se estaba escribiendo, se sigue escribiendo al cerrarla
+}
+
 function renderMapNote(){
+  NP.rerendering=true;
+  try{ renderMapNoteNow(); } finally { NP.rerendering=false; }
+}
+function renderMapNoteNow(){
   const box=document.getElementById("mv-note"); if(!box) return;
   const many=selIds();
   if(many.length>1){
@@ -1403,7 +1848,7 @@ function renderMapNote(){
       <label class="mn-page" title="Escribe un número para ir a esa página">Página
         <input type="number" id="mn-pg" min="1" value="1" aria-label="Página actual"> de <b id="mn-pgs">1</b></label>
     </div>
-    <div class="mn-meta"><span>${meta}</span><span class="mn-key">Ctrl+I: índice</span><span class="mn-count" id="mn-count" hidden></span>${colors}</div>
+    <div class="mn-meta"><span>${meta}</span><span class="mn-key">Ctrl+I: índice</span><label class="mn-addimg" title="Añadir imágenes (también puedes pegarlas con Ctrl+V o arrastrarlas)">+ Imagen<input type="file" id="mn-file" accept="image/*" multiple hidden></label><span class="mn-count" id="mn-count" hidden></span>${colors}</div>
     ${addSub?`<button type="button" class="mn-addsub" data-maddsub>+ Añadir subnodos</button>`:""}
     <div class="mn-body" id="mn-body">
       ${mNoteEditing
@@ -1430,7 +1875,11 @@ function npMount(s){
   NP.ro=new ResizeObserver(()=>npLayout(true)); NP.ro.observe(body);
   el.addEventListener("scroll",npOnScroll);
   if(mNoteEditing){
-    el.addEventListener("input",()=>{ NP.typedAt=performance.now(); npPad(); npUpdate(); npFollowCaret(); });
+    el.addEventListener("input",()=>{ if(NP.syncing) return; NP.typedAt=performance.now(); imgEditSync(false); npPad(); npUpdate(); npFollowCaret(); imgGuardCaret(); });
+    el.addEventListener("scroll",imgOverlayScroll);
+    el.addEventListener("keydown",imgKeydown);
+    el.addEventListener("keyup",imgGuardCaret);
+    el.addEventListener("mouseup",()=>setTimeout(imgGuardCaret,0));
     el.addEventListener("scroll",()=>{ if(performance.now()-(NP.typedAt||0)<600) npFollowCaret(); });
     // Las teclas que mueven el cursor sin escribir (flechas, Inicio, Fin, Av Pág...) también arrastran la vista
     el.addEventListener("keydown",e=>{ if(/^(Arrow|Page|Home|End)/.test(e.key)){ NP.typedAt=performance.now(); setTimeout(npFollowCaret,0); } });
@@ -1449,7 +1898,7 @@ function npMount(s){
     if(NP.pendingCaret){
       // Al pulsar una línea leyendo, el cursor va justo ahí y la vista se queda en el mismo tramo
       const {line,col}=NP.pendingCaret, lines=el.value.split("\n"); NP.pendingCaret=null;
-      const li=line==null?lines.length-1:Math.min(line,lines.length-1);
+      const li=line==null?lines.length-1:Math.min(srcLineToDisp(el.value,line),lines.length-1);
       const pos=li<0?0:lines.slice(0,li).reduce((a,l)=>a+l.length+1,0)+(line==null?lines[li].length:Math.min(col,lines[li].length));
       el.setSelectionRange(pos,pos);
       const off=lineOffsets(el)[Math.max(0,li)]||0;
@@ -1464,7 +1913,8 @@ function npMount(s){
 // Primera línea de los apuntes que se ve en el tramo actual de la escritura
 function topLineOfScreen(ta){
   const offs=lineOffsets(ta), top=ta.scrollTop;
-  let li=offs.findIndex(o=>o>=top-1); return li<0?Math.max(0,offs.length-1):li;
+  let li=offs.findIndex(o=>o>=top-1); li=li<0?Math.max(0,offs.length-1):li;
+  return dispLineToSrc(ta.value,li);                     // línea de los apuntes (sin las líneas reservadas)
 }
 // Línea y columna de los apuntes en el punto pulsado al leer
 function caretFromClick(e){
@@ -1497,6 +1947,7 @@ function npLayout(keep){
   // Cada tramo mide un número exacto de líneas, para que ninguna quede cortada al pasar de uno a otro
   NP.pageH=Math.max(lh*3, Math.floor(avail/lh)*lh);
   el.style.height=NP.pageH+"px";
+  if(mNoteEditing) imgEditSync(true); else layoutImagesRead(el);
   npPad();
   const sc=keep?NP.screen:(notePage[NP.key]||0);
   NP.screen=Math.min(Math.max(0,sc),NP.screens-1);
@@ -2177,7 +2628,7 @@ bvBody.addEventListener("click",e=>{
   if(q("[data-maddsub]")){ createNode(null,null,null); return; }
   if((el=q("[data-ckline]"))){ const s=noteSubject(), lines=s.o.notes.split("\n"), i=+el.dataset.ckline;
     mRemember(); lines[i]=lines[i].replace(/\[( |x|X)\]/, el.checked?"[x]":"[ ]"); s.o.notes=lines.join("\n"); save(); renderMapNote(); mgDraw(); return; }
-  if(q("#mn-md") && !q("a")){ NP.pendingCaret=caretFromClick(e); mNoteEditing=true; mTyping=false; renderMapNote(); }
+  if(q("#mn-md") && !q("a") && !q(".mn-img")){ NP.pendingCaret=caretFromClick(e); mNoteEditing=true; mTyping=false; renderMapNote(); }
 }, true);
 bvBody.addEventListener("input",e=>{
   const t=e.target;
@@ -2189,7 +2640,7 @@ bvBody.addEventListener("input",e=>{
     if(t.id==="mn-title"){ const v=t.value.trim(); if(!v) return; s.o.title=v.slice(0,s.kind==="map"?80:120);
       const cr=bvBody.querySelector(`.mv-crumb[data-mlevel="${s.kind==="map"?"":s.id}"]`); if(cr) cr.textContent=s.o.title;
       if(s.kind==="map") document.getElementById("bv-current").textContent=s.o.title; }
-    else { s.o.notes=t.value.slice(0,LIMITE_LIBRETA); noteCount(t.value.length); saveSoon(); if(!(MG&&MG.idleOn)) mgDraw(); return; }
+    else { if(NP.syncing) return; const src=toSource(t.value); s.o.notes=src.slice(0,LIMITE_LIBRETA); noteCount(src.length); saveSoon(); if(!(MG&&MG.idleOn)) mgDraw(); return; }
     save(); mgDraw();
   }
 });
@@ -2200,6 +2651,7 @@ bvBody.addEventListener("focusout",e=>{
   const dentro=e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("#mv-note");
   // Mientras el foco siga dentro de la libreta (índice, número de página, colores) se sigue en modo escritura
   if(e.target.id==="mn-text") flushSave();
+  if(NP.rerendering) return;            // la libreta se está repintando (p. ej. tras cambiar una imagen): se sigue escribiendo
   if(e.target.id==="mn-text" && !dentro){ NP.pendingTopLine=topLineOfScreen(e.target); mNoteEditing=false; renderMapNote(); }
   if(e.target.id==="mn-title"){ const s=noteSubject(); if(s.o) e.target.value=s.o.title; }
 });
@@ -2528,8 +2980,11 @@ document.getElementById("addh").addEventListener("click",()=>{
   save(); renderAll();
   const names=document.querySelectorAll("#hlist .name"); const last=names[names.length-1]; if(last){ last.focus(); last.select(); }
 });
-document.getElementById("exp").addEventListener("click",()=>{
-  const blob=new Blob([JSON.stringify(state,null,1)],{type:"application/json"});
+document.getElementById("exp").addEventListener("click",async()=>{
+  // Con la base de datos, la copia incluye también las imágenes de las libretas
+  let copia=state;
+  if(online&&API){ try{ copia={...state, adjuntos:await api("GET","adjuntos-copia")}; }catch(err){} }
+  const blob=new Blob([JSON.stringify(copia,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="ascenso-copia-"+key(today())+".json";
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
   document.getElementById("bmsg").textContent="Copia descargada.";
@@ -2538,7 +2993,9 @@ document.getElementById("imp").addEventListener("change",async e=>{
   const f=e.target.files[0]; if(!f) return;
   try{ const d=JSON.parse(await f.text()); if(!d||typeof d.days!=="object") throw 0;
     state=cleanState(d);
-    if(online){ await api("POST","importar",snapshot()); synced=snapshot(); }
+    const adj=d.adjuntos&&typeof d.adjuntos==="object"?d.adjuntos:null;
+    if(adj) for(const [id,a] of Object.entries(adj)) if(a&&a.ancho&&a.alto) attMeta[id]={t:a.tipo, w:a.ancho, h:a.alto};
+    if(online){ await api("POST","importar",adj?{...snapshot(), adjuntos:adj}:snapshot()); synced=snapshot(); }
     save(); renderAll(); document.getElementById("bmsg").textContent="Datos importados.";
   }catch(err){ document.getElementById("bmsg").textContent="Ese archivo no es una copia de Ascenso válida."; }
   e.target.value="";
@@ -2842,7 +3299,7 @@ function setStatus(t,nivel="ok"){
     b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso" ? "Solo en este navegador" : "Sin guardar";
   }
 }
-const VERSION_NECESARIA=8;
+const VERSION_NECESARIA=9;
 function saveLocal(){
   try{
     const j=JSON.stringify(state);
@@ -2975,6 +3432,7 @@ async function init(){
         throw new Error("servidor antiguo");
       }
       state=cleanState(remote);
+      attMeta=remote.att&&typeof remote.att==="object"?remote.att:{};
       synced=snapshot(); online=true;
       // Tableros que solo están en este navegador (creados mientras no se guardaban en la base de datos):
       // se recuperan, con sus listas, tarjetas y etiquetas, y se suben
