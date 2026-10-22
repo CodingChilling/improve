@@ -27,7 +27,8 @@ const cleanState = (x,fallbackDays) => ({
   tasks:cleanTasks(x.tasks),
   notes:cleanNotes(x.notes),
   events:cleanEvents(x.events),
-  ...cleanBoardData(x)
+  ...cleanBoardData(x),
+  ...cleanMapData(x)
 });
 // Eventos del calendario: {id: {start, end, time, title, color, created}}
 function cleanEvents(x){
@@ -102,6 +103,45 @@ function cleanTasks(x){
 const B_PRIOS=[["urgente","Urgente"],["alta","Alta"],["media","Media"],["baja","Baja"],["ninguna","Sin prioridad"]];
 const B_PRIO_OK=new Set(B_PRIOS.map(p=>p[0]));
 const B_COLORS=["#2E86AB","#3D9468","#D9822B","#C0392B","#5B5FC7","#9B59B6","#D4AC0D","#7F8C8D"];
+// ---------- Mapas de nodos: datos ----------
+// maps   {id: {title, color, fav, order, notes, created}}           color = acento del mapa
+// mnodes {id: {map, parent, title, color, x, y, notes, created}}    parent null = primer nivel; color "" = acento
+// mlinks {id: {a, b}}                                               hilos entre nodos del mismo nivel
+const LIMITE_LIBRETA=1000000;   // caracteres por libreta (unas 350 páginas)
+const M_COLORS=["#7F77DD","#BA7517","#1D9E75","#378ADD","#D4537E","#D85A30","#639922","#888780"];
+function cleanMapData(x){
+  const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, obj=v=>v&&typeof v==="object"?v:{};
+  const pos=v=>(v===null||v===undefined||v==="")?null:(Number.isFinite(+v)?Math.round(+v*10)/10:null);
+  const maps={}, mnodes={}, mlinks={};
+  for(const [id,m] of Object.entries(obj(x.maps))){
+    if(!ID.test(id)||!m) continue;
+    const title=String(m.title||"").trim().slice(0,80); if(!title) continue;
+    maps[id]={title, color:HEX.test(m.color||"")?m.color.toUpperCase():M_COLORS[0], fav:!!m.fav,
+      order:Number.isFinite(+m.order)?Math.round(+m.order):0, notes:String(m.notes||"").slice(0,LIMITE_LIBRETA), created:String(m.created||"").slice(0,40)};
+  }
+  const raw={};
+  for(const [id,n] of Object.entries(obj(x.mnodes))){
+    if(!ID.test(id)||!n||!maps[n.map]) continue;
+    const title=String(n.title||"").trim().slice(0,120); if(!title) continue;
+    raw[id]={map:n.map, parent:typeof n.parent==="string"&&n.parent?n.parent:null, title,
+      color:HEX.test(n.color||"")?n.color.toUpperCase():"", x:pos(n.x), y:pos(n.y), notes:String(n.notes||"").slice(0,LIMITE_LIBRETA), created:String(n.created||"").slice(0,40)};
+  }
+  // Solo nodos cuya cadena de padres existe, es del mismo mapa y no da vueltas
+  for(const [id,n] of Object.entries(raw)){
+    let p=n.parent, ok=true, seen=new Set([id]);
+    while(p){ const q=raw[p]; if(!q||q.map!==n.map||seen.has(p)){ ok=false; break; } seen.add(p); p=q.parent; }
+    if(ok) mnodes[id]=n;
+  }
+  const pairs=new Set();
+  for(const [id,l] of Object.entries(obj(x.mlinks))){
+    if(!ID.test(id)||!l) continue;
+    const a=mnodes[l.a], b=mnodes[l.b];
+    if(!a||!b||l.a===l.b||a.map!==b.map||a.parent!==b.parent) continue;
+    const k=[l.a,l.b].sort().join("|"); if(pairs.has(k)) continue; pairs.add(k);
+    mlinks[id]={a:l.a, b:l.b};
+  }
+  return {maps, mnodes, mlinks};
+}
 function cleanBoardData(x){
   const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, F=/^\d{4}-\d{2}-\d{2}$/;
   const num=v=>Number.isFinite(+v)?Math.round(+v):0, obj=v=>v&&typeof v==="object"?v:{};
@@ -249,7 +289,7 @@ const QUOTES = [
   ["El mérito es de quien está de verdad en la arena, con el rostro cubierto de polvo, sudor y sangre.","Theodore Roosevelt","Discurso en la Sorbona, 1910","f09"],
   ["Al amanecer, cuando te cueste levantarte, piensa: me levanto para hacer el trabajo de un ser humano.","Marco Aurelio","Meditaciones, V 1","f10"],
   ["Primero dite a ti mismo quién quieres ser; después haz lo que tengas que hacer.","Epicteto","Disertaciones, III 23","f11"],
-  ["Un viaje de mil li empieza bajo tus pies.","Lao Tse","Tao Te Ching, 64","f12"],
+  ["Un viaje de mil millas empieza bajo tus pies.","Lao Tse","Tao Te Ching, 64","f12"],
   ["No dejamos de atrevernos porque las cosas sean difíciles; son difíciles porque no nos atrevemos.","Séneca","Cartas a Lucilio, 104","f13"],
   ["Nos hacemos valientes realizando actos valientes.","Aristóteles","Ética a Nicómaco, II","f14"],
   ["Muy poco hace falta para una vida feliz: todo está dentro de ti, en tu manera de pensar.","Marco Aurelio","Meditaciones, VII 67","f15"],
@@ -749,7 +789,7 @@ const nextColor=used=>B_COLORS.find(c=>!used.includes(c))||B_COLORS[used.length%
 function showBoards(){
   closeCal(); closePad();
   dayMain.hidden=true; boardsView.hidden=false;
-  if(curBoard!=="home" && !state.boards[curBoard]) curBoard="home";
+  if(curBoard!=="home" && !state.boards[curBoard] && !(curMapId() && state.maps[curMapId()])) curBoard="home";
   renderBoards(); window.scrollTo(0,0);
 }
 function showDay(){
@@ -766,14 +806,16 @@ function boardsChanged(){ save(); renderBoards(); }
 // ---- pintar ----
 function renderBoards(){
   if(boardsView.hidden) return;
-  const b=state.boards[curBoard];
-  if(!b && curBoard!=="home") curBoard="home";
-  document.getElementById("bv-current").textContent=b?b.name:"Todos los tableros";
-  boardsView.style.setProperty("--bc", b?b.color:"var(--gold)");
+  const mid=curMapId(), m=mid&&state.maps[mid], b=!mid&&state.boards[curBoard];
+  if(!b && !m && curBoard!=="home") curBoard="home";
+  document.getElementById("bv-current").textContent=m?m.title:b?b.name:"Todos los tableros";
+  boardsView.style.setProperty("--bc", m?m.color:b?b.color:"var(--gold)");
+  boardsView.classList.toggle("on-map",!!m);
   renderPicker();
   const lists=document.getElementById("bd-lists"), sx=lists?lists.scrollLeft:0;
-  bvBody.innerHTML=b?boardHTML(curBoard,b):homeHTML();
+  bvBody.innerHTML=m?mapViewHTML(mid,m):b?boardHTML(curBoard,b):homeHTML();
   const nl=document.getElementById("bd-lists"); if(nl) nl.scrollLeft=sx;
+  if(m) mountMap();
   placeMenus();
   if(cardOpen) renderCardDlg();
 }
@@ -801,7 +843,10 @@ function renderPicker(){
   m.hidden=!pickerOpen; if(!pickerOpen) return;
   m.innerHTML=boardsSorted().map(([id,b])=>
     `<button type="button" class="pk-item${id===curBoard?" on":""}" data-goboard="${id}" style="--c:${b.color}"><span class="pk-dot"></span>${esc(b.name)}${b.fav?'<span class="pk-star">★</span>':""}</button>`).join("")+
-    `<hr><button type="button" class="pk-item" data-gohome>Todos los tableros</button><button type="button" class="pk-item" data-gonew>+ Nuevo tablero</button>`;
+    `<hr><button type="button" class="pk-item" data-gohome>Todos los tableros</button><button type="button" class="pk-item" data-gonew>+ Nuevo tablero</button>`+
+    `<hr><p class="pk-h">Mapas</p>`+mapsSorted().map(([id,mp])=>
+    `<button type="button" class="pk-item${"m:"+id===curBoard?" on":""}" data-gomap="${id}" style="--c:${mp.color}"><span class="pk-dot pk-round"></span>${esc(mp.title)}${mp.fav?'<span class="pk-star">★</span>':""}</button>`).join("")+
+    `<button type="button" class="pk-item" data-gonewmap>+ Nuevo mapa</button>`;
 }
 function homeHTML(){
   const items=boardsSorted().map(([id,b])=>{
@@ -827,7 +872,8 @@ function homeHTML(){
   return `<div class="bh"><h2>Tableros</h2>
     ${Object.keys(state.boards).length?"":`<p class="bh-empty">Todavía no tienes tableros. Crea el primero.</p>`}
     <div class="bh-grid" id="bh-grid">${items}${nb}</div>
-    <p class="hint">Arrastra los tableros para ordenarlos. Los favoritos (★) aparecen primero.</p></div>`;
+    <p class="hint">Arrastra los tableros y los mapas para ordenarlos. Los favoritos (★) aparecen primero.</p>
+    ${mapsSectionHTML()}</div>`;
 }
 function boardHTML(bid,b){
   const lists=boardLists(bid);
@@ -996,6 +1042,8 @@ document.getElementById("bv-current").addEventListener("click",()=>{ pickerOpen=
 document.getElementById("bv-menu").addEventListener("click",e=>{
   const b=e.target.closest("[data-goboard]"); if(b){ setBoard(b.dataset.goboard); return; }
   if(e.target.closest("[data-gohome]")){ setBoard("home"); return; }
+  const mp=e.target.closest("[data-gomap]"); if(mp){ setMap(mp.dataset.gomap); return; }
+  if(e.target.closest("[data-gonewmap]")){ openNewMap(); setBoard("home"); const f=document.getElementById("nm-name"); if(f){ f.focus(); f.scrollIntoView({block:"center"}); } return; }
   if(e.target.closest("[data-gonew]")){ openNewBoard(); setBoard("home"); const f=document.getElementById("nb-name"); if(f) f.focus(); }
 });
 bvBody.addEventListener("click",e=>{
@@ -1069,6 +1117,7 @@ bvBody.addEventListener("focusout",e=>{
 // Cerrar menús y resultados al pulsar fuera
 document.addEventListener("pointerdown",e=>{
   if(boardsView.hidden) return;
+  if(mHelpOpen && !e.target.closest(".mv-help-wrap")) toggleHelp(false);
   if(openMenuKey && !e.target.closest(".menu-wrap")){ openMenuKey=null; renderBoards(); }
   if(pickerOpen && !e.target.closest(".bv-pick")){ pickerOpen=false; renderPicker(); }
   if(!bvResults.hidden && !e.target.closest(".bv-search")) bvResults.hidden=true;
@@ -1087,22 +1136,1116 @@ function renderSearch(){
   const res=Object.entries(state.cards)
     .filter(([,c])=>fold(c.title).includes(q)||fold(c.desc).includes(q)||c.check.some(k=>fold(k.t).includes(q)))
     .sort((a,b)=>(fold(b[1].title).includes(q))-(fold(a[1].title).includes(q))).slice(0,30);
-  bvResults.innerHTML = res.length ? res.map(([id,c])=>{ const l=state.blists[c.list], b=state.boards[l.board];
-      return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")
-    : `<p class="sr-empty">No hay tarjetas con «${esc(bvQ.value.trim())}».</p>`;
+  // También nodos de los mapas (por título o por lo escrito en su libreta)
+  const nodes=Object.entries(state.mnodes)
+    .filter(([,n])=>fold(n.title).includes(q)||fold(n.notes).includes(q))
+    .sort((a,b)=>(fold(b[1].title).includes(q))-(fold(a[1].title).includes(q))).slice(0,30);
+  const where=n=>{ const p=[]; let x=n.parent; while(x&&state.mnodes[x]){ p.unshift(state.mnodes[x].title); x=state.mnodes[x].parent; } return [state.maps[n.map].title,...p].map(esc).join(" › "); };
+  const html=res.map(([id,c])=>{ const l=state.blists[c.list], b=state.boards[l.board];
+      return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">Tarjeta · ${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")+
+    nodes.map(([id,n])=>`<button type="button" class="sr sr-node" data-srn="${id}" style="--c:${n.color||state.maps[n.map].color}"><span class="sr-t">${esc(n.title)}</span><span class="sr-w">Nodo · ${where(n)}</span></button>`).join("");
+  bvResults.innerHTML = html || `<p class="sr-empty">No hay tarjetas ni nodos con «${esc(bvQ.value.trim())}».</p>`;
   bvResults.hidden=false;
 }
 bvQ.addEventListener("input",renderSearch);
 bvQ.addEventListener("focus",renderSearch);
 bvQ.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ bvQ.value=""; bvResults.hidden=true; }
-  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr]"); if(f) f.click(); }
+  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr],[data-srn]"); if(f) f.click(); }
 });
 bvResults.addEventListener("click",e=>{
+  const rn=e.target.closest("[data-srn]");
+  if(rn){ const n=state.mnodes[rn.dataset.srn]; if(!n) return;
+    bvQ.value=""; bvResults.hidden=true;
+    setMap(n.map); goLevel(n.parent); selectOnly(rn.dataset.srn); selectionChanged(); ensureVisible(rn.dataset.srn); return; }
   const r=e.target.closest("[data-sr]"); if(!r) return;
   const c=state.cards[r.dataset.sr]; if(!c) return;
   bvQ.value=""; bvResults.hidden=true;
   setBoard(state.blists[c.list].board); openCard(r.dataset.sr);
+});
+
+// ======================================================================
+// ---------- Mapas de nodos (en la vista de tableros, sección «Mapas») ----------
+// ======================================================================
+let mapLevel=null, mSel=null, mSelLink=null, mNoteEditing=false;
+let nbMapOpen=false, nmDraft={title:"", color:M_COLORS[0]};
+// Reparto mapa | libreta, en % del mapa. Empieza con la libreta más grande (40 | 60), y se puede ajustar
+let mSplit=(()=>{ try{ const v=+localStorage.getItem("ascenso-reparto-mapa-libreta"); return v>=20&&v<=80?v:40; }catch(e){ return 40; } })();
+const mCam={};          // cámara (zoom y desplazamiento) de cada nivel visitado en esta sesión
+let MG=null;            // estado del lienzo montado
+const curMapId=()=>typeof curBoard==="string"&&curBoard.startsWith("m:")?curBoard.slice(2):null;
+const mapsSorted=()=>Object.entries(state.maps).sort((a,b)=>(b[1].fav-a[1].fav)||(a[1].order-b[1].order));
+const levelNodes=(mid,lvl)=>Object.entries(state.mnodes).filter(([,n])=>n.map===mid&&(n.parent||null)===(lvl||null));
+function childrenIndex(){ const ch={}; for(const [id,n] of Object.entries(state.mnodes)) if(n.parent) (ch[n.parent]=ch[n.parent]||[]).push(id); return ch; }
+function descCount(id,ch){ let c=0; for(const k of ch[id]||[]) c+=1+descCount(k,ch); return c; }
+// Carga de un nodo: los nodos que contiene (en todos sus niveles) más su texto (cada 250 caracteres cuentan como uno)
+const nodeLoad=(id,ch)=>descCount(id,ch)+(state.mnodes[id].notes.length/250);
+const glowLevel=l=>l<1?0:l<4?1:l<10?2:3;
+const GLOW_NAMES=["ninguno","suave","medio","intenso"];
+function levelPath(){ const p=[]; let n=mapLevel; while(n&&state.mnodes[n]){ p.unshift(n); n=state.mnodes[n].parent; } return p; }
+
+// ---- deshacer y rehacer (durante la sesión) ----
+// Historial ligero: se guarda una sola copia de referencia (cada elemento como texto) y, en cada paso,
+// solo los elementos que cambiaron. Así deshacer no ocupa más memoria aunque haya libretas muy largas.
+let mUndo=[], mRedo=[], mTyping=false, mBase=null, mBaseOf=null;
+const MCOLS=["maps","mnodes","mlinks"];
+function mEnsureBase(){
+  if(mBase && mBaseOf===state) return;
+  mBase={}; mBaseOf=state; mUndo=[]; mRedo=[];          // datos nuevos (importados o recargados): historial nuevo
+  for(const k of MCOLS){ mBase[k]={}; for(const [id,v] of Object.entries(state[k])) mBase[k][id]=JSON.stringify(v); }
+}
+// Cambios desde la última referencia, como «cómo estaban antes»; y la referencia se pone al día
+function mDiff(){
+  const patch={}; let n=0;
+  for(const k of MCOLS){ const cur=state[k], base=mBase[k];
+    for(const id in cur){ const j=JSON.stringify(cur[id]); if(base[id]!==j){ (patch[k]=patch[k]||{})[id]=base[id]??null; base[id]=j; n++; } }
+    for(const id in base) if(!(id in cur)){ (patch[k]=patch[k]||{})[id]=base[id]; delete base[id]; n++; }
+  }
+  return n?patch:null;
+}
+function mApply(patch){
+  const back={};
+  for(const k in patch){ back[k]={};
+    for(const id in patch[k]){ back[k][id]=mBase[k][id]??null; const v=patch[k][id];
+      if(v==null){ delete state[k][id]; delete mBase[k][id]; } else { state[k][id]=JSON.parse(v); mBase[k][id]=v; } } }
+  return back;
+}
+// Se llama justo antes de cada acción: cierra el paso anterior
+function mRemember(){ mEnsureBase(); const p=mDiff(); if(p){ mUndo.push(p); if(mUndo.length>200) mUndo.shift(); mRedo=[]; } }
+function mAfterRestore(){
+  const mid=curMapId();
+  if(mid && !state.maps[mid]){ curBoard="home"; mapLevel=null; }
+  while(mapLevel && !state.mnodes[mapLevel]) mapLevel=null;
+  if(mSel && !state.mnodes[mSel]) mSel=null;
+  mMulti=new Set([...mMulti].filter(id=>state.mnodes[id]));
+  if(mSelLink && !state.mlinks[mSelLink]) mSelLink=null;
+  save(); renderBoards();
+}
+function mUndoDo(){
+  mEnsureBase(); const p=mDiff(); if(p){ mUndo.push(p); mRedo=[]; }
+  if(!mUndo.length) return; mRedo.push(mApply(mUndo.pop())); mAfterRestore();
+}
+function mRedoDo(){
+  mEnsureBase(); const p=mDiff(); if(p){ mUndo.push(p); mRedo=[]; return; }
+  if(!mRedo.length) return; mUndo.push(mApply(mRedo.pop())); mAfterRestore();
+}
+
+// ---- inicio: sección «Mapas» bajo los tableros ----
+function mapsSectionHTML(){
+  const count=id=>Object.values(state.mnodes).filter(n=>n.map===id).length;
+  const items=mapsSorted().map(([id,m])=>{ const n=count(id);
+    return `<article class="bcard mcard" data-map="${id}" style="--bc:${m.color}" tabindex="0">
+      <span class="bcard-band"></span><h3>${esc(m.title)}</h3>
+      <p>${n} ${n===1?"nodo":"nodos"}</p>
+      <button type="button" class="bfav" data-mfav="${id}" aria-pressed="${m.fav}" aria-label="${m.fav?"Quitar de favoritos":"Marcar como favorito"}">★</button>
+    </article>`; }).join("");
+  const form = nbMapOpen
+    ? `<div class="bcard bnew-form" style="--bc:${nmDraft.color}">
+        <input type="text" id="nm-name" maxlength="80" placeholder="Título del mapa" value="${esc(nmDraft.title)}" aria-label="Título del mapa">
+        <div class="swatches">${M_COLORS.map(c=>`<button type="button" class="sw" data-nmcolor="${c}" aria-pressed="${c===nmDraft.color}" style="--c:${c}" aria-label="Color de acento"></button>`).join("")}</div>
+        <div class="eacts"><button type="button" class="add" data-nmcreate>Crear mapa</button><button type="button" class="add alt" data-nmcancel>Cancelar</button></div>
+      </div>`
+    : `<button type="button" class="bcard bnew" data-newmap>+ Nuevo mapa</button>`;
+  return `<section class="bh-maps" aria-labelledby="h-mapas"><h2 id="h-mapas">Mapas</h2>
+    ${Object.keys(state.maps).length?"":`<p class="bh-empty">Organiza ideas y apuntes en mapas de nodos conectados.</p>`}
+    <div class="bh-grid" id="mh-grid">${items}${form}</div></section>`;
+}
+function openNewMap(){
+  if(!nbMapOpen && !nmDraft.title){ const used=Object.values(state.maps).map(m=>m.color); nmDraft.color=M_COLORS.find(c=>!used.includes(c))||M_COLORS[0]; }
+  nbMapOpen=true;
+}
+function createMap(){
+  const title=nmDraft.title.trim(); if(!title){ const f=document.getElementById("nm-name"); if(f) f.focus(); return; }
+  mRemember();
+  const id=newId("m");
+  state.maps[id]={title:title.slice(0,80), color:nmDraft.color, fav:false,
+    order:Math.max(-1,...Object.values(state.maps).map(m=>m.order))+1, notes:"", created:new Date().toISOString()};
+  nbMapOpen=false; nmDraft={title:"", color:M_COLORS[0]};
+  save(); setMap(id);
+}
+function setMap(id){
+  curBoard="m:"+id; try{ localStorage.setItem("ascenso-tablero",curBoard); }catch(e){}
+  openMenuKey=null; pickerOpen=false; mapLevel=null; mSel=null; mSelLink=null; mNoteEditing=false;
+  renderBoards(); window.scrollTo(0,0);
+}
+function deleteMap(mid){
+  mRemember();
+  for(const [id,n] of Object.entries(state.mnodes)) if(n.map===mid){
+    for(const [lid,l] of Object.entries(state.mlinks)) if(l.a===id||l.b===id) delete state.mlinks[lid];
+    delete state.mnodes[id];
+  }
+  delete state.maps[mid];
+  save(); setBoard("home");
+}
+
+// ---- vista de un mapa ----
+function mapViewHTML(mid,m){
+  const path=levelPath();
+  const crumbs=`<button type="button" class="mv-crumb${mapLevel?"":" cur"}" data-mlevel="">${esc(m.title)}</button>`+
+    path.map((nid,i)=>`<span class="mv-sep">/</span><button type="button" class="mv-crumb${i===path.length-1?" cur":""}" data-mlevel="${nid}">${esc(state.mnodes[nid].title)}</button>`).join("");
+  const solo = mapLevel && !levelNodes(mid,mapLevel).length;
+  return `<div class="mv" style="--acc:${m.color}">
+    <div class="mv-head">
+      <nav class="mv-crumbs" aria-label="Ruta"><span class="mv-root">Mapas</span><span class="mv-sep">/</span>${crumbs}</nav>
+      <span class="bd-sp"></span>
+      <span class="mv-acc-l">Acento</span>
+      <div class="swatches mv-acc">${M_COLORS.map(c=>`<button type="button" class="sw" data-macc="${c}" aria-pressed="${c===m.color}" style="--c:${c}" aria-label="Color de acento"></button>`).join("")}</div>
+      <button type="button" class="bfav" data-mfav="${mid}" aria-pressed="${m.fav}" aria-label="${m.fav?"Quitar de favoritos":"Marcar como favorito"}">★</button>
+      <div class="menu-wrap"><button type="button" class="bd-more" data-menu="map" aria-label="Opciones del mapa" aria-expanded="${openMenuKey==="map"}">⋯</button>
+        ${openMenuKey==="map"?`<div class="bmenu" role="menu"><button type="button" class="bm-item danger" data-delmap>Eliminar mapa</button></div>`:""}</div>
+      <div class="mv-help-wrap"><button type="button" class="mv-help-btn" data-mhelp aria-label="Comandos y atajos" aria-expanded="${mHelpOpen}" title="Comandos y atajos (?)">?</button>
+        ${mHelpOpen?helpHTML():""}</div>
+    </div>
+    <div class="mv-body${solo?" solo":""}" id="mv-body" style="--split:${mSplit}%">
+      <div class="mv-graph" id="mv-graph">
+        <canvas id="mv-cv" aria-label="Mapa de nodos"></canvas>
+        <div class="mv-tools">
+          <button type="button" data-mtool="new">+ Nodo</button>
+          <button type="button" data-mtool="out" aria-label="Alejar">−</button>
+          <button type="button" data-mtool="in" aria-label="Acercar">+</button>
+          <button type="button" data-mtool="fit" aria-label="Ajustar a la pantalla" title="Ajustar a la pantalla">⤢</button>
+        </div>
+        <div class="mv-confirm" id="mv-confirm" hidden></div>
+      </div>
+      <div class="mv-split" id="mv-split" role="separator" aria-orientation="vertical" title="Arrastra para cambiar el reparto"></div>
+      <div class="mv-note" id="mv-note"></div>
+    </div>
+  </div>`;
+}
+// ---- ayuda: comandos y atajos («?» arriba a la derecha) ----
+let mHelpOpen=false;
+const K=t=>t.split("+").map(k=>`<kbd>${k}</kbd>`).join("+");
+function helpHTML(){
+  const groups=[
+    ["Crear",[["Doble clic en un hueco","Nuevo nodo"],[K("Tab"),"Nuevo nodo conectado al seleccionado"],[K("Intro")+" al nombrar un nodo nuevo","Otro nodo al mismo nivel"],
+      [K("Mayús")+" + arrastrar de un nodo a un hueco","Nuevo nodo ya conectado"],["Botón «+ Nodo»","Nuevo nodo en el centro"]]],
+    ["Conectar",[[K("Mayús")+" + arrastrar de un nodo a otro","Conectar dos nodos"],["Clic derecho › Conectar con…","Elegir el otro nodo con un clic"],["Clic en un hilo + "+K("Supr"),"Quitar la conexión"]]],
+    ["Seleccionar",[["Clic","Seleccionar un nodo"],[K("Ctrl")+" + clic","Añadir o quitar de la selección"],[K("Mayús")+" + arrastrar en el fondo","Seleccionar con un recuadro"],[K("Ctrl+A"),"Todos los nodos del nivel"],[K("Esc"),"Quitar la selección"]]],
+    ["Organizar",[["Arrastrar","Mover los nodos seleccionados"],["Soltar un nodo sobre otro","Meterlo dentro de ese nodo"],["Clic derecho › Mover a…","Llevarlo a otro nivel"],
+      [K("Ctrl+C")+" · "+K("Ctrl+X")+" · "+K("Ctrl+V"),"Copiar, cortar y pegar (también entre mapas)"],["Pegar una lista de texto","Un nodo por línea; las sangradas, dentro"],
+      [K("Supr"),"Eliminar"],[K("Ctrl+Z")+" · "+K("Ctrl+Y"),"Deshacer y rehacer"]]],
+    ["Moverse",[["Doble clic en un nodo o "+K("Intro"),"Entrar en su nivel"],[K("Retroceso")+" o "+K("Alt")+"+"+K("←"),"Subir un nivel"],["La ruta de arriba","Ir a cualquier nivel"],
+      ["Rueda del ratón","Acercar y alejar"],["Arrastrar el fondo","Desplazarse"],["Botón ⤢","Ajustar a la pantalla"]]],
+    ["Libreta",[[K("F2"),"Cambiar el nombre"],["Clic en el texto","Escribir justo ahí"],[K("Ctrl+I"),"Índice de títulos"],["Rueda o segmentos de la barra","Pasar de tramo; el número de arriba, de página"],
+      ["<code># título</code> · <code>- lista</code> · <code>- [ ] casilla</code> · <code>**negrita**</code>","Formato"]]],
+  ];
+  return `<div class="mv-help" role="dialog" aria-label="Comandos y atajos">
+    <div class="mh-head"><b>Comandos y atajos</b><span>${K("?")} para abrir y cerrar</span></div>
+    <div class="mh-grid">${groups.map(([t,rows])=>`<section><h4>${t}</h4><dl>${rows.map(([k,d])=>`<dt>${k}</dt><dd>${d}</dd>`).join("")}</dl></section>`).join("")}</div>
+  </div>`;
+}
+function toggleHelp(force){ mHelpOpen=force==null?!mHelpOpen:force; renderBoards(); }
+function goLevel(id){
+  flushNoteTyping(); mapLevel=id||null; clearSel(); mChain=null; mNoteEditing=false; renderBoards();
+}
+const goUp=()=>{ if(mapLevel) goLevel(state.mnodes[mapLevel].parent); };
+
+// ---- libreta (al estilo del editor de Obsidian) ----
+function noteSubject(){
+  if(mSel && state.mnodes[mSel]) return {kind:"node", id:mSel, o:state.mnodes[mSel]};
+  if(mapLevel && state.mnodes[mapLevel]) return {kind:"node", id:mapLevel, o:state.mnodes[mapLevel]};
+  const mid=curMapId(); return {kind:"map", id:mid, o:state.maps[mid]};
+}
+// Cada línea de los apuntes ocupa una fila también al leer (incluidas las líneas en blanco),
+// y lleva su número (data-line): así leer y escribir se ven a la misma altura y se puede pasar de uno a otro sin perder el sitio
+function mdRender(t){
+  const inline=s=>esc(s).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*?)\*/g,"$1<em>$2</em>");
+  let h="", list=null, para=[];
+  const closeList=()=>{ if(list){ h+=`</${list}>`; list=null; } };
+  const closePara=()=>{ if(para.length){ h+=`<p>${para.map(([l,i])=>`<span class="ln" data-line="${i}">${inline(l)}</span>`).join("<br>")}</p>`; para=[]; } };
+  const lines=t.split("\n");
+  lines.forEach((l,i)=>{
+    let m;
+    if((m=l.match(/^\s*[-*] \[( |x|X)\] (.*)$/))){ closePara(); if(list!=="ul"){ closeList(); h+='<ul class="mn-ul">'; list="ul"; }
+      h+=`<li class="mn-ck" data-line="${i}"><input type="checkbox" data-ckline="${i}"${m[1]===" "?"":" checked"} aria-label="Hecho"><span${m[1]===" "?"":' class="done"'}>${inline(m[2])}</span></li>`; return; }
+    if((m=l.match(/^\s*[-*] (.*)$/))){ closePara(); if(list!=="ul"){ closeList(); h+='<ul class="mn-ul">'; list="ul"; } h+=`<li data-line="${i}">${inline(m[1])}</li>`; return; }
+    if((m=l.match(/^\s*\d+[.)] (.*)$/))){ closePara(); if(list!=="ol"){ closeList(); h+='<ol class="mn-ol">'; list="ol"; } h+=`<li data-line="${i}">${inline(m[1])}</li>`; return; }
+    closeList();
+    if((m=l.match(/^(#{1,3})\s+(.*)$/))){ closePara(); const n=m[1].length+1; h+=`<h${n} data-line="${i}">${inline(m[2])}</h${n}>`; return; }
+    if((m=l.match(/^>\s?(.*)$/))){ closePara(); h+=`<blockquote data-line="${i}">${inline(m[1])}</blockquote>`; return; }
+    if(/^\s*---+\s*$/.test(l)){ closePara(); h+=`<hr data-line="${i}">`; return; }
+    if(l.trim()) para.push([l,i]);
+    else if(i<lines.length-1 || h || para.length){ closePara(); h+=`<div class="gap" data-line="${i}"></div>`; }
+  });
+  closePara(); closeList();
+  return h || '<p class="mn-empty">Escribe aquí tus apuntes…</p>';
+}
+function renderMapNote(){
+  const box=document.getElementById("mv-note"); if(!box) return;
+  const many=selIds();
+  if(many.length>1){
+    if(NP.ro) NP.ro.disconnect(); NP.el=null;
+    box.innerHTML=`<div class="mn-multi">
+      <h2>${many.length} nodos seleccionados</h2>
+      <p class="mn-multi-list">${many.map(id=>esc(state.mnodes[id].title)).join(" · ")}</p>
+      <div class="mn-meta"><span>Color para todos</span>
+        <button type="button" class="sw auto" data-mcolor="" aria-label="Automático: el acento del mapa" title="Automático: el acento del mapa"></button>
+        ${M_COLORS.map(cc=>`<button type="button" class="sw" data-mcolor="${cc}" style="--c:${cc}" aria-label="Color"></button>`).join("")}</div>
+      <ul class="mn-multi-tips">
+        <li>Arrástralos juntos, o suéltalos encima de otro nodo para meterlos dentro.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> para copiarlos o cortarlos, y <kbd>Ctrl</kbd>+<kbd>V</kbd> para pegarlos aquí o en otro mapa.</li>
+        <li><kbd>Supr</kbd> para eliminarlos · clic derecho para más opciones.</li>
+      </ul>
+      <div class="eacts"><button type="button" class="add alt" data-mmove>Mover a…</button><button type="button" class="add alt" data-mdel>Eliminar</button></div>
+    </div>`;
+    return;
+  }
+  const s=noteSubject(); if(!s.o) return;
+  const ch=childrenIndex();
+  const c = s.kind==="map" ? Object.values(state.mnodes).filter(n=>n.map===s.id).length : descCount(s.id,ch);
+  const meta = (c?`${c} ${c===1?"nodo":"nodos"} dentro`:"Sin subnodos") + (s.kind==="node"?` · brillo ${GLOW_NAMES[glowLevel(nodeLoad(s.id,ch))]}`:"");
+  const colors = s.kind==="node" ? `<span class="mn-sp"></span><span>Color</span>
+      <button type="button" class="sw auto" data-ncolor="" aria-pressed="${!s.o.color}" aria-label="Automático: el acento del mapa" title="Automático: el acento del mapa"></button>
+      ${M_COLORS.map(cc=>`<button type="button" class="sw" data-ncolor="${cc}" aria-pressed="${cc===s.o.color}" style="--c:${cc}" aria-label="Color del nodo"></button>`).join("")}` : "";
+  const addSub = s.kind==="node" && s.id===mapLevel && !(ch[s.id]||[]).length;
+  box.innerHTML=`<div class="mn-head">
+      <input type="text" class="mn-title" id="mn-title" maxlength="${s.kind==="map"?80:120}" aria-label="Título">
+      <label class="mn-page" title="Escribe un número para ir a esa página">Página
+        <input type="number" id="mn-pg" min="1" value="1" aria-label="Página actual"> de <b id="mn-pgs">1</b></label>
+    </div>
+    <div class="mn-meta"><span>${meta}</span><span class="mn-key">Ctrl+I: índice</span><span class="mn-count" id="mn-count" hidden></span>${colors}</div>
+    ${addSub?`<button type="button" class="mn-addsub" data-maddsub>+ Añadir subnodos</button>`:""}
+    <div class="mn-body" id="mn-body">
+      ${mNoteEditing
+        ? `<textarea class="mn-scroll mn-text" id="mn-text" aria-label="Libreta" maxlength="${LIMITE_LIBRETA}" placeholder="Escribe aquí tus apuntes…"></textarea>`
+        : `<div class="mn-scroll mn-md" id="mn-md" tabindex="0" title="Pulsa para escribir">${mdRender(s.o.notes)}</div>`}
+      <div class="mn-rail" id="mn-rail" role="scrollbar" aria-label="Páginas" aria-controls="${mNoteEditing?"mn-text":"mn-md"}"></div>
+      <div class="mn-index" id="mn-index" hidden></div>
+    </div>`;
+  document.getElementById("mn-title").value=s.o.title;
+  if(mNoteEditing){ const ta=document.getElementById("mn-text"); ta.value=s.o.notes; }
+  npMount(s); noteCount(s.o.notes.length);
+}
+
+// ---------- Páginas de la libreta ----------
+// La libreta avanza por tramos del alto visible. Cada página son 5 tramos, que son los 5 segmentos de la barra
+// de la derecha. Al seguir escribiendo al final de un tramo se pasa al siguiente, y tras el quinto, a la página siguiente.
+const SEGS_POR_PAGINA=5;
+const notePage={};                      // tramo en el que se dejó cada libreta (durante la sesión)
+const NP={el:null, key:"", pageH:1, screen:0, screens:1, page:1, pages:1, snapTop:0, snapT:null, drag:null, ro:null, pendingCaret:null, pendingTopLine:null};
+function npMount(s){
+  const el=document.getElementById(mNoteEditing?"mn-text":"mn-md"), body=document.getElementById("mn-body");
+  if(NP.ro) NP.ro.disconnect();
+  Object.assign(NP,{el, key:s.kind+":"+s.id, snapT:null, drag:null});
+  NP.ro=new ResizeObserver(()=>npLayout(true)); NP.ro.observe(body);
+  el.addEventListener("scroll",npOnScroll);
+  if(mNoteEditing){
+    el.addEventListener("input",()=>{ NP.typedAt=performance.now(); npPad(); npUpdate(); npFollowCaret(); });
+    el.addEventListener("scroll",()=>{ if(performance.now()-(NP.typedAt||0)<600) npFollowCaret(); });
+    // Las teclas que mueven el cursor sin escribir (flechas, Inicio, Fin, Av Pág...) también arrastran la vista
+    el.addEventListener("keydown",e=>{ if(/^(Arrow|Page|Home|End)/.test(e.key)){ NP.typedAt=performance.now(); setTimeout(npFollowCaret,0); } });
+  }
+  npLayout(false);
+  if(!mNoteEditing && NP.pendingTopLine!=null){
+    const line=NP.pendingTopLine; NP.pendingTopLine=null;
+    const els=[...el.querySelectorAll("[data-line]")].filter(n=>+n.dataset.line<=line);
+    const target=els[els.length-1];
+    if(target){ const top=target.getBoundingClientRect().top-el.getBoundingClientRect().top+el.scrollTop;
+      NP.screen=Math.min(NP.screens-1,Math.max(0,Math.round(top/NP.pageH-0.49)));
+      el.scrollTop=NP.screen*NP.pageH; NP.snapTop=el.scrollTop; npUpdate(); }
+  }
+  if(mNoteEditing){
+    el.focus();
+    if(NP.pendingCaret){
+      // Al pulsar una línea leyendo, el cursor va justo ahí y la vista se queda en el mismo tramo
+      const {line,col}=NP.pendingCaret, lines=el.value.split("\n"); NP.pendingCaret=null;
+      const li=line==null?lines.length-1:Math.min(line,lines.length-1);
+      const pos=li<0?0:lines.slice(0,li).reduce((a,l)=>a+l.length+1,0)+(line==null?lines[li].length:Math.min(col,lines[li].length));
+      el.setSelectionRange(pos,pos);
+      const off=lineOffsets(el)[Math.max(0,li)]||0;
+      const sc=Math.floor(off/NP.pageH)===NP.screen?NP.screen:Math.min(NP.screens-1,Math.floor(off/NP.pageH));
+      NP.screen=sc; el.scrollTop=sc*NP.pageH; NP.snapTop=el.scrollTop; npUpdate();
+    } else {
+      // Si se entra a escribir de otra forma, el cursor se coloca al principio del tramo que estabas leyendo
+      const top=NP.screen*NP.pageH; npCaretAt(top); el.scrollTop=top; NP.snapTop=top;
+    }
+  }
+}
+// Primera línea de los apuntes que se ve en el tramo actual de la escritura
+function topLineOfScreen(ta){
+  const offs=lineOffsets(ta), top=ta.scrollTop;
+  let li=offs.findIndex(o=>o>=top-1); return li<0?Math.max(0,offs.length-1):li;
+}
+// Línea y columna de los apuntes en el punto pulsado al leer
+function caretFromClick(e){
+  const box=document.getElementById("mn-md"), el=e.target.closest&&e.target.closest("[data-line]");
+  if(!box||!el||!box.contains(el)) return {line:null, col:0};      // fuera del texto: al final
+  const line=+el.dataset.line, src=(noteSubject().o.notes.split("\n")[line])||"";
+  let rendered="";
+  const cp=document.caretRangeFromPoint?document.caretRangeFromPoint(e.clientX,e.clientY)
+         :document.caretPositionFromPoint?(p=>p&&{startContainer:p.offsetNode,startOffset:p.offset})(document.caretPositionFromPoint(e.clientX,e.clientY)):null;
+  if(cp && el.contains(cp.startContainer)){ const r=document.createRange(); r.setStart(el,0); r.setEnd(cp.startContainer,cp.startOffset); rendered=r.toString(); }
+  else rendered=el.textContent;
+  // Se recorre la línea original saltando las marcas (#, -, [ ], **, `) para encontrar la misma posición
+  const pre=(src.match(/^(#{1,3}\s+|\s*[-*] \[[ xX]\] |\s*[-*] |\s*\d+[.)] |>\s?)/)||[""])[0];
+  let j=pre.length;
+  for(const ch of rendered){
+    while(j<src.length && src[j]!==ch && (src[j]==="*"||src[j]==="`")) j++;
+    if(j<src.length && src[j]===ch) j++;
+  }
+  return {line, col:j};
+}
+function npCaretAt(top){
+  const el=NP.el, lines=el.value.split("\n"), offs=lineOffsets(el);
+  let li=offs.findIndex(o=>o>=top-1); if(li<0) li=lines.length-1;
+  const pos=lines.slice(0,li).reduce((a,l)=>a+l.length+1,0); el.setSelectionRange(pos,pos);
+}
+function npLayout(keep){
+  const el=NP.el; if(!el||!document.body.contains(el)) return;
+  const body=el.parentElement, avail=body.clientHeight; if(!avail) return;
+  const lh=parseFloat(getComputedStyle(el).lineHeight)||24;
+  // Cada tramo mide un número exacto de líneas, para que ninguna quede cortada al pasar de uno a otro
+  NP.pageH=Math.max(lh*3, Math.floor(avail/lh)*lh);
+  el.style.height=NP.pageH+"px";
+  npPad();
+  const sc=keep?NP.screen:(notePage[NP.key]||0);
+  NP.screen=Math.min(Math.max(0,sc),NP.screens-1);
+  el.scrollTop=NP.screen*NP.pageH; NP.snapTop=el.scrollTop;
+  npUpdate();
+}
+// Relleno al final para que el último tramo también sea un tramo completo
+function npPad(){
+  const el=NP.el; if(!el) return;
+  // Alto del contenido = alto total menos el relleno actual. No se quita el relleno para medir:
+  // quitarlo un instante recortaba el desplazamiento y la vista subía de golpe al escribir en el último tramo
+  const pad=parseFloat(el.style.paddingBottom)||0, ch=el.scrollHeight-pad;
+  NP.screens=Math.max(1,Math.ceil((ch-2)/NP.pageH));
+  const np=Math.max(0,NP.screens*NP.pageH-ch);
+  if(Math.abs(np-pad)>.5) el.style.paddingBottom=np+"px";
+}
+// Mientras se escribe, la vista sigue al cursor: siempre se ve el tramo en el que está
+function npFollowCaret(){
+  const el=NP.el; if(!el||!mNoteEditing||document.activeElement!==el) return;
+  // El navegador ya desplaza lo justo para que se vea el cursor; aquí solo se encaja en el tramo de ese lado
+  const t=el.scrollTop; if(Math.abs(t-NP.snapTop)<1) return;
+  const q=t/NP.pageH, p=t>NP.snapTop?Math.ceil(q-0.02):Math.floor(q+0.02);
+  const target=Math.min(NP.screens-1,Math.max(0,p))*NP.pageH;
+  NP.snapTop=target;
+  // Sin animación: una transición suave se cortaba al seguir escribiendo y la vista se quedaba a medias
+  if(Math.abs(el.scrollTop-target)>1) el.scrollTop=target;
+}
+function npUpdate(){
+  const el=NP.el; if(!el) return;
+  NP.screen=Math.min(NP.screens-1,Math.max(0,Math.round(el.scrollTop/NP.pageH)));
+  NP.page=Math.floor(NP.screen/SEGS_POR_PAGINA)+1;
+  NP.pages=Math.max(1,Math.ceil(NP.screens/SEGS_POR_PAGINA));
+  notePage[NP.key]=NP.screen;
+  const pg=document.getElementById("mn-pg"), pgs=document.getElementById("mn-pgs");
+  if(pg && document.activeElement!==pg){ pg.value=NP.page; pg.max=NP.pages; }
+  if(pgs) pgs.textContent=NP.pages;
+  npRail();
+}
+function npOnScroll(){
+  npUpdate();
+  clearTimeout(NP.snapT);
+  if(!NP.drag) NP.snapT=setTimeout(()=>npSnap(0),130);
+}
+// Al terminar de desplazarse, la vista encaja en un tramo: hacia delante si se bajaba, hacia atrás si se subía
+function npSnap(forceDir){
+  const el=NP.el; if(!el) return;
+  if(mNoteEditing && performance.now()-(NP.typedAt||0)<600){ npFollowCaret(); return; }
+  const t=el.scrollTop, dir=forceDir||Math.sign(t-NP.snapTop), q=t/NP.pageH;
+  const p=dir>0?Math.ceil(q-0.02):dir<0?Math.floor(q+0.02):Math.round(q);
+  const target=Math.min(NP.screens-1,Math.max(0,p))*NP.pageH;
+  NP.snapTop=target;
+  if(Math.abs(target-t)>1) el.scrollTo({top:target, behavior:"smooth"});
+}
+function npGoScreen(sc){
+  const el=NP.el; if(!el) return;
+  sc=Math.min(NP.screens-1,Math.max(0,Math.round(sc)||0));
+  const top=sc*NP.pageH; NP.snapTop=top;
+  el.scrollTo({top, behavior:"smooth"});
+  if(mNoteEditing) npCaretAt(top);
+}
+// Ir a una página es ir a su primer tramo, arriba del todo
+const npGo=page=>npGoScreen((Math.min(NP.pages,Math.max(1,Math.round(page)||1))-1)*SEGS_POR_PAGINA);
+// Barra: siempre 5 segmentos, los 5 tramos de la página actual; el tramo en el que estás, en el color de acento
+function npRail(){
+  const r=document.getElementById("mn-rail"); if(!r||!NP.el) return;
+  const base=(NP.page-1)*SEGS_POR_PAGINA, gap=6, seg=(r.clientHeight-(SEGS_POR_PAGINA-1)*gap)/SEGS_POR_PAGINA;
+  r.innerHTML=Array.from({length:SEGS_POR_PAGINA},(_,i)=>{ const sc=base+i;
+    return `<span class="seg${sc===NP.screen?" on":""}${sc>=NP.screens?" void":""}" style="height:${seg}px"></span>`; }).join("");
+  r.setAttribute("aria-valuenow",NP.page); r.setAttribute("aria-valuemin",1); r.setAttribute("aria-valuemax",NP.pages);
+}
+function lineOffsets(ta){
+  const cs=getComputedStyle(ta), d=document.createElement("div");
+  for(const p of ["fontFamily","fontSize","fontWeight","lineHeight","letterSpacing","paddingLeft","paddingRight","paddingTop","tabSize"]) d.style[p]=cs[p];
+  Object.assign(d.style,{position:"absolute",visibility:"hidden",left:"-9999px",top:"0",boxSizing:"border-box",width:ta.clientWidth+"px",whiteSpace:"pre-wrap",overflowWrap:"break-word"});
+  d.innerHTML=ta.value.split("\n").map((l,i)=>`<span data-l="${i}"></span>${esc(l)}`).join("\n");
+  document.body.appendChild(d);
+  const offs=[...d.querySelectorAll("span[data-l]")].map(s=>s.offsetTop);
+  d.remove(); return offs;
+}
+
+// ---------- Índice (Ctrl+I): los títulos con # de la libreta ----------
+let miItems=[], miActive=0;
+function headingsOf(text){
+  const out=[]; text.split("\n").forEach((l,i)=>{ const m=l.match(/^(#{1,3})\s+(.*)$/); if(m&&m[2].trim()) out.push({line:i, lvl:m[1].length, text:m[2].trim()}); });
+  return out;
+}
+function toggleIndex(){
+  const box=document.getElementById("mn-index"); if(!box) return;
+  if(!box.hidden){ closeIndex(); return; }
+  const s=noteSubject(), el=NP.el, hs=headingsOf(mNoteEditing?el.value:s.o.notes);
+  // Página de cada título
+  if(mNoteEditing){ const offs=lineOffsets(el); hs.forEach(h=>{ h.screen=Math.floor((offs[h.line]||0)/NP.pageH); }); }
+  else { const els=[...el.querySelectorAll("h2,h3,h4")]; hs.forEach((h,i)=>{ h.screen=els[i]?Math.floor(els[i].offsetTop/NP.pageH):0; }); }
+  hs.forEach(h=>{ h.page=Math.floor(h.screen/SEGS_POR_PAGINA)+1; });
+  miItems=hs; miActive=Math.max(0,hs.findIndex(h=>h.screen>=NP.screen));
+  box.innerHTML=`<div class="mi-head"><b>Índice</b><input type="text" id="mi-q" placeholder="Filtrar títulos…" aria-label="Filtrar títulos" autocomplete="off"><kbd>Esc</kbd></div>
+    <ul class="mi-list" id="mi-list" role="listbox"></ul>`;
+  box.hidden=false; miRender(""); document.getElementById("mi-q").focus();
+}
+function miRender(f){
+  const list=document.getElementById("mi-list"); if(!list) return;
+  const q=fold(f.trim()), vis=miItems.map((h,i)=>({h,i})).filter(({h})=>!q||fold(h.text).includes(q));
+  if(!vis.some(v=>v.i===miActive) && vis.length) miActive=vis[0].i;
+  list.innerHTML = vis.length ? vis.map(({h,i})=>`<li><button type="button" class="mi-item lv${h.lvl}${i===miActive?" on":""}" data-mi="${i}" role="option" aria-selected="${i===miActive}">
+      <span class="mi-t">${esc(h.text)}</span><span class="mi-p">p. ${h.page}</span></button></li>`).join("")
+    : `<li class="mi-empty">${miItems.length?"Ningún título coincide.":"Esta libreta aún no tiene títulos. Empieza una línea con # para crear uno."}</li>`;
+  const on=list.querySelector(".on"); if(on) on.scrollIntoView({block:"nearest"});
+}
+function closeIndex(){ const box=document.getElementById("mn-index"); if(box){ box.hidden=true; box.innerHTML=""; } if(NP.el) NP.el.focus(); }
+function miGo(i){
+  const h=miItems[i], el=NP.el; if(!h||!el) return;
+  closeIndex();
+  if(mNoteEditing){
+    const pos=el.value.split("\n").slice(0,h.line).reduce((a,l)=>a+l.length+1,0);
+    el.focus(); el.setSelectionRange(pos,pos);
+    const top=h.screen*NP.pageH; NP.snapTop=top; el.scrollTo({top, behavior:"smooth"});
+  } else npGoScreen(h.screen);
+}
+bvBody.addEventListener("click",e=>{
+  const it=e.target.closest("[data-mi]"); if(it){ miGo(+it.dataset.mi); return; }
+});
+bvBody.addEventListener("input",e=>{ if(e.target.id==="mi-q") miRender(e.target.value); });
+bvBody.addEventListener("keydown",e=>{
+  const t=e.target;
+  if(t.id==="mi-q"){
+    const vis=[...document.querySelectorAll("#mi-list [data-mi]")].map(b=>+b.dataset.mi), k=vis.indexOf(miActive);
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); if(vis.length){ miActive=vis[(k+(e.key==="ArrowDown"?1:-1)+vis.length)%vis.length]; miRender(t.value); } }
+    else if(e.key==="Enter"){ e.preventDefault(); if(vis.length) miGo(miActive); }
+    else if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); closeIndex(); }
+    return;
+  }
+  if(t.id==="mn-pg" && e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); npGo(+t.value); t.blur(); }
+});
+bvBody.addEventListener("change",e=>{ if(e.target.id==="mn-pg") npGo(+e.target.value); });
+// Barra: pulsar un segmento para ir a ese tramo, o arrastrar para recorrer los tramos de la página
+bvBody.addEventListener("pointerdown",e=>{
+  const r=e.target.closest("#mn-rail"); if(!r||!NP.el) return;
+  e.preventDefault(); r.setPointerCapture(e.pointerId);
+  const R=r.getBoundingClientRect(), el=NP.el, y0=e.clientY, base=(NP.page-1)*SEGS_POR_PAGINA;
+  const last=Math.min(base+SEGS_POR_PAGINA,NP.screens)-1;
+  const frac=y=>Math.min(.999,Math.max(0,(y-R.top)/R.height));
+  NP.drag={moved:false}; r.classList.add("dragging");
+  const mv=ev=>{ if(Math.abs(ev.clientY-y0)>3) NP.drag.moved=true;
+    if(NP.drag.moved) el.scrollTop=Math.min(last,base+frac(ev.clientY)*SEGS_POR_PAGINA-.5)*NP.pageH; };
+  const up=ev=>{ r.removeEventListener("pointermove",mv); r.removeEventListener("pointerup",up); r.classList.remove("dragging");
+    const moved=NP.drag.moved; NP.drag=null;
+    if(moved) npSnap(0); else npGoScreen(Math.min(last,base+Math.floor(frac(ev.clientY)*SEGS_POR_PAGINA))); };
+  r.addEventListener("pointermove",mv); r.addEventListener("pointerup",up);
+});
+
+// Aviso de espacio: solo aparece al acercarse al límite; al llegar, se avisa en lugar de cortar el texto
+function noteCount(len){
+  const el=document.getElementById("mn-count"); if(!el) return;
+  const left=LIMITE_LIBRETA-len;
+  if(len<LIMITE_LIBRETA*0.9){ el.hidden=true; return; }
+  el.hidden=false; el.classList.toggle("full",left<=0);
+  el.textContent=left<=0?"Libreta llena: sigue en un nodo dentro de este (Tab o «+ Añadir subnodos»)"
+                        :`Quedan ${left.toLocaleString("es-ES")} caracteres`;
+}
+function flushNoteTyping(){ mTyping=false; }
+function focusTitle(){ const t=document.getElementById("mn-title"); if(t){ t.focus(); t.select(); } }
+
+// ---- crear, borrar, conectar ----
+function createNode(wx,wy,from){
+  const mid=curMapId(); if(!mid) return;
+  mRemember();
+  const wasSolo = mapLevel && !levelNodes(mid,mapLevel).length;
+  const id=newId("n");
+  state.mnodes[id]={map:mid, parent:mapLevel, title:"Nuevo nodo", color:"", x:wx==null?null:Math.round(wx), y:wy==null?null:Math.round(wy), notes:"", created:new Date().toISOString()};
+  if(from) state.mlinks[newId("x")]={a:from, b:id};
+  selectOnly(id); mNoteEditing=false; save();
+  if(MG&&MG.birth) MG.birth[id]=performance.now();
+  mChain={id, from:from||null};          // al poner su nombre, Intro crea otro al mismo nivel
+  if(wasSolo) renderBoards(); else { renderMapNote(); mgSettle(); mgDraw(); }
+  focusTitle();
+  return id;
+}
+function linkNodes(a,b){
+  if(a===b) return;
+  if(Object.values(state.mlinks).some(l=>(l.a===a&&l.b===b)||(l.a===b&&l.b===a))) return;
+  mRemember(); state.mlinks[newId("x")]={a,b}; save(); mgDraw();
+}
+function removeNodes(ids){
+  const all=new Set(ids), ch=childrenIndex();
+  const add=id=>{ for(const k of ch[id]||[]){ all.add(k); add(k); } };
+  ids.forEach(add);
+  for(const [lid,l] of Object.entries(state.mlinks)) if(all.has(l.a)||all.has(l.b)) delete state.mlinks[lid];
+  all.forEach(id=>delete state.mnodes[id]);
+}
+function askDeleteNode(id){
+  const n=state.mnodes[id]; if(!n) return;
+  const inside=descCount(id,childrenIndex());
+  const doIt=()=>{ mRemember(); removeNodes([id]); clearSel(); save(); renderBoards(); };
+  if(!inside && !n.notes.trim()) return doIt();
+  mvConfirm(inside ? `¿Eliminar «${n.title}» y ${inside===1?"el nodo":"los "+inside+" nodos"} que contiene?` : `¿Eliminar «${n.title}» y sus apuntes?`, doIt);
+}
+function mvConfirm(text,ok){
+  const box=document.getElementById("mv-confirm"); if(!box) return;
+  box.innerHTML=`<span></span><button type="button" class="add" data-cok>Eliminar</button><button type="button" class="add alt" data-cno>Cancelar</button>`;
+  box.querySelector("span").textContent=text+" Podrás deshacerlo con Ctrl+Z.";
+  box.hidden=false; box.querySelector("[data-cok]").focus();
+  box.onclick=e=>{ if(e.target.closest("[data-cok]")){ box.hidden=true; ok(); } else if(e.target.closest("[data-cno]")) box.hidden=true; };
+  box.onkeydown=e=>{ if(e.key==="Escape"){ e.stopPropagation(); box.hidden=true; } };
+}
+
+// ---- lienzo ----
+function mountMap(){
+  const cv=document.getElementById("mv-cv"); if(!cv) return;
+  if(MG&&MG.ro) MG.ro.disconnect();
+  const key=curMapId()+":"+(mapLevel||"");
+  MG={cv, ctx:cv.getContext("2d"), W:0, H:0, dpr:window.devicePixelRatio||1, key, f:{}, tmp:null, alpha:0, anim:null,
+      drag:null, pan:null, wire:null, menu:null, hover:null};
+  const g=document.getElementById("mv-graph");
+  const size=()=>{ if(!MG||MG.cv!==cv) return;
+    const w=g.clientWidth, h=g.clientHeight, c=mCam[MG.key];
+    // Al cambiar el tamaño (ventana o reparto), el centro de la vista se mantiene en su sitio
+    if(c && MG.W && w){ c.ox+=(w-MG.W)/2; c.oy+=(h-MG.H)/2; }
+    MG.W=w; MG.H=h; cv.width=w*MG.dpr; cv.height=h*MG.dpr; cv.style.width=w+"px"; cv.style.height=h+"px"; mgDraw(); };
+  // Se decide antes de medir: al medir se dibuja, y dibujar crearía una cámara por defecto
+  const needFit=!mCam[key];
+  MG.ro=new ResizeObserver(size); MG.ro.observe(g); size();
+  if(needFit){ delete mCam[key]; mgFit(true); mgDraw(); }
+  bindCanvas(cv);
+  MG.birth={};
+  if(key!==lastMountKey){ const t0=performance.now(); levelNodes(curMapId(),mapLevel).forEach(([id],i)=>{ MG.birth[id]=t0+Math.min(i,20)*28; }); lastMountKey=key; }
+  mgSettle(); mgDraw(); renderMapNote(); mgIdle();
+}
+// Cámara del nivel; mientras el lienzo no tiene tamaño (libreta a pantalla completa) no se guarda
+const cam=()=>mCam[MG.key]||(MG.W?(mCam[MG.key]={z:1, ox:MG.W/2, oy:MG.H/2}):{z:1, ox:0, oy:0});
+const toWorld=(x,y)=>{ const c=cam(); return [(x-c.ox)/c.z,(y-c.oy)/c.z]; };
+const posOf=id=>(MG.tmp&&MG.tmp[id])||state.mnodes[id];
+function mgFit(silent){
+  if(!MG||!MG.W) return;
+  const items=levelNodes(curMapId(),mapLevel).map(([id])=>posOf(id)).filter(p=>p.x!=null);
+  if(!items.length){ mCam[MG.key]={z:1, ox:MG.W/2, oy:MG.H/2}; if(!silent) mgDraw(); return; }
+  const xs=items.map(p=>p.x), ys=items.map(p=>p.y);
+  const x0=Math.min(...xs)-60, x1=Math.max(...xs)+60, y0=Math.min(...ys)-50, y1=Math.max(...ys)+70;
+  const z=Math.max(.35, Math.min(1.6, MG.W/(x1-x0), MG.H/(y1-y0)));
+  mCam[MG.key]={z, ox:MG.W/2-(x0+x1)/2*z, oy:MG.H/2-(y0+y1)/2*z};
+  if(!silent) mgDraw();
+}
+function zoomAt(x,y,k){ const c=cam(), z=Math.min(3,Math.max(.25,c.z*k)); c.ox=x-(x-c.ox)*z/c.z; c.oy=y-(y-c.oy)*z/c.z; c.z=z; c.user=true; mgDraw(); }
+// Los nodos sin posición (creados con «+ Nodo» o «Añadir subnodos») se colocan solos, con una pequeña simulación,
+// sin mover los que ya tienen sitio; al terminar, su posición se guarda
+function mgSettle(){
+  if(!MG) return;
+  const lv=levelNodes(curMapId(),mapLevel), free=lv.filter(([,n])=>n.x==null);
+  if(!free.length) return;
+  const placed=lv.filter(([,n])=>n.x!=null);
+  const cx=placed.length?placed.reduce((s,[,n])=>s+n.x,0)/placed.length:0, cy=placed.length?placed.reduce((s,[,n])=>s+n.y,0)/placed.length:0;
+  MG.tmp={}; free.forEach(([id],i)=>{ const a=i*2.4+Math.random(), r=40+Math.random()*30; MG.tmp[id]={x:cx+Math.cos(a)*r, y:cy+Math.sin(a)*r, vx:0, vy:0}; });
+  MG.alpha=1; mgLoop();
+}
+function mgStep(){
+  if(!MG.tmp) return;
+  const lv=levelNodes(curMapId(),mapLevel).map(([id])=>id), P=id=>posOf(id), al=MG.alpha;
+  for(const id of Object.keys(MG.tmp)){ const a=MG.tmp[id];
+    for(const o of lv){ if(o===id) continue; const b=P(o); if(b.x==null) continue; let dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy+.01, d=Math.sqrt(d2), f=2200/d2*al; a.vx+=dx/d*f; a.vy+=dy/d*f; }
+  }
+  for(const l of Object.values(state.mlinks)){ const ta=MG.tmp[l.a], tb=MG.tmp[l.b]; if(!ta&&!tb) continue;
+    const a=P(l.a), b=P(l.b); if(!a||!b||a.x==null||b.x==null) continue;
+    let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1, f=(d-110)*.02*al;
+    if(ta){ ta.vx+=dx/d*f; ta.vy+=dy/d*f; } if(tb){ tb.vx-=dx/d*f; tb.vy-=dy/d*f; } }
+  for(const t of Object.values(MG.tmp)){ t.x+=t.vx; t.y+=t.vy; t.vx*=.55; t.vy*=.55; }
+  MG.alpha*=.96;
+  if(MG.alpha<.02){ for(const [id,t] of Object.entries(MG.tmp)) if(state.mnodes[id]){ state.mnodes[id].x=Math.round(t.x); state.mnodes[id].y=Math.round(t.y); }
+    MG.tmp=null; save();
+    if(!(mCam[MG.key]&&mCam[MG.key].user)) mgFit(true); }
+}
+function mgLoop(){
+  if(!MG||MG.anim) return;
+  const tick=()=>{ if(!MG) return; MG.anim=null; mgStep(); const moving=mgDraw(); if((MG.tmp||moving) && !MG.anim) MG.anim=requestAnimationFrame(tick); };
+  MG.anim=requestAnimationFrame(tick);
+}
+function hexA(h,a){ const v=parseInt(h.slice(1),16); return `rgba(${v>>16&255},${v>>8&255},${v&255},${a})`; }
+// Animación suave: los nodos flotan unos pocos píxeles, el brillo respira, los hilos del nodo activo llevan
+// una pequeña luz y los nodos aparecen con un leve rebote. Se dibuja a 30 imágenes por segundo como mucho,
+// se detiene si la ventana no está a la vista y se desactiva si el sistema pide reducir el movimiento.
+const reduceMotion=()=>window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const phaseOf=id=>{ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))%9973; return h/9973*Math.PI*2; };
+const easeOutBack=t=>{ const c1=1.4, c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); };
+let lastMountKey=null;
+function mgIdle(){
+  if(reduceMotion()||!MG||MG.idleOn) return;
+  const me=MG; me.idleOn=true; let last=0;
+  const tick=ts=>{
+    // Se detiene al salir del mapa o de la vista (al volver, el mapa se monta de nuevo y la reanuda)
+    if(MG!==me||!document.body.contains(me.cv)||boardsView.hidden){ me.idleOn=false; return; }
+    if(!document.hidden && !boardsView.hidden && ts-last>=33){ last=ts; mgDraw(); }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function mgDraw(){
+  if(!MG||!MG.W||!document.body.contains(MG.cv)) return false;
+  const {ctx,W,H,dpr}=MG, c=cam(), mid=curMapId(), m=state.maps[mid]; if(!m) return false;
+  const css=getComputedStyle(document.documentElement), v=n=>css.getPropertyValue(n).trim();
+  const ink=v("--ink"), muted=v("--muted"), line=v("--line"), font=getComputedStyle(document.body).fontFamily;
+  const lv=levelNodes(mid,mapLevel), ids=new Set(lv.map(([id])=>id)), ch=childrenIndex(), selSet=new Set(selIds());
+  const links=Object.entries(state.mlinks).filter(([,l])=>ids.has(l.a)&&ids.has(l.b));
+  const focus=MG.hover, near=new Set();
+  if(focus){ near.add(focus); for(const [,l] of links){ if(l.a===focus) near.add(l.b); if(l.b===focus) near.add(l.a); } }
+  const anim=!reduceMotion(), nowMs=performance.now(), now=nowMs/1000;
+  const dragging=new Set(MG.drag?MG.drag.ids:[]);
+  // Posición animada: un pequeño vaivén distinto para cada nodo (no afecta a la posición guardada)
+  const ap=id=>{ const p=posOf(id); if(!anim||p.x==null||dragging.has(id)) return p; const ph=phaseOf(id);
+    return {x:p.x+Math.cos(now*.55+ph)*1.6, y:p.y+Math.sin(now*.7+ph*1.3)*2.2}; };
+  const birth=id=>{ const bt=MG.birth&&MG.birth[id]; if(!anim||bt==null) return 1; const e=(nowMs-bt)/420;
+    if(e>=1){ delete MG.birth[id]; return 1; } return e<=0?0:easeOutBack(e); };
+  let moving=false;
+  for(const [id] of lv){ const t=focus?(near.has(id)?1:0):1, f=MG.f[id]??1, nf=f+(t-f)*.25; MG.f[id]=Math.abs(t-nf)<.01?t:nf; if(MG.f[id]!==t) moving=true; }
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  ctx.setTransform(dpr*c.z,0,0,dpr*c.z,dpr*c.ox,dpr*c.oy);
+  const colorOf=n=>n.color||m.color;
+  // hilos
+  for(const [lid,l] of links){ const a=ap(l.a), b=ap(l.b); if(a.x==null||b.x==null) continue;
+    const via=focus&&(l.a===focus||l.b===focus)?focus:(mSel&&(l.a===mSel||l.b===mSel)?mSel:null);
+    const on=lid===mSelLink || !!via, vis=Math.min(MG.f[l.a]??1, MG.f[l.b]??1)*Math.min(birth(l.a),birth(l.b),1);
+    ctx.globalAlpha=on?1:(.15+.6*vis); ctx.strokeStyle=on?(via?colorOf(state.mnodes[via]):m.color):line;
+    ctx.lineWidth=(lid===mSelLink?2.4:on?1.6:1)/c.z; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    // Una pequeña luz recorre los hilos del nodo activo
+    if(on && anim){ const col=via?colorOf(state.mnodes[via]):m.color, from=via&&l.b===via?b:a, to=via&&l.b===via?a:b, u=(now*.45+phaseOf(lid))%1;
+      ctx.fillStyle=col; ctx.globalAlpha=.9*Math.sin(u*Math.PI); ctx.beginPath(); ctx.arc(from.x+(to.x-from.x)*u, from.y+(to.y-from.y)*u, 3.2/c.z, 0, 7); ctx.fill(); } }
+  if(MG.wire){ const a=ap(MG.wire.from); ctx.globalAlpha=1; ctx.strokeStyle=colorOf(state.mnodes[MG.wire.from]); ctx.setLineDash([5/c.z,5/c.z]); ctx.lineWidth=1.4/c.z;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(MG.wire.x,MG.wire.y); ctx.stroke(); ctx.setLineDash([]); }
+  // nodos
+  for(const [id,n] of lv){ const p=ap(id); if(p.x==null) continue;
+    const k=birth(id); if(k<1) moving=true; if(k<=0) continue;
+    const load=nodeLoad(id,ch), g=glowLevel(load), r=(6+Math.min(10,Math.sqrt(load)*2.3))*k, col=colorOf(n), f=MG.f[id]??1, vis=(.18+.82*f)*Math.min(1,k), hi=id===focus;
+    // El brillo respira despacio
+    const breath=anim?.82+.18*Math.sin(now*1.25+phaseOf(id)):1;
+    for(let i=g;i>0;i--){ ctx.globalAlpha=vis*breath; ctx.fillStyle=hexA(col,.1*(g-i+1)); ctx.beginPath(); ctx.arc(p.x,p.y,r+i*5.5*k,0,7); ctx.fill(); }
+    ctx.globalAlpha=vis; ctx.fillStyle=(hi||g>=2||n.color)?col:muted; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill();
+    if((ch[id]||[]).length){ ctx.strokeStyle=hi?col:muted; ctx.lineWidth=1.3/c.z; ctx.beginPath(); ctx.arc(p.x,p.y,r+3.5,0,7); ctx.stroke(); }
+    const sel=selSet.has(id);
+    if(sel){ ctx.globalAlpha=1; ctx.strokeStyle=ink; ctx.lineWidth=1.6/c.z; ctx.beginPath(); ctx.arc(p.x,p.y,r+7,0,7); ctx.stroke(); }
+    if(MG.dropTarget===id){ ctx.globalAlpha=1; ctx.fillStyle=hexA(col,.18); ctx.beginPath(); ctx.arc(p.x,p.y,r+16,0,7); ctx.fill();
+      ctx.strokeStyle=col; ctx.lineWidth=2.4/c.z; ctx.setLineDash([4/c.z,3/c.z]); ctx.beginPath(); ctx.arc(p.x,p.y,r+16,0,7); ctx.stroke(); ctx.setLineDash([]); }
+    if(c.z>.6||g>=2||hi||sel||MG.dropTarget===id){ ctx.globalAlpha=vis; ctx.fillStyle=hi||sel?ink:muted; ctx.textAlign="center";
+      ctx.font=`${hi||sel?600:500} ${Math.round(13/Math.max(c.z,.75))}px ${font}`; ctx.fillText(n.title,p.x,p.y+r+16); }
+  }
+  ctx.globalAlpha=1; ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(MG.rect){ const R=MG.rect, x=Math.min(R.x0,R.x1), y=Math.min(R.y0,R.y1), w=Math.abs(R.x1-R.x0), h=Math.abs(R.y1-R.y0);
+    ctx.fillStyle=hexA(m.color,.08); ctx.fillRect(x,y,w,h); ctx.strokeStyle=m.color; ctx.lineWidth=1; ctx.setLineDash([5,4]); ctx.strokeRect(x+.5,y+.5,w,h); ctx.setLineDash([]); }
+  if(MG.dropTarget && state.mnodes[MG.dropTarget]){ ctx.fillStyle=ink; ctx.font=`600 13px ${font}`; ctx.textAlign="left";
+    ctx.fillText(`Suelta para meterlo dentro de «${state.mnodes[MG.dropTarget].title}»`,14,24); }
+  if(!lv.length){ ctx.fillStyle=muted; ctx.textAlign="center"; ctx.font=`15px ${font}`; ctx.fillText("Doble clic en cualquier sitio para crear el primer nodo",W/2,H/2); }
+  if(moving && !MG.idleOn) mgLoop();
+  return moving;
+}
+function hitNode(x,y,skip){
+  const c=cam(), [wx,wy]=toWorld(x,y), ch=childrenIndex();
+  let best=null, bd=1e9;
+  for(const [id] of levelNodes(curMapId(),mapLevel)){ if(skip&&skip.has(id)) continue; const p=posOf(id); if(p.x==null) continue;
+    const r=6+Math.min(10,Math.sqrt(nodeLoad(id,ch))*2.3), d=Math.hypot(p.x-wx,p.y-wy);
+    if(d<r+8/c.z && d<bd){ bd=d; best=id; } }
+  return best;
+}
+function hitLink(x,y){
+  const c=cam(), [wx,wy]=toWorld(x,y), ids=new Set(levelNodes(curMapId(),mapLevel).map(([id])=>id));
+  for(const [lid,l] of Object.entries(state.mlinks)){ if(!ids.has(l.a)||!ids.has(l.b)) continue;
+    const a=posOf(l.a), b=posOf(l.b); if(a.x==null||b.x==null) continue;
+    const dx=b.x-a.x, dy=b.y-a.y, t=Math.max(0,Math.min(1,((wx-a.x)*dx+(wy-a.y)*dy)/(dx*dx+dy*dy||1)));
+    if(Math.hypot(a.x+t*dx-wx, a.y+t*dy-wy) < 6/c.z) return lid; }
+  return null;
+}
+function closeMgMenu(){ if(MG&&MG.menu){ MG.menu.remove(); MG.menu=null; } }
+function openMgMenu(x,y,items){
+  closeMgMenu();
+  const g=document.getElementById("mv-graph"), el=document.createElement("div"); el.className="mv-menu"; el.setAttribute("role","menu");
+  items.forEach(([t,fn,cls])=>{ const b=document.createElement("button"); b.type="button"; b.textContent=t; if(cls) b.className=cls; b.onclick=()=>{ closeMgMenu(); fn(); }; el.appendChild(b); });
+  g.appendChild(el);
+  el.style.left=Math.min(x, MG.W-el.offsetWidth-8)+"px"; el.style.top=Math.min(y, MG.H-el.offsetHeight-8)+"px";
+  MG.menu=el; const f=el.querySelector("button"); if(f) f.focus();
+}
+// ---- selección (uno o varios nodos del nivel actual) ----
+let mMulti=new Set(), mClip=null, mChain=null;
+function selIds(){
+  const s=new Set(mMulti); if(mSel) s.add(mSel);
+  return [...s].filter(id=>{ const n=state.mnodes[id]; return n && n.map===curMapId() && (n.parent||null)===(mapLevel||null); });
+}
+function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; }
+function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; }
+function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); }
+const mapActive=()=>!boardsView.hidden && !!curMapId() && !!MG && !cdlg.open;
+const isTyping=()=>{ const a=document.activeElement; return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+
+// ---- avisos breves con «Deshacer» ----
+function mvToast(text){
+  const g=document.getElementById("mv-graph"); if(!g) return;
+  let t=g.querySelector(".mv-toast"); if(!t){ t=document.createElement("div"); t.className="mv-toast"; t.setAttribute("role","status"); g.appendChild(t); }
+  t.innerHTML=`<span></span><button type="button">Deshacer</button>`; t.querySelector("span").textContent=text;
+  t.querySelector("button").onclick=()=>{ t.remove(); mUndoDo(); };
+  clearTimeout(t._h); t._h=setTimeout(()=>t.remove(),4500);
+}
+
+// ---- posiciones ----
+// Hueco libre alrededor de un nodo, para los nodos creados con Tab o Intro
+function spotNear(refId){
+  const p=posOf(refId); if(!p||p.x==null) return [null,null];
+  const others=levelNodes(curMapId(),mapLevel).map(([id])=>posOf(id)).filter(q=>q&&q.x!=null);
+  for(let k=0;k<30;k++){ const a=-Math.PI/2+k*0.62, r=120+Math.floor(k/10)*55, x=p.x+Math.cos(a)*r, y=p.y+Math.sin(a)*r;
+    if(others.every(q=>Math.hypot(q.x-x,q.y-y)>72)) return [x,y]; }
+  return [p.x+140,p.y];
+}
+function ensureVisible(id){
+  const p=posOf(id); if(!MG||!p||p.x==null) return;
+  const c=cam(), sx=p.x*c.z+c.ox, sy=p.y*c.z+c.oy, m=60;
+  if(sx<m||sx>MG.W-m||sy<m||sy>MG.H-m){ c.ox+=MG.W/2-sx; c.oy+=MG.H/2-sy; mgDraw(); }
+}
+// Si lo pegado o creado queda fuera de la vista, se encuadra todo
+function revealAll(ids){
+  if(!MG) return; const c=cam(), m=40;
+  const out=ids.some(id=>{ const p=posOf(id); if(!p||p.x==null) return false; const sx=p.x*c.z+c.ox, sy=p.y*c.z+c.oy; return sx<m||sx>MG.W-m||sy<m||sy>MG.H-m; });
+  if(out) mgFit(false);
+}
+function pastePoint(){
+  if(MG.lastPointer){ const [x,y]=MG.lastPointer; if(x>0&&y>0&&x<MG.W&&y<MG.H) return toWorld(x,y); }
+  return toWorld(MG.W/2,MG.H/2);
+}
+
+// ---- crear nodos encadenados (Tab e Intro) ----
+function createNear(refId, linkFrom){
+  const [x,y]=refId?spotNear(refId):pastePoint();
+  const id=createNode(x,y,linkFrom);
+  if(id) ensureVisible(id);
+  return id;
+}
+
+// ---- borrar varios ----
+function askDeleteNodes(ids){
+  if(ids.length<=1){ if(ids[0]) askDeleteNode(ids[0]); return; }
+  const ch=childrenIndex(), inside=ids.reduce((a,id)=>a+descCount(id,ch),0);
+  mvConfirm(`¿Eliminar ${ids.length} nodos${inside?` y ${inside===1?"el nodo":"los "+inside+" nodos"} que contienen`:""}?`,
+    ()=>{ mRemember(); removeNodes(ids); clearSel(); save(); renderBoards(); });
+}
+
+// ---- mover nodos a otro nivel (arrastrando encima de otro nodo o con «Mover a…») ----
+function moveNodes(ids,dest){
+  const set=new Set(ids);
+  for(const id of ids){ const n=state.mnodes[id]; if(n){ n.parent=dest||null; n.x=null; n.y=null; } }
+  // Los hilos solo unen nodos del mismo nivel: se quitan los que unían lo movido con lo que se queda
+  for(const [lid,l] of Object.entries(state.mlinks)) if(set.has(l.a)!==set.has(l.b)) delete state.mlinks[lid];
+}
+function destName(dest){ return dest?`«${state.mnodes[dest].title}»`:`el primer nivel de «${state.maps[curMapId()].title}»`; }
+function openMoveTo(ids){
+  closeMgMenu();
+  const g=document.getElementById("mv-graph"); if(!g||!ids.length) return;
+  const ch=childrenIndex(), excl=new Set(ids), add=id=>{ for(const k of ch[id]||[]){ excl.add(k); add(k); } }; ids.forEach(add);
+  const mid=curMapId(), roots=levelNodes(mid,null).map(([id])=>id);
+  const rows=[`<button type="button" data-moveto=""${mapLevel?"":" disabled"}><span>${esc(state.maps[mid].title)}</span><small>primer nivel</small></button>`];
+  const walk=(id,d)=>{ if(excl.has(id)) return; const n=state.mnodes[id];
+    rows.push(`<button type="button" data-moveto="${id}" style="padding-left:${12+d*16}px"${id===mapLevel?" disabled":""}><span>${esc(n.title)}</span></button>`);
+    for(const k of ch[id]||[]) walk(k,d+1); };
+  roots.forEach(r=>walk(r,1));
+  const box=document.createElement("div"); box.className="mv-move"; box.setAttribute("role","dialog"); box.setAttribute("aria-label","Mover a");
+  box.innerHTML=`<div class="mm-head"><b>Mover ${ids.length===1?`«${esc(state.mnodes[ids[0]].title)}»`:ids.length+" nodos"} a…</b><button type="button" data-movecancel aria-label="Cerrar">×</button></div>
+    <input type="text" placeholder="Filtrar…" aria-label="Filtrar destinos" autocomplete="off"><div class="mm-list">${rows.join("")}</div>`;
+  g.appendChild(box);
+  const inp=box.querySelector("input"); inp.focus();
+  inp.oninput=()=>{ const q=fold(inp.value.trim()); box.querySelectorAll("[data-moveto]").forEach(b=>{ b.hidden=!!q && !fold(b.textContent).includes(q); }); };
+  box.onkeydown=e=>{ if(e.key==="Escape"){ e.stopPropagation(); box.remove(); } if(e.key==="Enter"){ const f=[...box.querySelectorAll("[data-moveto]:not([hidden]):not([disabled])")][0]; if(f) f.click(); } };
+  box.onclick=e=>{
+    if(e.target.closest("[data-movecancel]")){ box.remove(); return; }
+    const b=e.target.closest("[data-moveto]"); if(!b||b.disabled) return;
+    const dest=b.dataset.moveto||null; box.remove();
+    mRemember(); moveNodes(ids,dest); clearSel(); save(); renderBoards();
+    mvToast(`${ids.length===1?"Nodo movido":ids.length+" nodos movidos"} a ${destName(dest)}`);
+  };
+}
+
+// ---- copiar, cortar y pegar (también entre mapas) ----
+function outlineText(ids,ch){
+  const out=[], walk=(id,d)=>{ out.push("  ".repeat(d)+"- "+state.mnodes[id].title); for(const k of ch[id]||[]) walk(k,d+1); };
+  ids.forEach(id=>walk(id,0)); return out.join("\n");
+}
+function copySelection(){
+  const ids=selIds(); if(!ids.length) return null;
+  const ch=childrenIndex(), all=[], add=id=>{ all.push(id); for(const k of ch[id]||[]) add(k); }; ids.forEach(add);
+  const set=new Set(all), tops=new Set(ids);
+  mClip={nodes:all.map(id=>{ const n=state.mnodes[id]; return {id, parent:tops.has(id)?null:n.parent, title:n.title, color:n.color, x:n.x, y:n.y, notes:n.notes}; }),
+         links:Object.values(state.mlinks).filter(l=>set.has(l.a)&&set.has(l.b)).map(l=>[l.a,l.b]),
+         text:outlineText(ids,ch), count:ids.length};
+  return mClip.text;
+}
+function pasteClip(wx,wy){
+  const c=mClip, mid=curMapId(); if(!c||!mid) return;
+  mRemember();
+  const ids={}; c.nodes.forEach(n=>{ ids[n.id]=newId("n"); });
+  const tops=c.nodes.filter(n=>n.parent===null), placed=tops.filter(n=>n.x!=null);
+  const cx=placed.length?placed.reduce((a,n)=>a+n.x,0)/placed.length:0, cy=placed.length?placed.reduce((a,n)=>a+n.y,0)/placed.length:0;
+  const now=new Date().toISOString();
+  for(const n of c.nodes){ const top=n.parent===null;
+    state.mnodes[ids[n.id]]={map:mid, parent:top?(mapLevel||null):ids[n.parent], title:n.title, color:n.color,
+      x:top?(n.x!=null?Math.round(n.x-cx+wx):null):n.x, y:top?(n.y!=null?Math.round(n.y-cy+wy):null):n.y, notes:n.notes, created:now}; }
+  for(const [a,b] of c.links) state.mlinks[newId("x")]={a:ids[a], b:ids[b]};
+  clearSel(); tops.forEach((n,i)=>{ if(i===0) mSel=ids[n.id]; mMulti.add(ids[n.id]); });
+  save(); renderBoards(); revealAll(selIds());
+  mvToast(`${c.count===1?"Nodo pegado":c.count+" nodos pegados"}`);
+}
+// Una lista de texto pegada (una idea por línea) se convierte en nodos; las líneas sangradas, en nodos de dentro
+function pasteList(text,wx,wy){
+  const mid=curMapId(); if(!mid) return;
+  const items=[];
+  for(const raw of text.replace(/\r/g,"").split("\n").slice(0,300)){
+    if(!raw.trim()) continue;
+    const ws=(raw.match(/^[ \t]*/)[0]).replace(/\t/g,"    ").length;
+    const h=raw.trim().match(/^(#{1,6})\s+/);
+    const title=raw.trim().replace(/^(#{1,6}\s+|[-*+•]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/,"").trim().slice(0,120);
+    if(title) items.push({indent:h?(h[1].length-1)*100:ws, title});
+  }
+  if(!items.length) return;
+  mRemember();
+  const stack=[], now=new Date().toISOString(), tops=[];
+  for(const it of items){
+    while(stack.length && stack[stack.length-1].indent>=it.indent) stack.pop();
+    const parent=stack.length?stack[stack.length-1].id:(mapLevel||null), id=newId("n");
+    let x=null, y=null;
+    if(!stack.length){ const k=tops.length, col=k%4, row=Math.floor(k/4); x=Math.round(wx+(col-1.5)*150); y=Math.round(wy+row*95); tops.push(id); }
+    state.mnodes[id]={map:mid, parent, title:it.title, color:"", x, y, notes:"", created:now};
+    stack.push({indent:it.indent, id});
+  }
+  clearSel(); tops.forEach((id,i)=>{ if(i===0) mSel=id; mMulti.add(id); });
+  save(); renderBoards(); revealAll(selIds());
+  mvToast(`${items.length} ${items.length===1?"nodo creado":"nodos creados"} a partir del texto`);
+}
+document.addEventListener("copy",e=>{
+  if(!mapActive()||isTyping()) return;
+  const t=copySelection(); if(t==null) return;
+  e.preventDefault(); e.clipboardData.setData("text/plain",t);
+});
+document.addEventListener("cut",e=>{
+  if(!mapActive()||isTyping()) return;
+  const ids=selIds(), t=copySelection(); if(t==null) return;
+  e.preventDefault(); e.clipboardData.setData("text/plain",t);
+  mRemember(); removeNodes(ids); clearSel(); save(); renderBoards();
+  mvToast(`${ids.length===1?"Nodo cortado":ids.length+" nodos cortados"}: pégalo donde quieras con Ctrl+V`);
+});
+document.addEventListener("paste",e=>{
+  if(!mapActive()||isTyping()) return;
+  const text=e.clipboardData.getData("text/plain")||"";
+  e.preventDefault();
+  const [wx,wy]=pastePoint();
+  if(mClip && text===mClip.text) pasteClip(wx,wy);
+  else if(text.trim()) pasteList(text,wx,wy);
+  else if(mClip) pasteClip(wx,wy);
+});
+// ---- lienzo: ratón ----
+function bindCanvas(cv){
+  const pos=e=>{ const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+  cv.addEventListener("pointerdown",e=>{
+    if(e.button===2) return;
+    closeMgMenu(); const mv=document.querySelector(".mv-move"); if(mv) mv.remove();
+    const [x,y]=pos(e), id=hitNode(x,y), multi=e.ctrlKey||e.metaKey;
+    if(MG.wire && MG.wire.pick){ const from=MG.wire.from; MG.wire=null; if(id) linkNodes(from,id); else mgDraw(); return; }
+    cv.setPointerCapture(e.pointerId);
+    if(id){
+      if(multi){                                       // Ctrl+clic: añade o quita de la selección
+        const s=new Set(selIds()); s.has(id)?s.delete(id):s.add(id);
+        mMulti=s; mSel=s.has(id)?id:([...s][0]||null); mSelLink=null; selectionChanged(); return;
+      }
+      if(e.shiftKey){ if(!selIds().includes(id)) selectOnly(id); const [wx,wy]=toWorld(x,y); MG.wire={from:id, x:wx, y:wy}; selectionChanged(); return; }
+      const sel=selIds();
+      if(!sel.includes(id)){ selectOnly(id); selectionChanged(); }
+      else if(mSel!==id){ mSel=id; selectionChanged(); }
+      // Se arrastran todos los seleccionados a la vez
+      const [wx,wy]=toWorld(x,y), ids=selIds();
+      MG.drag={ids, ox:wx, oy:wy, from:Object.fromEntries(ids.map(i=>[i,{x:state.mnodes[i].x, y:state.mnodes[i].y}])), moved:false};
+      mgDraw(); return;
+    }
+    const lid=hitLink(x,y);
+    if(lid && !multi && !e.shiftKey){ clearSel(); mSelLink=lid; selectionChanged(); return; }
+    if(multi || e.shiftKey){                           // Mayús o Ctrl + arrastrar en el fondo: recuadro de selección
+      MG.rect={x0:x, y0:y, x1:x, y1:y, base:multi?new Set(selIds()):new Set()}; mgDraw(); return;
+    }
+    MG.pan={x, y, ox:cam().ox, oy:cam().oy};
+    if(selIds().length||mSelLink){ clearSel(); selectionChanged(); }
+    cv.classList.add("panning"); mgDraw();
+  });
+  cv.addEventListener("pointermove",e=>{
+    const [x,y]=pos(e); MG.lastPointer=[x,y];
+    if(MG.drag){
+      const [wx,wy]=toWorld(x,y), dx=wx-MG.drag.ox, dy=wy-MG.drag.oy;
+      if(!MG.drag.moved){ if(Math.hypot(dx,dy)*cam().z<3) return; mRemember(); MG.drag.moved=true; }
+      for(const id of MG.drag.ids){ const n=state.mnodes[id], f=MG.drag.from[id]; if(n&&f.x!=null){ n.x=Math.round(f.x+dx); n.y=Math.round(f.y+dy); } }
+      // ¿Se está soltando encima de otro nodo? Entonces se meterá dentro de él
+      const over=hitNode(x,y,new Set(MG.drag.ids)); MG.dropTarget=over||null;
+      mgDraw(); return;
+    }
+    if(MG.rect){
+      MG.rect.x1=x; MG.rect.y1=y;
+      const [ax,ay]=toWorld(Math.min(MG.rect.x0,x),Math.min(MG.rect.y0,y)), [bx,by]=toWorld(Math.max(MG.rect.x0,x),Math.max(MG.rect.y0,y));
+      const s=new Set(MG.rect.base);
+      for(const [id] of levelNodes(curMapId(),mapLevel)){ const p=posOf(id); if(p.x!=null && p.x>=ax&&p.x<=bx&&p.y>=ay&&p.y<=by) s.add(id); }
+      mMulti=s; mSel=[...s][0]||null; mgDraw(); return;
+    }
+    if(MG.pan){ const c=cam(); c.ox=MG.pan.ox+x-MG.pan.x; c.oy=MG.pan.oy+y-MG.pan.y; c.user=true; mgDraw(); return; }
+    if(MG.wire){ const [wx,wy]=toWorld(x,y); MG.wire.x=wx; MG.wire.y=wy; mgDraw(); }
+    const h=hitNode(x,y);
+    if(h!==MG.hover){ MG.hover=h; cv.style.cursor=h?"pointer":""; mgDraw(); }
+  });
+  cv.addEventListener("pointerup",e=>{
+    const [x,y]=pos(e);
+    if(MG.drag){
+      const d=MG.drag; MG.drag=null;
+      if(d.moved && MG.dropTarget){
+        const dest=MG.dropTarget; MG.dropTarget=null;
+        // Al soltar encima de otro nodo, lo arrastrado vuelve a su sitio y pasa a estar dentro de ese nodo
+        for(const id of d.ids){ const n=state.mnodes[id], f=d.from[id]; if(n){ n.x=f.x; n.y=f.y; } }
+        moveNodes(d.ids,dest); clearSel(); save(); renderBoards();
+        mvToast(`${d.ids.length===1?"Nodo movido":d.ids.length+" nodos movidos"} dentro de «${state.mnodes[dest].title}»`);
+        return;
+      }
+      MG.dropTarget=null; if(d.moved) save(); mgDraw();
+    }
+    if(MG.rect){ MG.rect=null; selectionChanged(); }
+    if(MG.wire && !MG.wire.pick){ const from=MG.wire.from, to=hitNode(x,y); MG.wire=null;
+      if(to && to!==from) linkNodes(from,to);
+      else if(!to){ const [wx,wy]=toWorld(x,y); createNode(wx,wy,from); }
+      else mgDraw(); }
+    if(MG.pan){ MG.pan=null; cv.classList.remove("panning"); }
+  });
+  cv.addEventListener("pointerleave",()=>{ if(MG&&!MG.drag&&!MG.pan&&!MG.rect&&MG.hover){ MG.hover=null; mgDraw(); } });
+  cv.addEventListener("dblclick",e=>{
+    const [x,y]=pos(e), id=hitNode(x,y);
+    if(id){ goLevel(id); return; }
+    const [wx,wy]=toWorld(x,y); createNode(wx,wy,null);
+  });
+  cv.addEventListener("wheel",e=>{ e.preventDefault(); const [x,y]=pos(e); zoomAt(x,y,e.deltaY<0?1.12:1/1.12); },{passive:false});
+  cv.addEventListener("contextmenu",e=>{
+    e.preventDefault(); const [x,y]=pos(e), id=hitNode(x,y), lid=id?null:hitLink(x,y);
+    MG.lastPointer=[x,y];
+    if(id){
+      if(!selIds().includes(id)) selectOnly(id); else mSel=id;
+      selectionChanged();
+      const ids=selIds();
+      if(ids.length>1) openMgMenu(x,y,[["Mover a…",()=>openMoveTo(ids)],["Eliminar "+ids.length+" nodos",()=>askDeleteNodes(ids),"danger"]]);
+      else openMgMenu(x,y,[["Abrir",()=>goLevel(id)],["Cambiar nombre",focusTitle],
+        ["Conectar con…",()=>{ const p=posOf(id); MG.wire={from:id, x:p.x, y:p.y, pick:true}; mgDraw(); }],
+        ["Nuevo nodo conectado",()=>{ mChain=null; createNear(id,id); }],
+        ["Mover a…",()=>openMoveTo([id])],
+        ["Eliminar",()=>askDeleteNode(id),"danger"]]);
+    }
+    else if(lid){ clearSel(); mSelLink=lid; selectionChanged();
+      openMgMenu(x,y,[["Quitar conexión",()=>{ mRemember(); delete state.mlinks[lid]; mSelLink=null; save(); mgDraw(); },"danger"]]); }
+    else { const [wx,wy]=toWorld(x,y);
+      const items=[["Nuevo nodo aquí",()=>createNode(wx,wy,null)]];
+      if(mClip) items.push(["Pegar "+(mClip.count===1?"el nodo copiado":mClip.count+" nodos copiados"),()=>pasteClip(wx,wy)]);
+      items.push(["Seleccionar todo",()=>{ const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); }],
+                 ["Ajustar a la pantalla",()=>mgFit(false)]);
+      openMgMenu(x,y,items); }
+  });
+}
+
+// ---- eventos de la vista de mapa (delegados en el cuerpo de la vista de tableros) ----
+bvBody.addEventListener("click",e=>{
+  if(!curMapId() && !e.target.closest(".mcard,[data-newmap],[data-nmcolor],[data-nmcreate],[data-nmcancel],[data-mfav]")) return;
+  const t=e.target, q=s=>t.closest(s); let el;
+  if((el=q("[data-mfav]"))){ e.stopImmediatePropagation(); const m=state.maps[el.dataset.mfav]; mRemember(); m.fav=!m.fav; boardsChanged(); return; }
+  if(q("[data-newmap]")){ e.stopImmediatePropagation(); openNewMap(); renderBoards(); document.getElementById("nm-name").focus(); return; }
+  if((el=q("[data-nmcolor]"))){ e.stopImmediatePropagation(); nmDraft.color=el.dataset.nmcolor; renderBoards(); return; }
+  if(q("[data-nmcreate]")){ e.stopImmediatePropagation(); createMap(); return; }
+  if(q("[data-nmcancel]")){ e.stopImmediatePropagation(); nbMapOpen=false; renderBoards(); return; }
+  if((el=q(".mcard[data-map]"))){ e.stopImmediatePropagation(); if(!bJustDragged) setMap(el.dataset.map); return; }
+  if(!curMapId()) return;
+  if(q("[data-mhelp]")){ toggleHelp(); return; }
+  if((el=q("[data-mlevel]"))){ goLevel(el.dataset.mlevel||null); return; }
+  if((el=q("[data-macc]"))){ mRemember(); state.maps[curMapId()].color=el.dataset.macc; boardsChanged(); return; }
+  if((el=q("[data-delmap]"))){ armDelete(el,()=>deleteMap(curMapId()),"Pulsa otra vez para eliminar el mapa"); return; }
+  if((el=q("[data-mtool]"))){ const k=el.dataset.mtool;
+    if(k==="new"){ const c=cam(); createNode((MG.W/2-c.ox)/c.z+(Math.random()-.5)*60, (MG.H/2-c.oy)/c.z+(Math.random()-.5)*60, mSel); }
+    else if(k==="in") zoomAt(MG.W/2,MG.H/2,1.2); else if(k==="out") zoomAt(MG.W/2,MG.H/2,1/1.2); else mgFit(false);
+    return; }
+  if((el=q("[data-mcolor]"))){ mRemember(); for(const id of selIds()) state.mnodes[id].color=el.dataset.mcolor; save(); mgDraw(); return; }
+  if(q("[data-mmove]")){ openMoveTo(selIds()); return; }
+  if(q("[data-mdel]")){ askDeleteNodes(selIds()); return; }
+  if((el=q("[data-ncolor]"))){ const s=noteSubject(); if(s.kind!=="node") return; mRemember(); s.o.color=el.dataset.ncolor; save(); renderMapNote(); mgDraw(); return; }
+  if(q("[data-maddsub]")){ createNode(null,null,null); return; }
+  if((el=q("[data-ckline]"))){ const s=noteSubject(), lines=s.o.notes.split("\n"), i=+el.dataset.ckline;
+    mRemember(); lines[i]=lines[i].replace(/\[( |x|X)\]/, el.checked?"[x]":"[ ]"); s.o.notes=lines.join("\n"); save(); renderMapNote(); mgDraw(); return; }
+  if(q("#mn-md") && !q("a")){ NP.pendingCaret=caretFromClick(e); mNoteEditing=true; mTyping=false; renderMapNote(); }
+}, true);
+bvBody.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.id==="nm-name"){ nmDraft.title=t.value; return; }
+  if(!curMapId()) return;
+  if(t.id==="mn-title"||t.id==="mn-text"){
+    const s=noteSubject(); if(!s.o) return;
+    if(!mTyping){ mRemember(); mTyping=true; }
+    if(t.id==="mn-title"){ const v=t.value.trim(); if(!v) return; s.o.title=v.slice(0,s.kind==="map"?80:120);
+      const cr=bvBody.querySelector(`.mv-crumb[data-mlevel="${s.kind==="map"?"":s.id}"]`); if(cr) cr.textContent=s.o.title;
+      if(s.kind==="map") document.getElementById("bv-current").textContent=s.o.title; }
+    else { s.o.notes=t.value.slice(0,LIMITE_LIBRETA); noteCount(t.value.length); saveSoon(); if(!(MG&&MG.idleOn)) mgDraw(); return; }
+    save(); mgDraw();
+  }
+});
+bvBody.addEventListener("focusin",e=>{ if(e.target.id==="mn-title"||e.target.id==="mn-text") mTyping=false; });
+bvBody.addEventListener("focusout",e=>{
+  if(!curMapId()) return;
+  // Si el foco pasa a otro control de la libreta (un color, una casilla), su propio clic ya la repinta
+  const dentro=e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("#mv-note");
+  // Mientras el foco siga dentro de la libreta (índice, número de página, colores) se sigue en modo escritura
+  if(e.target.id==="mn-text") flushSave();
+  if(e.target.id==="mn-text" && !dentro){ NP.pendingTopLine=topLineOfScreen(e.target); mNoteEditing=false; renderMapNote(); }
+  if(e.target.id==="mn-title"){ const s=noteSubject(); if(s.o) e.target.value=s.o.title; }
+});
+bvBody.addEventListener("keydown",e=>{
+  const t=e.target;
+  if(t.id==="nm-name"){ if(e.key==="Enter"){ e.preventDefault(); createMap(); } else if(e.key==="Escape"){ nbMapOpen=false; renderBoards(); } return; }
+  // Estas teclas son para el campo; no deben llegar a los atajos del mapa (Intro abriría el nodo)
+  if(t.id==="mn-title" && (e.key==="Enter"||e.key==="Escape"||e.key==="Tab")){
+    e.preventDefault(); e.stopPropagation();
+    const sub=noteSubject(), inLevel=sub.kind==="node" && sub.id!==mapLevel;
+    if(e.key==="Tab" && inLevel){ mChain=null; createNear(sub.id,sub.id); return; }                 // Tab: uno conectado a este
+    if(e.key==="Enter" && inLevel && mChain && mChain.id===sub.id){                                    // Intro: otro al mismo nivel
+      const from=mChain.from; createNear(from||sub.id,from); return; }
+    mChain=null; t.blur();
+  }
+  if(t.id==="mn-md" && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); e.stopPropagation(); mNoteEditing=true; renderMapNote(); }
+  if(t.id==="mn-text" && e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); t.blur(); }
+});
+// Reparto entre el mapa y la libreta, arrastrando la separación
+bvBody.addEventListener("pointerdown",e=>{
+  if(!e.target.closest("#mv-split")) return;
+  const body=document.getElementById("mv-body"), r=body.getBoundingClientRect();
+  e.preventDefault(); e.target.setPointerCapture(e.pointerId); document.body.classList.add("is-resizing");
+  const mv=ev=>{ mSplit=Math.round(Math.min(80,Math.max(20,(ev.clientX-r.left)/r.width*100))); body.style.setProperty("--split",mSplit+"%"); };
+  const up=()=>{ e.target.removeEventListener("pointermove",mv); e.target.removeEventListener("pointerup",up); document.body.classList.remove("is-resizing");
+    try{ localStorage.setItem("ascenso-reparto-mapa-libreta",mSplit); }catch(err){} };
+  e.target.addEventListener("pointermove",mv); e.target.addEventListener("pointerup",up);
+});
+// Atajos de teclado del mapa
+document.addEventListener("keydown",e=>{
+  if(boardsView.hidden || !curMapId() || cdlg.open) return;
+  const a=document.activeElement, typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  const k=e.key, mod=e.ctrlKey||e.metaKey;
+  if(mod && (k==="i"||k==="I") && !e.shiftKey && !e.altKey){ e.preventDefault(); toggleIndex(); return; }
+  if(mod && !typing && (k==="z"||k==="Z")){ e.preventDefault(); if(e.shiftKey) mRedoDo(); else mUndoDo(); return; }
+  if(mod && !typing && (k==="y"||k==="Y")){ e.preventDefault(); mRedoDo(); return; }
+  if(typing) return;
+  if(k==="?" ){ e.preventDefault(); toggleHelp(); return; }
+  if(k==="Escape"){ const mv=document.querySelector(".mv-move");
+    if(mHelpOpen) toggleHelp(false); else if(mv) mv.remove(); else if(MG&&MG.wire){ MG.wire=null; mgDraw(); } else if(MG&&MG.menu) closeMgMenu(); else if(selIds().length||mSelLink){ clearSel(); selectionChanged(); } return; }
+  if(mod && (k==="a"||k==="A")){ e.preventDefault(); const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); return; }
+  if(k==="Tab" && mSel && selIds().length===1){ e.preventDefault(); createNear(mSel,mSel); return; }
+  if(k==="F2" && (mSel||mapLevel)){ e.preventDefault(); focusTitle(); return; }
+  if(k==="Delete"){ const ids=selIds(); if(ids.length) askDeleteNodes(ids); else if(mSelLink){ mRemember(); delete state.mlinks[mSelLink]; mSelLink=null; save(); mgDraw(); } return; }
+  if(k==="Enter" && mSel){ e.preventDefault(); goLevel(mSel); return; }
+  if(k==="Backspace" || (e.altKey && k==="ArrowLeft")){ if(mapLevel){ e.preventDefault(); goUp(); } }
 });
 
 // ---- arrastrar tarjetas, listas y tableros ----
@@ -1115,9 +2258,10 @@ bvBody.addEventListener("pointerdown",e=>{
   else if((el=t.closest(".bl.collapsed"))) kind="list";
   else if(t.closest(".bl-head") && !t.closest("button")){ el=t.closest(".bl"); kind="list"; }
   else if((el=t.closest(".bcard[data-board]"))) kind="board";
+  else if((el=t.closest(".mcard[data-map]"))) kind="map";
   if(!kind) return;
   const r=el.getBoundingClientRect();
-  bdrag={kind, el, id:el.dataset.card||el.dataset.list||el.dataset.board, x0:e.clientX, y0:e.clientY,
+  bdrag={kind, el, id:el.dataset.card||el.dataset.list||el.dataset.board||el.dataset.map, x0:e.clientX, y0:e.clientY,
          offX:e.clientX-r.left, offY:e.clientY-r.top, w:r.width, h:r.height, active:false, pid:e.pointerId, mouse:e.pointerType==="mouse"};
   if(bdrag.mouse) e.preventDefault();
   else bdrag.timer=setTimeout(()=>{ if(bdrag && !bdrag.active) bStart(bdrag.x0,bdrag.y0); },300);
@@ -1162,9 +2306,9 @@ function bMove(x,y){
     const before=[...wrap.children].find(n=>n!==d.ph && n!==d.el && n.classList.contains("bl") && x<n.getBoundingClientRect().left+n.getBoundingClientRect().width/2);
     wrap.insertBefore(d.ph, before||wrap.querySelector(".bl-add"));
   } else {
-    const grid=document.getElementById("bh-grid");
+    const grid=document.getElementById(d.kind==="map"?"mh-grid":"bh-grid");
     let best=null, bd=Infinity;
-    for(const n of grid.querySelectorAll(".bcard[data-board]")){
+    for(const n of grid.querySelectorAll(d.kind==="map"?".mcard[data-map]":".bcard[data-board]")){
       if(n===d.el) continue;
       const r=n.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2, dist=Math.hypot(x-cx,y-cy);
       if(dist<bd){ bd=dist; best={n, after:x>cx}; }
@@ -1189,6 +2333,9 @@ function bEnd(drop){
       if(from!==c.list) renumber(listCards(from),state.cards);
     } else if(d.kind==="list"){
       [...document.getElementById("bd-lists").children].filter(n=>n!==d.el).map(n=>n===d.ph?d.id:n.dataset.list).filter(Boolean).forEach((id,i)=>{ state.blists[id].order=i; });
+    } else if(d.kind==="map"){
+      mRemember();
+      [...document.getElementById("mh-grid").children].filter(n=>n!==d.el).map(n=>n===d.ph?d.id:n.dataset.map).filter(Boolean).forEach((id,i)=>{ state.maps[id].order=i; });
     } else {
       [...document.getElementById("bh-grid").children].filter(n=>n!==d.el).map(n=>n===d.ph?d.id:n.dataset.board).filter(Boolean).forEach((id,i)=>{ state.boards[id].order=i; });
     }
@@ -1205,8 +2352,14 @@ function openCard(id){
   if(!state.cards[id]) return;
   cardOpen=id; cdescEditing=false; ctaskOpen=false; renderCardDlg();
   if(!cdlg.open) cdlg.showModal();
+  // El alto del título solo se puede medir con la ficha ya visible
+  autoGrow(cdlg.querySelector(".dlg-title"));
   cdlg.querySelector(".dlg-x").focus();
 }
+// Si cambia el ancho de la ventana, el título puede ocupar más o menos líneas
+window.addEventListener("resize",()=>{
+  for(const d of [cdlg,dlg]) if(d.open){ const ti=d.querySelector(".dlg-title"); if(ti) autoGrow(ti); }
+});
 cdlg.addEventListener("close",()=>{ cardOpen=null; cdescEditing=false; ctaskOpen=false; cdlg.innerHTML=""; });
 cdlg.addEventListener("mousedown",e=>{ cdlg._downOnBackdrop = e.target===cdlg; });
 cdlg.addEventListener("click",e=>{ if(e.target===cdlg && cdlg._downOnBackdrop) cdlg.close(); });
@@ -1555,7 +2708,8 @@ dlg.addEventListener("close",()=>{ openTaskId=null; descEditing=false; toBoardOp
 // Clic fuera de la ficha (en el fondo oscuro) para cerrarla
 dlg.addEventListener("mousedown",e=>{ dlg._downOnBackdrop = e.target===dlg; });
 dlg.addEventListener("click",e=>{ if(e.target===dlg && dlg._downOnBackdrop) closeTask(); });
-const autoGrow=el=>{ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; };
+// Ajusta el alto de un cuadro de texto a su contenido (sumando sus bordes, porque el alto incluye el borde)
+const autoGrow=el=>{ if(!el) return; el.style.height="auto"; el.style.height=(el.scrollHeight+el.offsetHeight-el.clientHeight)+"px"; };
 function fmtCreated(s){
   const d=new Date(s); if(isNaN(d)) return "";
   return d.toLocaleString("es-ES",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -1688,10 +2842,17 @@ function setStatus(t,nivel="ok"){
     b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso" ? "Solo en este navegador" : "Sin guardar";
   }
 }
-const VERSION_NECESARIA=7;
-function saveLocal(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); return true; }catch(e){ return false; } }
+const VERSION_NECESARIA=8;
+function saveLocal(){
+  try{
+    const j=JSON.stringify(state);
+    // El navegador admite unos 5 MB: si los datos no caben, se quita la copia antigua para que nunca se use una copia desfasada
+    if(j.length>4500000){ localStorage.removeItem(STORE); return false; }
+    localStorage.setItem(STORE,j); return true;
+  }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
+}
 function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
-  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards})); }
+  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks})); }
 async function api(method,path,body){
   const opt={method, headers:{"X-Ascenso":"1"}};
   if(body!==undefined){ opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
@@ -1706,7 +2867,15 @@ function dayPayload(d){
   if(d.w!=null) o.w=d.w; if(d.type) o.type=d.type;
   return o;
 }
+// Guardado con espera: mientras se escribe en una libreta, se guarda 0,7 s después de la última tecla
+// (y siempre al salir de la libreta, al cambiar de ventana o al cerrar)
+let saveSoonT=null;
+function saveSoon(){ clearTimeout(saveSoonT); saveSoonT=setTimeout(()=>{ saveSoonT=null; save(); },700); }
+function flushSave(){ if(saveSoonT){ clearTimeout(saveSoonT); saveSoonT=null; save(); } }
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) flushSave(); });
+window.addEventListener("pagehide",flushSave);
 function save(){
+  if(saveSoonT){ clearTimeout(saveSoonT); saveSoonT=null; }
   const okLocal=saveLocal();
   if(!online){
     if(okLocal) document.dispatchEvent(new Event("ascenso:guardado"));
@@ -1733,11 +2902,15 @@ async function sync(){
       if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;
     }
     // Colecciones con identificador: primero se crean o actualizan (en orden de dependencia) y luego se borran (al revés)
-    const COLS=[["tags","etiquetas"],["tasks","tareas"],["boards","tableros"],["blabels","etiquetas-tablero"],["blists","listas"],["cards","tarjetas"],["events","eventos"]];
-    for(const [k,ruta] of COLS) for(const [id,v] of Object.entries(now[k])){
+    const COLS=[["tags","etiquetas"],["tasks","tareas"],["boards","tableros"],["blabels","etiquetas-tablero"],["blists","listas"],["cards","tarjetas"],["events","eventos"],
+                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"]];
+    // Los nodos se envían de los de primer nivel hacia dentro (un padre siempre antes que sus hijos)
+    const depth=(coll,id)=>{ let d=0, p=coll[id]&&coll[id].parent; while(p&&coll[p]&&d<500){ d++; p=coll[p].parent; } return d; };
+    const ordered=(k,coll)=>k==="mnodes"?Object.entries(coll).sort((a,b)=>depth(coll,a[0])-depth(coll,b[0])):Object.entries(coll);
+    for(const [k,ruta] of COLS) for(const [id,v] of ordered(k,now[k])){
       if(JSON.stringify(v)!==JSON.stringify(synced[k][id]||null) && await enviar("PUT",ruta+"/"+id,v)) synced[k][id]=v;
     }
-    for(const [k,ruta] of [...COLS].reverse()) for(const id of Object.keys(synced[k])){
+    for(const [k,ruta] of [...COLS].reverse()) for(const [id] of ordered(k,synced[k]).reverse()){
       if(!now[k][id] && await enviar("DELETE",ruta+"/"+id)) delete synced[k][id];
     }
     for(const k of new Set([...Object.keys(now.notes),...Object.keys(synced.notes)])){

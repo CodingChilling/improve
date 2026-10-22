@@ -52,7 +52,11 @@ COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 HORA_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 PRIORIDADES_TARJETA = PRIORIDADES | {"ninguna"}
 MAX_DIAS_EVENTO = 366
-MAX_BODY = 2 * 1024 * 1024
+MAX_BODY = 8 * 1024 * 1024          # cada cambio (una libreta llena ocupa unos 1-3 MB)
+MAX_IMPORTAR = 256 * 1024 * 1024    # una copia de seguridad completa
+LIMITE_LIBRETA = 1_000_000          # caracteres por libreta (de un mapa o de un nodo)
+DIR_COPIAS = os.path.join(BASE, "copias")          # copias diarias automáticas de ascenso.db
+COPIAS_A_CONSERVAR = 14
 PERFIL_APP = os.path.join(BASE, ".perfil-app")    # perfil propio de la ventana de la aplicación
 REGISTRO = os.path.join(BASE, "ascenso.log")      # errores cuando funciona sin consola
 ultimo_latido = time.time()                        # la página avisa periódicamente de que sigue abierta
@@ -207,10 +211,40 @@ CREATE TABLE IF NOT EXISTS checklist (
   hecho      INTEGER NOT NULL DEFAULT 0,
   orden      INTEGER NOT NULL DEFAULT 0
 );
+
+-- Mapas de nodos: cada nodo puede tener dentro su propio nivel (nodos hijos)
+CREATE TABLE IF NOT EXISTS mapas (
+  id       TEXT PRIMARY KEY,
+  titulo   TEXT NOT NULL,
+  color    TEXT NOT NULL,     -- color de acento del mapa
+  favorito INTEGER NOT NULL DEFAULT 0,
+  orden    INTEGER NOT NULL DEFAULT 0,
+  notas    TEXT NOT NULL DEFAULT '',   -- libreta del propio mapa
+  creado   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS nodos (
+  id          TEXT PRIMARY KEY,
+  mapa_id     TEXT NOT NULL REFERENCES mapas(id) ON DELETE CASCADE,
+  padre_id    TEXT REFERENCES nodos(id) ON DELETE CASCADE,   -- vacío: primer nivel del mapa
+  titulo      TEXT NOT NULL,
+  color       TEXT,                                            -- vacío: el acento del mapa
+  x           REAL,
+  y           REAL,
+  notas       TEXT NOT NULL DEFAULT '',
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS nodos_por_nivel ON nodos(mapa_id, padre_id);
+CREATE TABLE IF NOT EXISTS conexiones (
+  id    TEXT PRIMARY KEY,
+  desde TEXT NOT NULL REFERENCES nodos(id) ON DELETE CASCADE,
+  hasta TEXT NOT NULL REFERENCES nodos(id) ON DELETE CASCADE,
+  CHECK (desde <> hasta)
+);
 """
-VERSION_BD = 6
+VERSION_BD = 7
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 7
+VERSION_APP = 8
 
 
 class ErrorDatos(Exception):
@@ -312,8 +346,19 @@ def leer_estado(con):
     for r in con.execute("SELECT * FROM checklist ORDER BY orden, rowid"):
         if r["tarjeta_id"] in tarjetas:
             tarjetas[r["tarjeta_id"]]["check"].append({"id": r["id"], "t": r["texto"], "d": bool(r["hecho"])})
+    mapas = {
+        r["id"]: {"title": r["titulo"], "color": r["color"], "fav": bool(r["favorito"]), "order": r["orden"],
+                  "notes": r["notas"], "created": r["creado"]}
+        for r in con.execute("SELECT * FROM mapas")
+    }
+    nodos = {
+        r["id"]: {"map": r["mapa_id"], "parent": r["padre_id"], "title": r["titulo"], "color": r["color"] or "",
+                  "x": r["x"], "y": r["y"], "notes": r["notas"], "created": r["creado"]}
+        for r in con.execute("SELECT * FROM nodos")
+    }
+    conexiones = {r["id"]: {"a": r["desde"], "b": r["hasta"]} for r in con.execute("SELECT * FROM conexiones")}
     vacia = (not config and not habitos and not dias and not historial and not etiquetas
-             and not tareas and not notas and not eventos and not tableros)
+             and not tareas and not notas and not eventos and not tableros and not mapas)
     return {
         "plan": config.get("plan"),
         "thr": config.get("thr"),
@@ -328,6 +373,9 @@ def leer_estado(con):
         "blabels": etiquetas_t,
         "blists": listas,
         "cards": tarjetas,
+        "maps": mapas,
+        "mnodes": nodos,
+        "mlinks": conexiones,
         "vacia": vacia,
         "version": VERSION_APP,
     }
@@ -701,17 +749,110 @@ borrar_lista = borrar_de("listas", "lista")
 borrar_tarjeta = borrar_de("tarjetas", "tarjeta")
 
 
+# ---- mapas de nodos ---------------------------------------------------------
+
+def real_o_nada(valor):
+    if valor is None or valor == "":
+        return None
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        raise ErrorDatos("posición no válida")
+    if not -1e7 < v < 1e7:
+        raise ErrorDatos("posición no válida")
+    return v
+
+
+def guardar_mapa(con, mid, datos):
+    mid = comprobar_id(mid, "mapa")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("mapa no válido")
+    titulo = str(datos.get("title") or "").strip()[:80]
+    color = str(datos.get("color") or "")
+    if not titulo:
+        raise ErrorDatos("el mapa necesita un título")
+    if not COLOR_RE.match(color):
+        raise ErrorDatos("color no válido")
+    con.execute(
+        """INSERT INTO mapas (id, titulo, color, favorito, orden, notas, creado) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET titulo=excluded.titulo, color=excluded.color, favorito=excluded.favorito,
+             orden=excluded.orden, notas=excluded.notas""",
+        (mid, titulo, color.upper(), int(bool(datos.get("fav"))), entero(datos.get("order", 0), "orden"),
+         str(datos.get("notes") or "")[:LIMITE_LIBRETA], str(datos.get("created") or "")[:40]),
+    )
+
+
+def guardar_nodo(con, nid, datos):
+    nid = comprobar_id(nid, "nodo")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("nodo no válido")
+    mapa = comprobar_id(datos.get("map"), "mapa")
+    padre = datos.get("parent")
+    if padre:
+        padre = comprobar_id(padre, "nodo")
+        fila = con.execute("SELECT mapa_id FROM nodos WHERE id = ?", (padre,)).fetchone()
+        if not fila or fila["mapa_id"] != mapa or padre == nid:
+            raise ErrorDatos("el nodo padre no es de este mapa")
+    else:
+        padre = None
+    titulo = str(datos.get("title") or "").strip()[:120]
+    if not titulo:
+        raise ErrorDatos("el nodo necesita un título")
+    color = str(datos.get("color") or "")
+    if color and not COLOR_RE.match(color):
+        raise ErrorDatos("color no válido")
+    con.execute(
+        """INSERT INTO nodos (id, mapa_id, padre_id, titulo, color, x, y, notas, creado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET mapa_id=excluded.mapa_id, padre_id=excluded.padre_id, titulo=excluded.titulo,
+             color=excluded.color, x=excluded.x, y=excluded.y, notas=excluded.notas,
+             actualizado=datetime('now', 'localtime')""",
+        (nid, mapa, padre, titulo, color.upper() or None, real_o_nada(datos.get("x")), real_o_nada(datos.get("y")),
+         str(datos.get("notes") or "")[:LIMITE_LIBRETA], str(datos.get("created") or "")[:40]),
+    )
+
+
+def guardar_conexion(con, cid, datos):
+    cid = comprobar_id(cid, "conexión")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("conexión no válida")
+    a, b = comprobar_id(datos.get("a"), "nodo"), comprobar_id(datos.get("b"), "nodo")
+    filas = {r["id"]: r for r in con.execute("SELECT id, mapa_id, padre_id FROM nodos WHERE id IN (?, ?)", (a, b))}
+    if a == b or len(filas) != 2:
+        raise ErrorDatos("conexión no válida")
+    # Solo se conectan nodos del mismo nivel (mismo mapa y mismo nodo padre)
+    if (filas[a]["mapa_id"], filas[a]["padre_id"]) != (filas[b]["mapa_id"], filas[b]["padre_id"]):
+        raise ErrorDatos("solo se pueden conectar nodos del mismo nivel")
+    con.execute("INSERT OR REPLACE INTO conexiones (id, desde, hasta) VALUES (?, ?, ?)", (cid, a, b))
+
+
+borrar_mapa = borrar_de("mapas", "mapa")
+borrar_nodo = borrar_de("nodos", "nodo")
+borrar_conexion = borrar_de("conexiones", "conexión")
+
+
+def nodos_por_profundidad(nodos):
+    """Ordena los nodos para guardar siempre un padre antes que sus hijos."""
+    def profundidad(nid, visto=()):
+        padre = (nodos.get(nid) or {}).get("parent")
+        return 0 if not padre or padre not in nodos or padre in visto else 1 + profundidad(padre, visto + (nid,))
+    return sorted(nodos.items(), key=lambda kv: profundidad(kv[0]))
+
+
 RUTAS_TABLEROS = {
     "/api/tableros/": (guardar_tablero, borrar_tablero),
     "/api/etiquetas-tablero/": (guardar_etiqueta_tablero, borrar_etiqueta_tablero),
     "/api/listas/": (guardar_lista, borrar_lista),
     "/api/tarjetas/": (guardar_tarjeta, borrar_tarjeta),
+    "/api/mapas/": (guardar_mapa, borrar_mapa),
+    "/api/nodos/": (guardar_nodo, borrar_nodo),
+    "/api/conexiones/": (guardar_conexion, borrar_conexion),
 }
 
 
 def importar(con, estado):
     if not isinstance(estado, dict) or not isinstance(estado.get("days"), dict):
         raise ErrorDatos("copia no válida")
+    con.execute("DELETE FROM mapas")      # en cascada: nodos y conexiones
     con.execute("DELETE FROM tableros")   # en cascada: listas, tarjetas, etiquetas y checklist
     con.execute("DELETE FROM eventos")
     con.execute("DELETE FROM notas")
@@ -748,11 +889,19 @@ def importar(con, estado):
         for eid, e in eventos.items():
             guardar_evento(con, eid, e)
     for clave, guardar in (("boards", guardar_tablero), ("blabels", guardar_etiqueta_tablero),
-                           ("blists", guardar_lista), ("cards", guardar_tarjeta)):
+                           ("blists", guardar_lista), ("cards", guardar_tarjeta), ("maps", guardar_mapa)):
         coleccion = estado.get(clave) or {}
         if isinstance(coleccion, dict):
             for ident, datos in coleccion.items():
                 guardar(con, ident, datos)
+    nodos = estado.get("mnodes") or {}
+    if isinstance(nodos, dict):
+        for ident, datos in nodos_por_profundidad(nodos):
+            guardar_nodo(con, ident, datos)
+    conexiones = estado.get("mlinks") or {}
+    if isinstance(conexiones, dict):
+        for ident, datos in conexiones.items():
+            guardar_conexion(con, ident, datos)
 
 
 def listar_imagenes():
@@ -870,7 +1019,8 @@ class Manejador(SimpleHTTPRequestHandler):
             largo = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             raise ErrorDatos("longitud no válida")
-        if largo < 0 or largo > MAX_BODY:
+        limite = MAX_IMPORTAR if urlparse(self.path).path == "/api/importar" else MAX_BODY
+        if largo < 0 or largo > limite:
             raise ErrorDatos("datos demasiado grandes")
         try:
             return json.loads(self.rfile.read(largo) or b"null")
@@ -1057,6 +1207,7 @@ def main():
                      "(O cierra «pythonw.exe» desde el Administrador de tareas.)")
 
     iniciar_bd()
+    threading.Thread(target=vigilar_copias, daemon=True).start()
 
     host = "0.0.0.0" if args.red else "127.0.0.1"
     servidor = None
@@ -1086,6 +1237,7 @@ def main():
         print("  Los demás dispositivos necesitan esa dirección completa: la clave cambia en cada arranque.")
         print("  Aviso: la conexión por wifi no va cifrada; úsalo solo en redes de confianza.")
     print("  Base de datos:   " + DB_PATH)
+    print("  Copias diarias:  " + DIR_COPIAS + "  (últimos %d días)" % COPIAS_A_CONSERVAR)
     print("  Para cerrar, pulsa Ctrl+C.\n")
 
     if not args.no_abrir:
@@ -1096,6 +1248,45 @@ def main():
         print("\n  Servidor cerrado.")
     finally:
         servidor.server_close()
+
+
+def copia_diaria():
+    """Una copia de ascenso.db al día en la carpeta «copias», conservando las de los últimos 14 días.
+
+    Se usa la copia en caliente de SQLite, que es segura aunque Ascenso esté escribiendo en ese momento."""
+    if not os.path.exists(DB_PATH):
+        return
+    os.makedirs(DIR_COPIAS, exist_ok=True)
+    destino = os.path.join(DIR_COPIAS, "ascenso-%s.db" % date.today().isoformat())
+    if not os.path.exists(destino):
+        temporal = destino + ".tmp"
+        origen = sqlite3.connect(DB_PATH)
+        copia = sqlite3.connect(temporal)
+        try:
+            origen.backup(copia)
+        finally:
+            copia.close()
+            origen.close()
+        os.replace(temporal, destino)
+    copias = sorted(f for f in os.listdir(DIR_COPIAS) if re.fullmatch(r"ascenso-\d{4}-\d{2}-\d{2}\.db", f))
+    for vieja in copias[:-COPIAS_A_CONSERVAR]:
+        try:
+            os.remove(os.path.join(DIR_COPIAS, vieja))
+        except OSError:
+            pass
+
+
+def vigilar_copias():
+    """Hace la copia del día al arrancar y vuelve a comprobarlo cada hora (por si Ascenso sigue abierto de un día a otro)."""
+    while True:
+        try:
+            copia_diaria()
+        except Exception as e:          # una copia fallida nunca debe parar Ascenso
+            try:
+                apuntar("No se pudo hacer la copia diaria: %s" % e)
+            except Exception:
+                pass
+        time.sleep(3600)
 
 
 def apuntar(texto):
