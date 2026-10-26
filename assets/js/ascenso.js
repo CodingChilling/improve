@@ -1948,50 +1948,46 @@ function renderMapNoteNow(){
 // de la derecha. Al seguir escribiendo al final de un tramo se pasa al siguiente, y tras el quinto, a la página siguiente.
 const SEGS_POR_PAGINA=5;
 const notePage={};                      // tramo en el que se dejó cada libreta (durante la sesión)
-const NP={el:null, key:"", pageH:1, screen:0, screens:1, page:1, pages:1, snapTop:0, snapT:null, drag:null, ro:null, pendingCaret:null, pendingTopLine:null};
+const NP={el:null, key:"", pageH:1, screen:0, screens:1, page:1, pages:1, drag:null, ro:null, pendingCaret:null, pendingTopLine:null};
 function npMount(s){
   const el=document.getElementById(mNoteEditing?"mn-text":"mn-md"), body=document.getElementById("mn-body");
   if(NP.ro) NP.ro.disconnect();
-  Object.assign(NP,{el, key:s.kind+":"+s.id, snapT:null, drag:null});
+  Object.assign(NP,{el, key:s.kind+":"+s.id, drag:null});
   NP.ro=new ResizeObserver(()=>npLayout(true)); NP.ro.observe(body);
   el.addEventListener("scroll",npOnScroll);
   if(mNoteEditing){
-    el.addEventListener("input",()=>{ NP.typedAt=performance.now(); layoutFloats(el); npPad(); npUpdate(); npFollowCaret(); });
+    // Al escribir, el navegador mantiene el cursor a la vista desplazando lo justo
+    el.addEventListener("input",()=>{ layoutFloats(el); npPad(); npUpdate(); });
     el.addEventListener("keydown",edKeydown);
     el.addEventListener("beforeinput",edBeforeInput);
-    el.addEventListener("scroll",()=>{ if(performance.now()-(NP.typedAt||0)<600) npFollowCaret(); });
-    // Las teclas que mueven el cursor sin escribir (flechas, Inicio, Fin, Av Pág...) también arrastran la vista
-    el.addEventListener("keydown",e=>{ if(/^(Arrow|Page|Home|End)/.test(e.key)){ NP.typedAt=performance.now(); setTimeout(npFollowCaret,0); } });
   }
   npLayout(false);
+  const view=()=>el.getBoundingClientRect().top;
   if(!mNoteEditing && NP.pendingTopLine!=null){
-    const line=NP.pendingTopLine; NP.pendingTopLine=null;
+    // Al salir de la escritura, la línea que estaba arriba de la vista sigue arriba
+    const {line, off}=NP.pendingTopLine; NP.pendingTopLine=null;
     const els=[...el.querySelectorAll("[data-line]")].filter(n=>+n.dataset.line<=line);
     const target=els[els.length-1];
-    if(target){ const top=target.getBoundingClientRect().top-el.getBoundingClientRect().top+el.scrollTop;
-      NP.screen=Math.min(NP.screens-1,Math.max(0,Math.round(top/NP.pageH-0.49)));
-      el.scrollTop=NP.screen*NP.pageH; NP.snapTop=el.scrollTop; npUpdate(); }
+    if(target){ el.scrollTop=target.getBoundingClientRect().top-view()+el.scrollTop-off; npUpdate(); }
   }
   if(mNoteEditing){
     el.focus();
     if(NP.pendingCaret){
-      // Al pulsar una línea leyendo, el cursor va justo ahí y la vista se queda en el mismo tramo
-      const {line,col}=NP.pendingCaret; NP.pendingCaret=null;
+      // Al pulsar una línea leyendo, el cursor va justo ahí y esa línea se queda a la misma altura en la pantalla
+      const {line,col,y}=NP.pendingCaret; NP.pendingCaret=null;
       const lines=edLines(el), li=line==null?lines.length-1:Math.min(line,lines.length-1);
       edSetCaret(el,li,line==null?Infinity:col);
-      const t=edLineTops(el)[Math.max(0,li)], off=t?t.top:0;
-      const sc=Math.floor(off/NP.pageH)===NP.screen?NP.screen:Math.min(NP.screens-1,Math.floor(off/NP.pageH));
-      NP.screen=sc; el.scrollTop=sc*NP.pageH; NP.snapTop=el.scrollTop; npUpdate();
-    } else {
-      // Si se entra a escribir de otra forma, el cursor se coloca al principio del tramo que estabas leyendo
-      const top=NP.screen*NP.pageH; npCaretAt(top); el.scrollTop=top; NP.snapTop=top;
-    }
+      const t=edLineTops(el)[Math.max(0,li)];
+      if(t && y!=null) el.scrollTop=t.top-y;
+      else if(t && (t.top<el.scrollTop || t.top>el.scrollTop+NP.pageH-24)) el.scrollTop=t.top-NP.pageH/2;
+      npUpdate();
+    } else npCaretAt(el.scrollTop);     // si se entra a escribir de otra forma, el cursor va a la primera línea que se ve
   }
 }
 // Primera línea de los apuntes que se ve en el tramo actual de la escritura
 function topLineOfScreen(ed){
-  const tops=edLineTops(ed), t=tops.find(x=>x.top>=ed.scrollTop-1);
-  return t?t.line:Math.max(0,tops.length-1);
+  const tops=edLineTops(ed), t=tops.find(x=>x.top>=ed.scrollTop-1)||tops[tops.length-1];
+  return t?{line:t.line, off:t.top-ed.scrollTop}:{line:0, off:0};
 }
 // Línea y columna de los apuntes en el punto pulsado al leer
 function caretFromClick(e){
@@ -2020,14 +2016,13 @@ function npLayout(keep){
   const el=NP.el; if(!el||!document.body.contains(el)) return;
   const body=el.parentElement, avail=body.clientHeight; if(!avail) return;
   const lh=parseFloat(getComputedStyle(el).lineHeight)||24;
-  // Cada tramo mide un número exacto de líneas, para que ninguna quede cortada al pasar de uno a otro
+  // Cada tramo mide un número exacto de líneas (sirve para contar páginas y para que las imágenes no se partan)
   NP.pageH=Math.max(lh*3, Math.floor(avail/lh)*lh);
+  const before=el.scrollTop;
   el.style.height=NP.pageH+"px";
   renderFloats(el);
   npPad();
-  const sc=keep?NP.screen:(notePage[NP.key]||0);
-  NP.screen=Math.min(Math.max(0,sc),NP.screens-1);
-  el.scrollTop=NP.screen*NP.pageH; NP.snapTop=el.scrollTop;
+  el.scrollTop=keep?before:(notePage[NP.key]||0);   // donde estabas, sin encajar
   npUpdate();
 }
 // Relleno al final para que el último tramo también sea un tramo completo
@@ -2041,57 +2036,45 @@ function npPad(){
   if(Math.abs(np-pad)>.5) el.style.paddingBottom=np+"px";
 }
 // Mientras se escribe, la vista sigue al cursor: siempre se ve el tramo en el que está
-function npFollowCaret(){
-  const el=NP.el; if(!el||!mNoteEditing||document.activeElement!==el) return;
-  // El navegador ya desplaza lo justo para que se vea el cursor; aquí solo se encaja en el tramo de ese lado
-  const t=el.scrollTop; if(Math.abs(t-NP.snapTop)<1) return;
-  const q=t/NP.pageH, p=t>NP.snapTop?Math.ceil(q-0.02):Math.floor(q+0.02);
-  const target=Math.min(NP.screens-1,Math.max(0,p))*NP.pageH;
-  NP.snapTop=target;
-  // Sin animación: una transición suave se cortaba al seguir escribiendo y la vista se quedaba a medias
-  if(Math.abs(el.scrollTop-target)>1) el.scrollTop=target;
-}
 function npUpdate(){
   const el=NP.el; if(!el) return;
-  NP.screen=Math.min(NP.screens-1,Math.max(0,Math.round(el.scrollTop/NP.pageH)));
+  // El tramo y la página son los de la mitad de lo que se ve (la vista puede quedar en cualquier punto)
+  NP.screen=Math.min(NP.screens-1,Math.max(0,Math.floor((el.scrollTop+NP.pageH/2)/NP.pageH)));
   NP.page=Math.floor(NP.screen/SEGS_POR_PAGINA)+1;
   NP.pages=Math.max(1,Math.ceil(NP.screens/SEGS_POR_PAGINA));
-  notePage[NP.key]=NP.screen;
+  notePage[NP.key]=el.scrollTop;
   const pg=document.getElementById("mn-pg"), pgs=document.getElementById("mn-pgs");
   if(pg && document.activeElement!==pg){ pg.value=NP.page; pg.max=NP.pages; }
   if(pgs) pgs.textContent=NP.pages;
   npRail();
 }
-function npOnScroll(){
-  npUpdate();
-  clearTimeout(NP.snapT);
-  if(!NP.drag) NP.snapT=setTimeout(()=>npSnap(0),130);
-}
+function npOnScroll(){ npUpdate(); }      // desplazamiento libre: la vista se queda donde la dejas
 // Al terminar de desplazarse, la vista encaja en un tramo: hacia delante si se bajaba, hacia atrás si se subía
-function npSnap(forceDir){
-  const el=NP.el; if(!el) return;
-  if(mNoteEditing && performance.now()-(NP.typedAt||0)<600){ npFollowCaret(); return; }
-  const t=el.scrollTop, dir=forceDir||Math.sign(t-NP.snapTop), q=t/NP.pageH;
-  const p=dir>0?Math.ceil(q-0.02):dir<0?Math.floor(q+0.02):Math.round(q);
-  const target=Math.min(NP.screens-1,Math.max(0,p))*NP.pageH;
-  NP.snapTop=target;
-  if(Math.abs(target-t)>1) el.scrollTo({top:target, behavior:"smooth"});
-}
 function npGoScreen(sc){
   const el=NP.el; if(!el) return;
   sc=Math.min(NP.screens-1,Math.max(0,Math.round(sc)||0));
-  const top=sc*NP.pageH; NP.snapTop=top;
+  const top=sc*NP.pageH;
   el.scrollTo({top, behavior:"smooth"});
   if(mNoteEditing) npCaretAt(top);
 }
 // Ir a una página es ir a su primer tramo, arriba del todo
 const npGo=page=>npGoScreen((Math.min(NP.pages,Math.max(1,Math.round(page)||1))-1)*SEGS_POR_PAGINA);
-// Barra: siempre 5 segmentos, los 5 tramos de la página actual; el tramo en el que estás, en el color de acento
+// Barra de desplazamiento propia: un carril con marcas en cada cambio de página y un tirador proporcional
+// a lo que se ve. Al soltarlo, la vista encaja en el tramo más cercano (la paginación no cambia).
 function npRail(){
-  const r=document.getElementById("mn-rail"); if(!r||!NP.el) return;
-  const base=(NP.page-1)*SEGS_POR_PAGINA, gap=6, seg=(r.clientHeight-(SEGS_POR_PAGINA-1)*gap)/SEGS_POR_PAGINA;
-  r.innerHTML=Array.from({length:SEGS_POR_PAGINA},(_,i)=>{ const sc=base+i;
-    return `<span class="seg${sc===NP.screen?" on":""}${sc>=NP.screens?" void":""}" style="height:${seg}px"></span>`; }).join("");
+  const r=document.getElementById("mn-rail"), el=NP.el; if(!r||!el) return;
+  if(!r.firstChild){ r.innerHTML='<span class="rl-ticks"></span><span class="rl-thumb"><span class="rl-tip"></span></span>'; r._ticks=""; }
+  const H=r.clientHeight, sh=el.scrollHeight, ch=el.clientHeight, max=Math.max(1,sh-ch);
+  const th=Math.max(36,Math.min(H,H*ch/Math.max(sh,1))), top=(H-th)*Math.min(1,el.scrollTop/max);
+  const thumb=r.querySelector(".rl-thumb");
+  thumb.style.height=th+"px"; thumb.style.transform=`translateY(${top}px)`;
+  r.classList.toggle("full",sh<=ch+2);
+  thumb.querySelector(".rl-tip").textContent=`Página ${NP.page} de ${NP.pages}`;
+  // Marcas donde empieza cada página (solo si hay varias y caben)
+  const key=NP.pages+"|"+H+"|"+sh;
+  if(r._ticks!==key){ r._ticks=key;
+    const tk=r.querySelector(".rl-ticks"), per=SEGS_POR_PAGINA*NP.pageH;
+    tk.innerHTML=NP.pages>1&&NP.pages<=60?Array.from({length:NP.pages-1},(_,i)=>`<i style="top:${((i+1)*per)/Math.max(sh,1)*H}px"></i>`).join(""):""; }
   r.setAttribute("aria-valuenow",NP.page); r.setAttribute("aria-valuemin",1); r.setAttribute("aria-valuemax",NP.pages);
 }
 
@@ -2123,10 +2106,11 @@ function closeIndex(){ const box=document.getElementById("mn-index"); if(box){ b
 function miGo(i){
   const h=miItems[i], el=NP.el; if(!h||!el) return;
   closeIndex();
-  if(mNoteEditing){
-    el.focus(); edSetCaret(el,h.line,0);
-    const top=h.screen*NP.pageH; NP.snapTop=top; el.scrollTo({top, behavior:"smooth"});
-  } else npGoScreen(h.screen);
+  // Se va al propio título, que queda arriba de la vista
+  let top;
+  if(mNoteEditing){ el.focus(); edSetCaret(el,h.line,0); const t=edLineTops(el)[h.line]; top=t?t.top:0; }
+  else { const n=el.querySelector(`[data-line="${h.line}"]`); top=n?n.getBoundingClientRect().top-el.getBoundingClientRect().top+el.scrollTop:0; }
+  el.scrollTo({top:Math.max(0,top-4), behavior:"smooth"});
 }
 bvBody.addEventListener("click",e=>{
   const it=e.target.closest("[data-mi]"); if(it){ miGo(+it.dataset.mi); return; }
@@ -2144,20 +2128,22 @@ bvBody.addEventListener("keydown",e=>{
   if(t.id==="mn-pg" && e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); npGo(+t.value); t.blur(); }
 });
 bvBody.addEventListener("change",e=>{ if(e.target.id==="mn-pg") npGo(+e.target.value); });
-// Barra: pulsar un segmento para ir a ese tramo, o arrastrar para recorrer los tramos de la página
+// Barra: arrastrar el tirador recorre la libreta; pulsar en el carril salta a ese punto. Al soltar, la vista se queda
+// exactamente donde la dejas (sin encajar en un tramo); la rueda y la escritura siguen pasando de tramo en tramo
 bvBody.addEventListener("pointerdown",e=>{
-  const r=e.target.closest("#mn-rail"); if(!r||!NP.el) return;
+  const r=e.target.closest("#mn-rail"); if(!r||!NP.el||e.button!==0) return;
   e.preventDefault(); r.setPointerCapture(e.pointerId);
-  const R=r.getBoundingClientRect(), el=NP.el, y0=e.clientY, base=(NP.page-1)*SEGS_POR_PAGINA;
-  const last=Math.min(base+SEGS_POR_PAGINA,NP.screens)-1;
-  const frac=y=>Math.min(.999,Math.max(0,(y-R.top)/R.height));
-  NP.drag={moved:false}; r.classList.add("dragging");
-  const mv=ev=>{ if(Math.abs(ev.clientY-y0)>3) NP.drag.moved=true;
-    if(NP.drag.moved) el.scrollTop=Math.min(last,base+frac(ev.clientY)*SEGS_POR_PAGINA-.5)*NP.pageH; };
-  const up=ev=>{ r.removeEventListener("pointermove",mv); r.removeEventListener("pointerup",up); r.classList.remove("dragging");
-    const moved=NP.drag.moved; NP.drag=null;
-    if(moved) npSnap(0); else npGoScreen(Math.min(last,base+Math.floor(frac(ev.clientY)*SEGS_POR_PAGINA))); };
-  r.addEventListener("pointermove",mv); r.addEventListener("pointerup",up);
+  const el=NP.el, R=r.getBoundingClientRect(), thumb=r.querySelector(".rl-thumb"), tr=thumb.getBoundingClientRect();
+  const max=Math.max(1,el.scrollHeight-el.clientHeight), free=Math.max(1,R.height-tr.height);
+  const onThumb=e.clientY>=tr.top && e.clientY<=tr.bottom;
+  // Pulsar en el carril: el tirador se centra en ese punto y se puede seguir arrastrando desde ahí
+  if(!onThumb) el.scrollTop=Math.min(1,Math.max(0,(e.clientY-R.top-tr.height/2)/free))*max;
+  const y0=e.clientY, s0=el.scrollTop;
+  NP.drag={moved:!onThumb}; r.classList.add("dragging");
+  const mv=ev=>{ NP.drag.moved=true; el.scrollTop=Math.min(max,Math.max(0,s0+(ev.clientY-y0)*max/free)); };
+  const up=()=>{ r.removeEventListener("pointermove",mv); r.removeEventListener("pointerup",up); r.removeEventListener("pointercancel",up);
+    r.classList.remove("dragging"); NP.drag=null; };
+  r.addEventListener("pointermove",mv); r.addEventListener("pointerup",up); r.addEventListener("pointercancel",up);
 });
 
 // Aviso de espacio: solo aparece al acercarse al límite; al llegar, se avisa en lugar de cortar el texto
@@ -2691,7 +2677,8 @@ bvBody.addEventListener("click",e=>{
   if((el=q("[data-ckline]"))){ const s=noteSubject(), lines=s.o.notes.split("\n"), i=+el.dataset.ckline;
     mRemember(); lines[i]=lines[i].replace(/\[( |x|X)\]/, el.checked?"[x]":"[ ]"); s.o.notes=lines.join("\n"); save(); renderMapNote(); mgDraw(); return; }
   if((el=q("[data-copy]"))){ copyCodeBlock(+el.dataset.copy); return; }
-  if(q("#mn-md") && !q("a") && !q(".ln-img")){ NP.pendingCaret=caretFromClick(e); mNoteEditing=true; mTyping=false; renderMapNote(); }
+  if(q("#mn-md") && !q("a") && !q(".ln-img")){ NP.pendingCaret=caretFromClick(e);
+    { const md=document.getElementById("mn-md"), ln=t.closest("[data-line]"); if(md&&ln&&NP.pendingCaret.line!=null) NP.pendingCaret.y=ln.getBoundingClientRect().top-md.getBoundingClientRect().top; } mNoteEditing=true; mTyping=false; renderMapNote(); }
 }, true);
 bvBody.addEventListener("input",e=>{
   const t=e.target;

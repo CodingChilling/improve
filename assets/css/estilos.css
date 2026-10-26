@@ -3225,58 +3225,87 @@ body.is-resizing {
   border-radius: 5px;
   font-size: 0.72rem;
 }
-/* Barra de páginas: un segmento por hoja, la actual en el color de acento */
+/* Barra de desplazamiento de la libreta: carril, marcas de página y tirador en el color de acento */
 .mn-rail {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 4px;
-  width: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  right: 6px;
+  width: 12px;
+  border-radius: 999px;
+  background: linear-gradient(to right, transparent 3px, var(--soft) 3px, var(--soft) 9px, transparent 9px);
   cursor: pointer;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
-.mn-rail .seg {
-  flex: none;
-  border-radius: 7px;
-  background: var(--line);
-  transition:
-    background-color 0.2s,
-    transform 0.2s;
-}
-.mn-rail .seg:hover {
-  background: color-mix(in srgb, var(--acc) 45%, var(--line));
-}
-.mn-rail .seg.on {
-  background: var(--acc);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent);
-}
-/* Tramos de la página que todavía no tienen contenido */
-.mn-rail .seg.void {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--line);
-}
-.mn-rail.cont {
-  display: block;
-  border-radius: 7px;
-  background: var(--soft);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-.mn-rail .thumb {
+.mn-rail .rl-ticks i {
   position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.mn-rail .rl-thumb {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  right: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 82%, #fff), var(--acc));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--acc) 55%, transparent),
+    0 4px 12px -4px color-mix(in srgb, var(--acc) 70%, transparent);
+  transition:
+    left 0.15s,
+    right 0.15s,
+    box-shadow 0.15s;
+  will-change: transform;
+}
+.mn-rail:hover .rl-thumb,
+.mn-rail.dragging .rl-thumb {
   left: 0;
   right: 0;
-  border-radius: 7px;
-  background: var(--acc);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent),
+    0 6px 16px -4px color-mix(in srgb, var(--acc) 80%, transparent);
 }
-.mn-rail.dragging .seg.on,
-.mn-rail.dragging .thumb {
-  transform: scaleX(1.15);
+.mn-rail.dragging {
+  cursor: grabbing;
+}
+/* Si todo cabe a la vista, la barra queda en reposo */
+.mn-rail.full {
+  cursor: default;
+}
+.mn-rail.full .rl-thumb {
+  opacity: 0.35;
+  box-shadow: none;
+}
+/* Al pasar el ratón o arrastrar: en qué página estás */
+.mn-rail .rl-tip {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.mn-rail:hover .rl-tip,
+.mn-rail.dragging .rl-tip {
+  opacity: 1;
+}
+.mn-rail.full .rl-tip {
+  display: none;
 }
 /* Índice de títulos (Ctrl+I) */
 .mn-index {
