@@ -1934,7 +1934,8 @@ function renderMapNoteNow(){
     <div class="mn-body" id="mn-body">
       ${mNoteEditing
         ? `<div class="mn-scroll mn-text" id="mn-text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Libreta" spellcheck="true"></div>`
-        : `<div class="mn-scroll mn-md" id="mn-md" tabindex="0" title="Pulsa para escribir">${mdRender(s.o.notes)}</div>`}
+        : `<div class="mn-scroll mn-md" id="mn-md" tabindex="0">${mdRender(s.o.notes)}</div>`}
+      <div class="np-hint" id="np-hint" aria-live="polite"></div>
       <div class="mn-rail" id="mn-rail" role="scrollbar" aria-label="Páginas" aria-controls="${mNoteEditing?"mn-text":"mn-md"}"></div>
       <div class="mn-index" id="mn-index" hidden></div>
     </div>`;
@@ -1943,18 +1944,167 @@ function renderMapNoteNow(){
   npMount(s); noteCount(s.o.notes.length);
 }
 
-// ---------- Páginas de la libreta ----------
-// La libreta avanza por tramos del alto visible. Cada página son 5 tramos, que son los 5 segmentos de la barra
-// de la derecha. Al seguir escribiendo al final de un tramo se pasa al siguiente, y tras el quinto, a la página siguiente.
-const SEGS_POR_PAGINA=5;
-const notePage={};                      // tramo en el que se dejó cada libreta (durante la sesión)
-const NP={el:null, key:"", pageH:1, screen:0, screens:1, page:1, pages:1, drag:null, ro:null, pendingCaret:null, pendingTopLine:null};
+// ======================================================================
+// ---------- Páginas de la libreta y barra de desplazamiento ----------
+// La libreta se divide en páginas (5 veces el alto visible). Cada página es como una hoja: desde ella no se
+// ve nada de la siguiente. Ascenso controla el desplazamiento él mismo (la caja no se desplaza sola), así la
+// vista nunca se pasa del final de la página:
+//  · Dentro de la página, la rueda, el teclado, el dedo o la barra la recorren con suavidad, sin encajes.
+//  · Al llegar al final, la hoja se detiene. Si se sigue tirando un poco (un «tirón»), la hoja cede un poco y
+//    un aviso indica que se va a pasar de página; al completar el tirón, se pasa a la siguiente con un
+//    deslizamiento suave: la nueva hoja empieza arriba del todo. Si se suelta antes, vuelve a su sitio.
+//  · Lo que quede del mismo gesto se descarta: para avanzar por la hoja nueva hay que volver a mover la rueda.
+//  · Escribiendo, al pasar de la última línea de una página se pasa igual a la siguiente.
+// ======================================================================
+const SEGS_POR_PAGINA=5;          // tramos (altos de pantalla) por página
+const TIRON=150;                  // cuánto hay que seguir tirando en el borde para pasar de página (px de rueda)
+const notePage={};                // posición en la que se dejó cada libreta (durante la sesión)
+const NP={el:null, key:"", pageH:1, screen:0, screens:1, page:1, pages:1, cp:0, drag:null, ro:null,
+          pendingCaret:null, pendingTopLine:null, target:null, expect:null, anim:null, turning:false,
+          pull:0, pullDir:0, pullT:null, lock:false, lastWheel:0};
+const pageSpan=()=>SEGS_POR_PAGINA*NP.pageH;
+function pageBounds(cp){
+  const el=NP.el, P=pageSpan(), max=Math.max(0,el.scrollHeight-el.clientHeight), lo=Math.min(cp*P,max);
+  return [lo, Math.max(lo,Math.min(lo+P-NP.pageH,max))];
+}
+// Mover la vista (siempre por aquí, para distinguir nuestros movimientos de los del navegador)
+function npRaw(v){ const el=NP.el; NP.expect=v; el.scrollTop=v; NP.expect=el.scrollTop; }
+function npStop(){ if(NP.anim){ cancelAnimationFrame(NP.anim); NP.anim=null; } }
+// Colocar la vista al instante en «t», dentro de la página que contiene «anchor» (por defecto, la de «t»)
+function npSetTop(t, anchor){
+  const el=NP.el; if(!el) return;
+  npStop(); npElastic(0,true);
+  NP.cp=Math.min(NP.pages-1,Math.max(0,Math.floor((anchor??t)/pageSpan())));
+  const [lo,hi]=pageBounds(NP.cp); const v=Math.min(hi,Math.max(lo,t));
+  npRaw(v); NP.target=v; npUpdate();
+}
+// Desplazamiento suave hasta «T» (dentro de la página actual)
+function npSmoothTo(T){
+  const el=NP.el; if(!el) return;
+  NP.target=T;
+  if(NP.anim) return;
+  const step=()=>{
+    const cur=el.scrollTop, d=NP.target-cur;
+    if(Math.abs(d)<0.6){ npRaw(NP.target); NP.anim=null; npUpdate(); return; }
+    npRaw(cur+d*0.24); npUpdate();
+    NP.anim=requestAnimationFrame(step);
+  };
+  NP.anim=requestAnimationFrame(step);
+}
+// La hoja cede un poco en el borde mientras se tira (y vuelve a su sitio al soltar)
+function npElastic(pull, instant){
+  const el=NP.el; if(!el) return;
+  const k=Math.min(26,pull*0.17), dir=NP.pullDir;
+  el.style.transition=instant||pull?"none":"transform .28s cubic-bezier(.2,.8,.2,1)";
+  el.style.transform=k?`translateY(${-dir*k}px)`:"";
+  const hint=document.getElementById("np-hint");
+  if(hint){
+    const show=pull>8 && !instant;
+    hint.classList.toggle("on",show); hint.classList.toggle("up",dir<0);
+    hint.style.setProperty("--p",Math.min(1,pull/TIRON));
+    if(show) hint.textContent=dir>0?`Sigue bajando para pasar a la página ${NP.page+1}`:`Sigue subiendo para volver a la página ${NP.page-1}`;
+  }
+}
+function npRelease(){ NP.pull=0; npElastic(0); }
+// Pasar de hoja: la vista se desliza exactamente un alto de pantalla, del final de una página al principio de la
+// otra (son contiguas), así que el movimiento es continuo y sin saltos
+function npTurn(dir){
+  const el=NP.el; if(!el||NP.turning) return;
+  const cp=NP.cp+dir; if(cp<0||cp>NP.pages-1){ npRelease(); return; }
+  npStop(); NP.turning=true; NP.pull=0;
+  const from=el.scrollTop, [nlo,nhi]=pageBounds(cp), to=dir>0?nlo:nhi;
+  NP.cp=cp; npUpdate();
+  el.style.transition="transform .3s cubic-bezier(.2,.8,.2,1)"; el.style.transform="";
+  const hint=document.getElementById("np-hint"); if(hint) hint.classList.remove("on");
+  const rail=document.getElementById("mn-rail"); if(rail) rail.classList.add("flipping");
+  const finish=()=>{ npRaw(to); NP.target=to; NP.turning=false; NP.lock=true; NP.lastWheel=performance.now(); npUpdate();
+    if(rail) setTimeout(()=>rail.classList.remove("flipping"),40); };
+  if(reduceMotion()){ finish(); return; }
+  const t0=performance.now(), dur=440, ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+  const step=now=>{ const p=Math.min(1,(now-t0)/dur); npRaw(from+(to-from)*ease(p)); npRail();
+    if(p<1) NP.anim=requestAnimationFrame(step); else { NP.anim=null; finish(); } };
+  NP.anim=requestAnimationFrame(step);
+}
+// Un desplazamiento pedido (rueda, teclado, dedo): dentro de la página, suave; en el borde, tirón
+function npScrollBy(dy, tiron){
+  const el=NP.el; if(!el||NP.turning||!dy) return;
+  const [lo,hi]=pageBounds(NP.cp), T=NP.target??el.scrollTop, dir=Math.sign(dy);
+  const edge=dir>0?hi:lo, atEdge=Math.abs(T-edge)<0.5;
+  if(!atEdge){ npRelease(); npSmoothTo(dir>0?Math.min(hi,T+dy):Math.max(lo,T+dy)); return; }
+  if(dir>0?NP.cp>=NP.pages-1:NP.cp<=0){ return; }          // primera o última página: no hay a dónde pasar
+  if(NP.pullDir!==dir) NP.pull=0;
+  NP.pullDir=dir; NP.pull+=Math.abs(dy); npElastic(NP.pull);
+  clearTimeout(NP.pullT); NP.pullT=setTimeout(npRelease,260);   // si se deja de tirar, vuelve a su sitio
+  if(NP.pull>=(tiron??TIRON)){ clearTimeout(NP.pullT); npTurn(dir); }
+}
+function npWheel(e){
+  if(e.ctrlKey) return;                                      // Ctrl + rueda: zoom del navegador
+  e.preventDefault();
+  const now=performance.now();
+  // Tras pasar de hoja, el resto del mismo gesto se descarta (hasta una pausa en la rueda)
+  if(NP.lock){ if(now-NP.lastWheel<180){ NP.lastWheel=now; return; } NP.lock=false; }
+  NP.lastWheel=now;
+  const dy=e.deltaMode===1?e.deltaY*24:e.deltaMode===2?e.deltaY*NP.pageH:e.deltaY;
+  npScrollBy(dy);
+}
+// Teclado al leer (la libreta en lectura también se recorre con las flechas, Av Pág, Re Pág, Inicio y Fin)
+function npKeys(e){
+  if(mNoteEditing||e.ctrlKey||e.altKey||e.metaKey) return;
+  const [lo,hi]=pageBounds(NP.cp), map={ArrowDown:48, ArrowUp:-48, PageDown:NP.pageH*0.85, PageUp:-NP.pageH*0.85, " ":NP.pageH*0.85};
+  if(e.key==="Home"){ e.preventDefault(); npSmoothTo(lo); return; }
+  if(e.key==="End"){ e.preventDefault(); npSmoothTo(hi); return; }
+  const dy=map[e.key]; if(!dy) return;
+  e.preventDefault(); npScrollBy(e.shiftKey&&e.key===" "?-dy:dy, Math.abs(dy)>100?1:96);
+}
+// Con el dedo (pantallas táctiles)
+function npTouch(el){
+  let y=null;
+  el.addEventListener("touchstart",e=>{ if(e.touches.length===1) y=e.touches[0].clientY; },{passive:true});
+  el.addEventListener("touchmove",e=>{ if(y==null||e.touches.length!==1) return; const ny=e.touches[0].clientY; e.preventDefault(); npScrollBy(y-ny,90); y=ny; },{passive:false});
+  el.addEventListener("touchend",()=>{ y=null; if(NP.pull) npRelease(); });
+}
+// Si quien mueve la vista es el navegador (por ejemplo, para que se vea el cursor al escribir), se respeta dentro
+// de la página; si se sale por abajo o por arriba, se pasa de hoja
+function npOnScroll(){
+  const el=NP.el; if(!el) return;
+  const t=el.scrollTop;
+  if(NP.expect!=null && Math.abs(t-NP.expect)<1.5){ return; }
+  if(NP.turning){ npRaw(NP.expect); return; }
+  const [lo,hi]=pageBounds(NP.cp);
+  if(t>hi+0.5){ npRaw(hi); if(NP.cp<NP.pages-1) npTurn(1); }
+  else if(t<lo-0.5){ npRaw(lo); if(NP.cp>0) npTurn(-1); }
+  else { NP.expect=t; NP.target=t; npStop(); }
+  npUpdate();
+}
+function npGoScreen(sc){
+  const el=NP.el; if(!el) return;
+  sc=Math.min(NP.screens-1,Math.max(0,Math.round(sc)||0));
+  npSetTop(sc*NP.pageH);
+  if(mNoteEditing) npCaretAt(el.scrollTop);
+}
+const npGo=page=>npGoScreen((Math.min(NP.pages,Math.max(1,Math.round(page)||1))-1)*SEGS_POR_PAGINA);
+// Barra de desplazamiento de la página actual: el carril es solo esta página; el tirador, siempre del mismo tamaño
+function npRail(){
+  const r=document.getElementById("mn-rail"), el=NP.el; if(!r||!el) return;
+  if(!r.firstChild) r.innerHTML='<span class="rl-thumb"><span class="rl-tip"></span></span>';
+  const [lo,hi]=pageBounds(NP.cp||0), range=hi-lo, H=r.clientHeight, th=Math.min(H,64);
+  const top=range<=1?0:(H-th)*Math.min(1,Math.max(0,(el.scrollTop-lo)/range));
+  const thumb=r.firstChild; thumb.style.height=th+"px"; thumb.style.transform=`translateY(${top}px)`;
+  r.classList.toggle("full",range<=1);
+  thumb.firstChild.textContent=`Página ${NP.page} de ${NP.pages}`;
+  r.setAttribute("aria-valuenow",NP.page); r.setAttribute("aria-valuemin",1); r.setAttribute("aria-valuemax",NP.pages);
+}
+
 function npMount(s){
   const el=document.getElementById(mNoteEditing?"mn-text":"mn-md"), body=document.getElementById("mn-body");
   if(NP.ro) NP.ro.disconnect();
-  Object.assign(NP,{el, key:s.kind+":"+s.id, drag:null});
+  npStop(); clearTimeout(NP.pullT);
+  Object.assign(NP,{el, key:s.kind+":"+s.id, drag:null, turning:false, pull:0, pullDir:0, lock:false, target:null, expect:null});
   NP.ro=new ResizeObserver(()=>npLayout(true)); NP.ro.observe(body);
   el.addEventListener("scroll",npOnScroll);
+  el.addEventListener("wheel",npWheel,{passive:false});
+  el.addEventListener("keydown",npKeys);
+  npTouch(el);
   if(mNoteEditing){
     // Al escribir, el navegador mantiene el cursor a la vista desplazando lo justo
     el.addEventListener("input",()=>{ layoutFloats(el); npPad(); npUpdate(); });
@@ -1968,7 +2118,7 @@ function npMount(s){
     const {line, off}=NP.pendingTopLine; NP.pendingTopLine=null;
     const els=[...el.querySelectorAll("[data-line]")].filter(n=>+n.dataset.line<=line);
     const target=els[els.length-1];
-    if(target){ el.scrollTop=target.getBoundingClientRect().top-view()+el.scrollTop-off; npUpdate(); }
+    if(target){ const top=target.getBoundingClientRect().top-view()+el.scrollTop; npSetTop(top-off, top); }
   }
   if(mNoteEditing){
     el.focus();
@@ -1978,9 +2128,9 @@ function npMount(s){
       const lines=edLines(el), li=line==null?lines.length-1:Math.min(line,lines.length-1);
       edSetCaret(el,li,line==null?Infinity:col);
       const t=edLineTops(el)[Math.max(0,li)];
-      if(t && y!=null) el.scrollTop=t.top-y;
-      else if(t && (t.top<el.scrollTop || t.top>el.scrollTop+NP.pageH-24)) el.scrollTop=t.top-NP.pageH/2;
-      npUpdate();
+      if(t && y!=null) npSetTop(t.top-y, t.top);
+      else if(t && (t.top<el.scrollTop || t.top>el.scrollTop+NP.pageH-24)) npSetTop(t.top-NP.pageH/2, t.top);
+      else npUpdate();
     } else npCaretAt(el.scrollTop);     // si se entra a escribir de otra forma, el cursor va a la primera línea que se ve
   }
 }
@@ -2022,8 +2172,8 @@ function npLayout(keep){
   el.style.height=NP.pageH+"px";
   renderFloats(el);
   npPad();
-  el.scrollTop=keep?before:(notePage[NP.key]||0);   // donde estabas, sin encajar
-  npUpdate();
+  NP.pages=Math.max(1,Math.ceil(NP.screens/SEGS_POR_PAGINA));
+  npSetTop(keep?before:(notePage[NP.key]||0));     // donde estabas
 }
 // Relleno al final para que el último tramo también sea un tramo completo
 function npPad(){
@@ -2038,46 +2188,16 @@ function npPad(){
 // Mientras se escribe, la vista sigue al cursor: siempre se ve el tramo en el que está
 function npUpdate(){
   const el=NP.el; if(!el) return;
-  // El tramo y la página son los de la mitad de lo que se ve (la vista puede quedar en cualquier punto)
-  NP.screen=Math.min(NP.screens-1,Math.max(0,Math.floor((el.scrollTop+NP.pageH/2)/NP.pageH)));
-  NP.page=Math.floor(NP.screen/SEGS_POR_PAGINA)+1;
   NP.pages=Math.max(1,Math.ceil(NP.screens/SEGS_POR_PAGINA));
+  NP.cp=Math.min(NP.pages-1,Math.max(0,NP.cp||0));
+  NP.page=NP.cp+1;
+  NP.screen=Math.min(NP.screens-1,Math.max(0,Math.floor((el.scrollTop+1)/NP.pageH)));
   notePage[NP.key]=el.scrollTop;
   const pg=document.getElementById("mn-pg"), pgs=document.getElementById("mn-pgs");
   if(pg && document.activeElement!==pg){ pg.value=NP.page; pg.max=NP.pages; }
   if(pgs) pgs.textContent=NP.pages;
   npRail();
 }
-function npOnScroll(){ npUpdate(); }      // desplazamiento libre: la vista se queda donde la dejas
-// Al terminar de desplazarse, la vista encaja en un tramo: hacia delante si se bajaba, hacia atrás si se subía
-function npGoScreen(sc){
-  const el=NP.el; if(!el) return;
-  sc=Math.min(NP.screens-1,Math.max(0,Math.round(sc)||0));
-  const top=sc*NP.pageH;
-  el.scrollTo({top, behavior:"smooth"});
-  if(mNoteEditing) npCaretAt(top);
-}
-// Ir a una página es ir a su primer tramo, arriba del todo
-const npGo=page=>npGoScreen((Math.min(NP.pages,Math.max(1,Math.round(page)||1))-1)*SEGS_POR_PAGINA);
-// Barra de desplazamiento propia: un carril con marcas en cada cambio de página y un tirador proporcional
-// a lo que se ve. Al soltarlo, la vista encaja en el tramo más cercano (la paginación no cambia).
-function npRail(){
-  const r=document.getElementById("mn-rail"), el=NP.el; if(!r||!el) return;
-  if(!r.firstChild){ r.innerHTML='<span class="rl-ticks"></span><span class="rl-thumb"><span class="rl-tip"></span></span>'; r._ticks=""; }
-  const H=r.clientHeight, sh=el.scrollHeight, ch=el.clientHeight, max=Math.max(1,sh-ch);
-  const th=Math.max(36,Math.min(H,H*ch/Math.max(sh,1))), top=(H-th)*Math.min(1,el.scrollTop/max);
-  const thumb=r.querySelector(".rl-thumb");
-  thumb.style.height=th+"px"; thumb.style.transform=`translateY(${top}px)`;
-  r.classList.toggle("full",sh<=ch+2);
-  thumb.querySelector(".rl-tip").textContent=`Página ${NP.page} de ${NP.pages}`;
-  // Marcas donde empieza cada página (solo si hay varias y caben)
-  const key=NP.pages+"|"+H+"|"+sh;
-  if(r._ticks!==key){ r._ticks=key;
-    const tk=r.querySelector(".rl-ticks"), per=SEGS_POR_PAGINA*NP.pageH;
-    tk.innerHTML=NP.pages>1&&NP.pages<=60?Array.from({length:NP.pages-1},(_,i)=>`<i style="top:${((i+1)*per)/Math.max(sh,1)*H}px"></i>`).join(""):""; }
-  r.setAttribute("aria-valuenow",NP.page); r.setAttribute("aria-valuemin",1); r.setAttribute("aria-valuemax",NP.pages);
-}
-
 // ---------- Índice (Ctrl+I): los títulos con # de la libreta ----------
 let miItems=[], miActive=0;
 function toggleIndex(){
@@ -2110,7 +2230,7 @@ function miGo(i){
   let top;
   if(mNoteEditing){ el.focus(); edSetCaret(el,h.line,0); const t=edLineTops(el)[h.line]; top=t?t.top:0; }
   else { const n=el.querySelector(`[data-line="${h.line}"]`); top=n?n.getBoundingClientRect().top-el.getBoundingClientRect().top+el.scrollTop:0; }
-  el.scrollTo({top:Math.max(0,top-4), behavior:"smooth"});
+  npSetTop(Math.max(0,top-4), top);
 }
 bvBody.addEventListener("click",e=>{
   const it=e.target.closest("[data-mi]"); if(it){ miGo(+it.dataset.mi); return; }
@@ -2128,19 +2248,19 @@ bvBody.addEventListener("keydown",e=>{
   if(t.id==="mn-pg" && e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); npGo(+t.value); t.blur(); }
 });
 bvBody.addEventListener("change",e=>{ if(e.target.id==="mn-pg") npGo(+e.target.value); });
-// Barra: arrastrar el tirador recorre la libreta; pulsar en el carril salta a ese punto. Al soltar, la vista se queda
-// exactamente donde la dejas (sin encajar en un tramo); la rueda y la escritura siguen pasando de tramo en tramo
+// Barra: arrastrar el tirador recorre la página actual; pulsar en el carril salta a ese punto de la página.
+// La vista se queda donde la dejas; la barra no cambia de página (eso lo hacen la rueda, la escritura o el número)
 bvBody.addEventListener("pointerdown",e=>{
   const r=e.target.closest("#mn-rail"); if(!r||!NP.el||e.button!==0) return;
   e.preventDefault(); r.setPointerCapture(e.pointerId);
   const el=NP.el, R=r.getBoundingClientRect(), thumb=r.querySelector(".rl-thumb"), tr=thumb.getBoundingClientRect();
-  const max=Math.max(1,el.scrollHeight-el.clientHeight), free=Math.max(1,R.height-tr.height);
-  const onThumb=e.clientY>=tr.top && e.clientY<=tr.bottom;
-  // Pulsar en el carril: el tirador se centra en ese punto y se puede seguir arrastrando desde ahí
-  if(!onThumb) el.scrollTop=Math.min(1,Math.max(0,(e.clientY-R.top-tr.height/2)/free))*max;
+  const [lo,hi]=pageBounds(NP.cp||0), range=hi-lo; if(range<=1) return;
+  const free=Math.max(1,R.height-tr.height), onThumb=e.clientY>=tr.top && e.clientY<=tr.bottom;
+  const go=t=>{ npStop(); const v=Math.min(hi,Math.max(lo,t)); npRaw(v); NP.target=v; npUpdate(); };
+  NP.drag={}; r.classList.add("dragging"); npRelease();
+  if(!onThumb) go(lo+Math.min(1,Math.max(0,(e.clientY-R.top-tr.height/2)/free))*range);
   const y0=e.clientY, s0=el.scrollTop;
-  NP.drag={moved:!onThumb}; r.classList.add("dragging");
-  const mv=ev=>{ NP.drag.moved=true; el.scrollTop=Math.min(max,Math.max(0,s0+(ev.clientY-y0)*max/free)); };
+  const mv=ev=>go(s0+(ev.clientY-y0)*range/free);
   const up=()=>{ r.removeEventListener("pointermove",mv); r.removeEventListener("pointerup",up); r.removeEventListener("pointercancel",up);
     r.classList.remove("dragging"); NP.drag=null; };
   r.addEventListener("pointermove",mv); r.addEventListener("pointerup",up); r.addEventListener("pointercancel",up);

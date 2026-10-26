@@ -3087,13 +3087,18 @@ body.is-resizing {
   position: relative;
   flex: 1;
   min-height: 120px;
+  overflow: hidden;          /* las hojas entran y salen por los bordes al pasar de página */
+}
+/* Copia de la hoja que se va al pasar de página */
+.np-ghost {
+  pointer-events: none;
 }
 .mn-scroll {
   position: absolute;
   top: 0;
   left: 0;
   right: 30px;
-  overflow-y: auto;
+  overflow: hidden;          /* el desplazamiento lo lleva Ascenso: así la vista nunca se asoma a la página siguiente */
   scrollbar-width: none;
 }
 .mn-scroll::-webkit-scrollbar {
@@ -3238,15 +3243,6 @@ body.is-resizing {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
-}
-.mn-rail .rl-ticks i {
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  height: 2px;
-  margin-top: -1px;
-  border-radius: 2px;
-  background: var(--line);
 }
 .mn-rail .rl-thumb {
   position: absolute;
@@ -4114,4 +4110,51 @@ body.img-dragging * {
 }
 .mn-table tbody tr:last-child td + td {
   box-shadow: inset 1px 0 0 var(--line);
+}
+/* Al pasar de hoja, el tirador vuelve a su sitio deslizándose */
+.mn-rail.flipping .rl-thumb {
+  transition:
+    transform 0.32s cubic-bezier(0.2, 0.8, 0.25, 1),
+    left 0.15s,
+    right 0.15s,
+    box-shadow 0.15s;
+}
+
+/* Aviso del «tirón» para pasar de página: aparece en el borde mientras se sigue tirando */
+.np-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 3;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 0.18s,
+    transform 0.18s;
+}
+.np-hint.up {
+  top: 10px;
+  bottom: auto;
+  transform: translate(-50%, -8px);
+}
+.np-hint.on {
+  opacity: calc(0.35 + var(--p, 0) * 0.65);
+  transform: translate(-50%, 0);
+}
+/* Una barrita que se llena con el tirón */
+.np-hint::after {
+  content: "";
+  display: block;
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--acc) calc(var(--p, 0) * 100%), color-mix(in srgb, var(--bg) 30%, transparent) 0);
 }
