@@ -4158,3 +4158,88 @@ body.img-dragging * {
   border-radius: 2px;
   background: linear-gradient(to right, var(--acc) calc(var(--p, 0) * 100%), color-mix(in srgb, var(--bg) 30%, transparent) 0);
 }
+
+/* ---------- Fórmulas (KaTeX) y diagramas (Mermaid) en la libreta ---------- */
+.mn-math {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.mn-math .katex-display {
+  margin: 0;
+  padding: 6px 0;
+}
+.mn-md .katex {
+  font-size: 1.08em;
+}
+.mn-texsrc,
+.mn-im:not([data-ok]) {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.86em;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.mn-mermaid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.mn-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+.mn-mermaid pre {
+  margin: 0;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.86rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+/* Si un diagrama tiene un error, se ve su código con un aviso */
+.mn-mermaid.err {
+  justify-content: flex-start;
+  border-left: 3px solid var(--p-urgente);
+  padding-left: 12px;
+}
+/* En modo oscuro, los colores oscuros de las fórmulas (\color{blue}, \color{red}…) se aclaran para que se lean */
+@media (prefers-color-scheme: dark) {
+  .mn-md .katex [style*="color:blue"] { color: #7fb0ff !important; }
+  .mn-md .katex [style*="color:red"] { color: #ff8a80 !important; }
+  .mn-md .katex [style*="color:green"] { color: #7ddc8a !important; }
+  .mn-md .katex [style*="color:purple"] { color: #c79bff !important; }
+  .mn-md .katex [style*="color:brown"] { color: #e0a070 !important; }
+  .mn-md .katex [style*="color:black"] { color: var(--ink) !important; }
+}
+
+/* ---------- Emojis ---------- */
+/* Siempre en color (Windows: Segoe UI Emoji), sin heredar negritas ni cursivas que los deforman */
+.emo {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-variant: normal;
+  line-height: 1;
+}
+/* En los bloques de código, cada emoji ocupa dos columnas exactas, como en un terminal */
+.mn-code .w2 {
+  display: inline-block;
+  width: 2ch;
+  text-align: center;
+  white-space: nowrap;
+}
+.mn-code .w2 .emo {
+  font-size: 0.95em;
+}
+/* Al escribir, los emojis también salen en color */
+.mn-text,
+.mn-md,
+.mn-code pre {
+  font-family: var(--sans), "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+.mn-code pre {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji";
+}

@@ -1292,7 +1292,7 @@ function mapViewHTML(mid,m){
       <div class="swatches mv-acc">${M_COLORS.map(c=>`<button type="button" class="sw" data-macc="${c}" aria-pressed="${c===m.color}" style="--c:${c}" aria-label="Color de acento"></button>`).join("")}</div>
       <button type="button" class="bfav" data-mfav="${mid}" aria-pressed="${m.fav}" aria-label="${m.fav?"Quitar de favoritos":"Marcar como favorito"}">★</button>
       <div class="menu-wrap"><button type="button" class="bd-more" data-menu="map" aria-label="Opciones del mapa" aria-expanded="${openMenuKey==="map"}">⋯</button>
-        ${openMenuKey==="map"?`<div class="bmenu" role="menu"><button type="button" class="bm-item danger" data-delmap>Eliminar mapa</button></div>`:""}</div>
+        ${openMenuKey==="map"?`<div class="bmenu" role="menu"><button type="button" class="bm-item" data-mexport>Exportar como imagen (PNG)</button><button type="button" class="bm-item danger" data-delmap>Eliminar mapa</button></div>`:""}</div>
       <div class="mv-help-wrap"><button type="button" class="mv-help-btn" data-mhelp aria-label="Comandos y atajos" aria-expanded="${mHelpOpen}" title="Comandos y atajos (?)">?</button>
         ${mHelpOpen?helpHTML():""}</div>
     </div>
@@ -1324,13 +1324,15 @@ function helpHTML(){
     ["Organizar",[["Arrastrar","Mover los nodos seleccionados"],["Soltar un nodo sobre otro","Meterlo dentro de ese nodo"],["Clic derecho › Mover a…","Llevarlo a otro nivel"],
       [K("Ctrl+C")+" · "+K("Ctrl+X")+" · "+K("Ctrl+V"),"Copiar, cortar y pegar (también entre mapas)"],["Pegar una lista de texto","Un nodo por línea; las sangradas, dentro"],
       [K("Supr"),"Eliminar"],[K("Ctrl+Z")+" · "+K("Ctrl+Y"),"Deshacer y rehacer"]]],
+    ["Exportar",[["Menú ⋯ › Exportar como imagen","Guardar el nivel que ves como PNG"],["Clic derecho en el fondo","También ahí"]]],
     ["Moverse",[["Doble clic en un nodo o "+K("Intro"),"Entrar en su nivel"],[K("Retroceso")+" o "+K("Alt")+"+"+K("←"),"Subir un nivel"],["La ruta de arriba","Ir a cualquier nivel"],
       ["Rueda del ratón","Acercar y alejar"],["Arrastrar el fondo","Desplazarse"],["Botón ⤢","Ajustar a la pantalla"]]],
     ["Libreta",[[K("F2"),"Cambiar el nombre"],["Clic en el texto","Escribir justo ahí"],[K("Ctrl+I"),"Índice de títulos"],["Rueda o segmentos de la barra","Pasar de tramo; el número de arriba, de página"],
       ["<code># título</code> · <code>**negrita**</code> · <code>*cursiva*</code> · <code>~~tachado~~</code> · <code>`código`</code>","Formato de texto"],
       ["<code>- lista</code> · <code>1. lista</code> · <code>- [ ] casilla</code> · <code>&gt; cita</code> · <code>---</code>","Listas (con sangría, anidadas), citas y separadores"],
       ["<code>```bash</code> … <code>```</code>","Bloque de código (con botón «Copiar»)"],
-      ["<code>| a | b |</code> + <code>| --- | --- |</code>","Tabla"],["<code>[texto](https://…)</code>","Enlace"]]],
+      ["<code>| a | b |</code> + <code>| --- | --- |</code>","Tabla"],["<code>[texto](https://…)</code>","Enlace"],
+      ["<code>$x^2$</code> · <code>$$ … $$</code>","Fórmula en línea · en bloque (LaTeX)"],["<code>```mermaid</code> … <code>```</code>","Diagrama"]]],
     ["Imágenes",[[K("Ctrl+V")+" con una captura o imagen copiada","Pegarla en la libreta"],["Arrastrar archivos a la libreta","Añadirlos donde los sueltes"],["Botón «+ Imagen»","Elegir archivos (en el móvil, también la cámara)"],
       ["Varias a la vez","Quedan en fila"],["Arrastrar la imagen","Moverla a cualquier sitio de la libreta"],["Escribir al lado","El texto ocupa el hueco que deja la imagen (en el lado con más sitio)"],["Arrastrar su esquina","Hacerla más grande o más pequeña"],
       ["Barra sobre la imagen","Pie de foto, ver en grande y quitar"],["Clic en la imagen","Verla en grande (rueda: zoom)"],
@@ -1358,17 +1360,25 @@ function noteSubject(){
 // así leer y escribir se ven a la misma altura y se puede pasar de uno a otro sin perder el sitio.
 // Admite: títulos (# a ######), **negrita**, *cursiva*, ~~tachado~~, `código`, [enlaces](https://…), listas
 // (con viñetas, numeradas, de casillas y anidadas), > citas, --- separadores, bloques ``` de código y tablas.
+// Emojis: se dibujan siempre con la fuente de emojis en color (en Windows, Segoe UI Emoji). Dentro de un bloque de
+// código ocupan exactamente dos columnas, como en un terminal, para que los dibujos hechos con emojis cuadren.
+const EMOJI_RE=/(?:\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F)\uFE0F?(?:\p{Emoji_Modifier})?(?:\u200D(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F?)\uFE0F?)*)/gu;
+// (la caja de dos columnas usa la letra del código; el emoji va dentro, con su propia fuente)
+const emojiWrap=(h,code)=>h.replace(EMOJI_RE,m=>code?`<span class="w2"><span class="emo">${m}</span></span>`:`<span class="emo">${m}</span>`);
 function mdInline(s){
   // Código, enlaces y direcciones se apartan primero, para que lo que llevan dentro (**, _, [) no se interprete
   const keep=[], put=h=>{ keep.push(h); return "\u0000"+(keep.length-1)+"\u0000"; };
   const fmt=x=>x.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/(^|[^\w])__(.+?)__(?!\w)/g,"$1<strong>$2</strong>")
                .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g,"$1<em>$2</em>").replace(/(^|[^\w])_([^_\s][^_]*?)_(?!\w)/g,"$1<em>$2</em>")
                .replace(/~~(.+?)~~/g,"<del>$1</del>");
-  const link=(url,label)=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  const link=(url,label)=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${emojiWrap(label)}</a>`;
   s=s.replace(/`([^`\n]+)`/g,(_,c)=>put(`<code>${esc(c)}</code>`));
+  // Fórmulas en línea: $...$ (no confunde precios: tras el $ de apertura no va un espacio ni antes del de cierre)
+  s=s.replace(/(^|[^\\$])\$(?![\s$])([^$\n]*?[^\s\\$])\$(?!\d)/g,(m,pre,tex)=>pre+put(`<span class="mn-im" data-tex="${esc(tex)}">${esc(tex)}</span>`));
+  s=s.replace(/(^|[^\\$])\$([^\s$\\])\$(?!\d)/g,(m,pre,tex)=>pre+put(`<span class="mn-im" data-tex="${esc(tex)}">${esc(tex)}</span>`));
   s=s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g,(m,txt,url)=>/^(https?:\/\/|mailto:)/i.test(url)?put(link(url,fmt(esc(txt)))):m);
   s=s.replace(/https?:\/\/[^\s<>()]*[^\s<>().,;:!?'"]/g,url=>put(link(url,esc(url))));
-  s=fmt(esc(s));
+  s=emojiWrap(fmt(esc(s)));
   for(let k=keep.length-1;k>=0;k--) s=s.split("\u0000"+k+"\u0000").join(keep[k]);
   return s.replace(/\u0000(\d+)\u0000/g,(_,k)=>keep[+k]);
 }
@@ -1387,9 +1397,13 @@ function mdRender(t){
       closePara(); closeList();
       const fence=m[1], lang=m[2]; let j=i+1; const body=[];
       while(j<lines.length && !lines[j].trim().startsWith(fence)) { body.push(j); j++; }
+      if(lang.toLowerCase()==="mermaid"){                 // diagrama: se dibuja (al escribir se ve el código)
+        h+=`<div class="mn-mermaid" data-line="${i}" data-src="${esc(body.map(k=>lines[k]).join("\n"))}"><pre>${esc(body.map(k=>lines[k]).join("\n"))}</pre></div>`;
+        i=j; continue;
+      }
       h+=`<div class="mn-code">`;
       h+=`<div class="mn-fence" data-line="${i}"><span>${esc(lang||"código")}</span><button type="button" class="mn-copy" data-copy="${i}">Copiar</button></div>`;
-      h+=`<pre>${body.map(k=>`<span class="cl" data-line="${k}">${esc(lines[k])||" "}</span>`).join("\n")}</pre>`;
+      h+=`<pre>${body.map(k=>`<span class="cl" data-line="${k}">${emojiWrap(esc(lines[k]),true)||" "}</span>`).join("\n")}</pre>`;
       if(j<lines.length) h+=`<div class="mn-fence end" data-line="${j}"></div>`;
       h+=`</div>`;
       i=j; continue;
@@ -1406,6 +1420,17 @@ function mdRender(t){
       i=j-1; continue;
     }
     if(isImgLine(l)){ closePara(); closeList(); h+=`<div class="ln-img" data-line="${i}" data-src="${esc(l)}"></div>`; continue; }
+    // Fórmula en bloque: $$ … $$ (en una línea o en varias)
+    if(l.trim().startsWith("$$")){
+      closePara(); closeList();
+      const t0=l.trim(); let tex, j=i;
+      if(t0.length>4 && t0.endsWith("$$")) tex=t0.slice(2,-2);
+      else { const parts=[t0.slice(2)]; j=i+1;
+        while(j<lines.length && !lines[j].trim().endsWith("$$")){ parts.push(lines[j]); j++; }
+        if(j<lines.length) parts.push(lines[j].trim().slice(0,-2)); tex=parts.join("\n"); }
+      h+=`<div class="mn-math" data-line="${i}" data-tex="${esc(tex)}"><span class="mn-texsrc">${esc(tex)}</span></div>`;
+      i=j; continue;
+    }
     // Listas (también anidadas, según la sangría): con casillas, con viñetas o numeradas
     if((m=l.match(/^(\s*)([-*+]|\d+[.)]) (\[( |x|X)\] )?(.*)$/))){
       closePara(); if(!list){ h+='<ul class="mn-ul">'; list="ul"; }
@@ -1425,6 +1450,34 @@ function mdRender(t){
   closePara(); closeList();
   return h || '<p class="mn-empty">Escribe aquí tus apuntes…</p>';
 }
+// Fórmulas (KaTeX) y diagramas (Mermaid): se cargan desde assets/vendor solo cuando una libreta los usa
+const LIBS={};
+function loadLib(name){
+  if(LIBS[name]) return LIBS[name];
+  const files={katex:["assets/vendor/katex/katex.min.css","assets/vendor/katex/katex.min.js"], mermaid:["assets/vendor/mermaid/mermaid.min.js"]}[name];
+  LIBS[name]=Promise.all(files.map(f=>new Promise((ok,ko)=>{
+    const n=f.endsWith(".css")?Object.assign(document.createElement("link"),{rel:"stylesheet",href:f}):Object.assign(document.createElement("script"),{src:f});
+    n.onload=ok; n.onerror=()=>{ delete LIBS[name]; ko(new Error("No se pudo cargar "+f)); }; document.head.appendChild(n); })));
+  return LIBS[name];
+}
+let mermaidTheme=null, mermaidN=0;
+function renderRich(el){
+  const maths=[...el.querySelectorAll(".mn-math:not([data-ok]),.mn-im:not([data-ok])")], mers=[...el.querySelectorAll(".mn-mermaid:not([data-ok])")];
+  const relayout=()=>{ if(!document.body.contains(el)||NP.el!==el) return; snapRich(el); layoutFloats(el); npPad(); npUpdate(); };
+  if(maths.length) loadLib("katex").then(()=>{
+    for(const n of maths){ try{ katex.render(n.dataset.tex,n,{displayMode:n.classList.contains("mn-math"), throwOnError:false, strict:"ignore", trust:false}); }catch(e){} n.dataset.ok=1; }
+    relayout(); }).catch(()=>{});
+  if(mers.length) loadLib("mermaid").then(async()=>{
+    const dark=window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches, theme=dark?"dark":"neutral";
+    if(mermaidTheme!==theme){ mermaid.initialize({startOnLoad:false, securityLevel:"strict", theme, fontFamily:getComputedStyle(document.body).fontFamily+', "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"'}); mermaidTheme=theme; }
+    for(const n of mers){ try{ const {svg}=await mermaid.render("mmd"+(++mermaidN), n.dataset.src); n.innerHTML=svg; }catch(e){ n.classList.add("err"); } n.dataset.ok=1; }
+    relayout(); }).catch(()=>{});
+}
+// Fórmulas y diagramas ocupan un número exacto de líneas de la rejilla
+function snapRich(el){
+  const lh=parseFloat(getComputedStyle(el).lineHeight)||24;
+  for(const n of el.querySelectorAll(".mn-math,.mn-mermaid")){ n.style.height=""; n.style.height=Math.ceil((n.offsetHeight-0.5)/lh)*lh+"px"; }
+}
 // Títulos para el índice (Ctrl+I): # ## ###, sin contar los que hay dentro de un bloque de código
 function headingsOf(text){
   const out=[]; let fence=null;
@@ -1441,8 +1494,8 @@ function copyCodeBlock(openLine){
   const lines=noteSubject().o.notes.split("\n"), m=(lines[openLine]||"").match(/^\s*(`{3,}|~{3,})/); if(!m) return;
   const out=[]; for(let j=openLine+1;j<lines.length && !lines[j].trim().startsWith(m[1]);j++) out.push(lines[j]);
   const txt=out.join("\n");
-  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>mvToast("Código copiado"),()=>{
-    const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); mvToast("Código copiado"); });
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>mvToast("Código copiado",false),()=>{
+    const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); mvToast("Código copiado",false); });
 }
 // ======================================================================
 // ---------- Imágenes en las libretas ----------
@@ -2170,6 +2223,7 @@ function npLayout(keep){
   NP.pageH=Math.max(lh*3, Math.floor(avail/lh)*lh);
   const before=el.scrollTop;
   el.style.height=NP.pageH+"px";
+  if(!mNoteEditing) renderRich(el);
   renderFloats(el);
   npPad();
   NP.pages=Math.max(1,Math.ceil(NP.screens/SEGS_POR_PAGINA));
@@ -2504,11 +2558,11 @@ const mapActive=()=>!boardsView.hidden && !!curMapId() && !!MG && !cdlg.open;
 const isTyping=()=>{ const a=document.activeElement; return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable); };
 
 // ---- avisos breves con «Deshacer» ----
-function mvToast(text){
+function mvToast(text, undo=true){
   const g=document.getElementById("mv-graph"); if(!g) return;
   let t=g.querySelector(".mv-toast"); if(!t){ t=document.createElement("div"); t.className="mv-toast"; t.setAttribute("role","status"); g.appendChild(t); }
-  t.innerHTML=`<span></span><button type="button">Deshacer</button>`; t.querySelector("span").textContent=text;
-  t.querySelector("button").onclick=()=>{ t.remove(); mUndoDo(); };
+  t.innerHTML=`<span></span>${undo?'<button type="button">Deshacer</button>':""}`; t.querySelector("span").textContent=text;
+  if(undo) t.querySelector("button").onclick=()=>{ t.remove(); mUndoDo(); };
   clearTimeout(t._h); t._h=setTimeout(()=>t.remove(),4500);
 }
 
@@ -2765,9 +2819,60 @@ function bindCanvas(cv){
       const items=[["Nuevo nodo aquí",()=>createNode(wx,wy,null)]];
       if(mClip) items.push(["Pegar "+(mClip.count===1?"el nodo copiado":mClip.count+" nodos copiados"),()=>pasteClip(wx,wy)]);
       items.push(["Seleccionar todo",()=>{ const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); }],
-                 ["Ajustar a la pantalla",()=>mgFit(false)]);
+                 ["Ajustar a la pantalla",()=>mgFit(false)],["Exportar como imagen (PNG)",exportMapPNG]);
       openMgMenu(x,y,items); }
   });
+}
+
+// ---- Exportar el nivel actual del mapa como imagen PNG ----
+// Se dibuja aparte, entero (aunque no quepa en pantalla), al doble de resolución, con el título y la ruta arriba,
+// todos los nombres visibles y los mismos colores y brillos que en Ascenso. Se descarga a la carpeta de descargas.
+function exportMapPNG(){
+  const mid=curMapId(), m=state.maps[mid]; if(!m) return;
+  const lv=levelNodes(mid,mapLevel).filter(([,n])=>n.x!=null);
+  if(!lv.length){ mvToast("Este nivel no tiene nodos que exportar",false); return; }
+  const css=getComputedStyle(document.documentElement), v=k=>css.getPropertyValue(k).trim();
+  const ink=v("--ink"), muted=v("--muted"), line=v("--line"), bg=getComputedStyle(document.querySelector(".mv-body")||document.body).backgroundColor;
+  const font=getComputedStyle(document.body).fontFamily, serif=getComputedStyle(document.querySelector("h1,.brand")||document.body).fontFamily;
+  const ch=childrenIndex(), ids=new Set(lv.map(([id])=>id));
+  const links=Object.values(state.mlinks).filter(l=>ids.has(l.a)&&ids.has(l.b));
+  const meas=document.createElement("canvas").getContext("2d"); meas.font=`500 13px ${font}`;
+  const info=lv.map(([id,n])=>{ const load=nodeLoad(id,ch); return {id, n, g:glowLevel(load), r:6+Math.min(10,Math.sqrt(load)*2.3), tw:meas.measureText(n.title).width}; });
+  // Límites: nodos, brillos y nombres
+  let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
+  for(const k of info){ const p=k.n, halo=k.r+k.g*5.5+4;
+    x0=Math.min(x0,p.x-halo,p.x-k.tw/2); x1=Math.max(x1,p.x+halo,p.x+k.tw/2); y0=Math.min(y0,p.y-halo); y1=Math.max(y1,p.y+k.r+24); }
+  const pad=48, head=74, W=Math.ceil(x1-x0+pad*2), H=Math.ceil(y1-y0+pad*2+head), S=2;
+  const cv=document.createElement("canvas"); cv.width=W*S; cv.height=H*S;
+  const c=cv.getContext("2d"); c.scale(S,S);
+  c.fillStyle=bg&&bg!=="rgba(0, 0, 0, 0)"?bg:"#ffffff"; c.fillRect(0,0,W,H);
+  // Cabecera: título y ruta
+  const ruta=[m.title,...levelPath().map(id=>state.mnodes[id].title)];
+  c.fillStyle=ink; c.textAlign="left"; c.textBaseline="alphabetic";
+  c.font=`600 22px ${serif}`; c.fillText(ruta[ruta.length-1],pad,pad+6);
+  c.fillStyle=muted; c.font=`13px ${font}`;
+  c.fillText((ruta.length>1?ruta.slice(0,-1).join(" › ")+" · ":"")+new Date().toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"}),pad,pad+28);
+  c.fillStyle=m.color; c.fillRect(pad,pad+40,36,3);
+  c.translate(pad-x0, pad+head-y0);
+  const colorOf=n=>n.color||m.color;
+  // Hilos
+  c.lineWidth=1.2; c.strokeStyle=line; c.globalAlpha=.9;
+  for(const l of links){ const a=state.mnodes[l.a], b=state.mnodes[l.b]; c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke(); }
+  c.globalAlpha=1;
+  // Nodos: brillo, círculo, anillo de subnivel y nombre
+  for(const k of info){ const p=k.n, col=colorOf(p);
+    for(let i=k.g;i>0;i--){ c.fillStyle=hexA(col,.1*(k.g-i+1)); c.beginPath(); c.arc(p.x,p.y,k.r+i*5.5,0,7); c.fill(); }
+    c.fillStyle=(k.g>=2||p.color)?col:muted; c.beginPath(); c.arc(p.x,p.y,k.r,0,7); c.fill();
+    if((ch[k.id]||[]).length){ c.strokeStyle=muted; c.lineWidth=1.3; c.beginPath(); c.arc(p.x,p.y,k.r+3.5,0,7); c.stroke(); }
+    c.fillStyle=ink; c.font=`500 13px ${font}`; c.textAlign="center"; c.fillText(p.title,p.x,p.y+k.r+16);
+  }
+  const name=ruta.join(" - ").replace(/[\\/:*?"<>|]+/g,"").slice(0,120)||"Mapa";
+  cv.toBlob(blob=>{
+    if(!blob){ mvToast("No se pudo crear la imagen",false); return; }
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`Mapa - ${name}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    mvToast(`Imagen guardada en Descargas: «Mapa - ${name}.png»`,false);
+  },"image/png");
 }
 
 // ---- eventos de la vista de mapa (delegados en el cuerpo de la vista de tableros) ----
@@ -2784,6 +2889,7 @@ bvBody.addEventListener("click",e=>{
   if(q("[data-mhelp]")){ toggleHelp(); return; }
   if((el=q("[data-mlevel]"))){ goLevel(el.dataset.mlevel||null); return; }
   if((el=q("[data-macc]"))){ mRemember(); state.maps[curMapId()].color=el.dataset.macc; boardsChanged(); return; }
+  if(q("[data-mexport]")){ openMenuKey=null; renderBoards(); exportMapPNG(); return; }
   if((el=q("[data-delmap]"))){ armDelete(el,()=>deleteMap(curMapId()),"Pulsa otra vez para eliminar el mapa"); return; }
   if((el=q("[data-mtool]"))){ const k=el.dataset.mtool;
     if(k==="new"){ const c=cam(); createNode((MG.W/2-c.ox)/c.z+(Math.random()-.5)*60, (MG.H/2-c.oy)/c.z+(Math.random()-.5)*60, mSel); }
