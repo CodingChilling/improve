@@ -1428,7 +1428,7 @@ function mdRender(t){
       else { const parts=[t0.slice(2)]; j=i+1;
         while(j<lines.length && !lines[j].trim().endsWith("$$")){ parts.push(lines[j]); j++; }
         if(j<lines.length) parts.push(lines[j].trim().slice(0,-2)); tex=parts.join("\n"); }
-      h+=`<div class="mn-math" data-line="${i}" data-tex="${esc(tex)}"><span class="mn-texsrc">${esc(tex)}</span></div>`;
+      h+=`<div class="mn-math" data-line="${i}" data-tex="${esc(tex)}"><div class="hx-scroll"><span class="mn-texsrc">${esc(tex)}</span></div>${HX_RAIL}</div>`;
       i=j; continue;
     }
     // Listas (también anidadas, según la sangría): con casillas, con viñetas o numeradas
@@ -1465,7 +1465,7 @@ function renderRich(el){
   const maths=[...el.querySelectorAll(".mn-math:not([data-ok]),.mn-im:not([data-ok])")], mers=[...el.querySelectorAll(".mn-mermaid:not([data-ok])")];
   const relayout=()=>{ if(!document.body.contains(el)||NP.el!==el) return; snapRich(el); layoutFloats(el); npPad(); npUpdate(); };
   if(maths.length) loadLib("katex").then(()=>{
-    for(const n of maths){ try{ katex.render(n.dataset.tex,n,{displayMode:n.classList.contains("mn-math"), throwOnError:false, strict:"ignore", trust:false}); }catch(e){} n.dataset.ok=1; }
+    for(const n of maths){ try{ katex.render(n.dataset.tex,n.querySelector(".hx-scroll")||n,{displayMode:n.classList.contains("mn-math"), throwOnError:false, strict:"ignore", trust:false}); }catch(e){} n.dataset.ok=1; }
     relayout(); }).catch(()=>{});
   if(mers.length) loadLib("mermaid").then(async()=>{
     const dark=window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches, theme=dark?"dark":"neutral";
@@ -1476,8 +1476,42 @@ function renderRich(el){
 // Fórmulas y diagramas ocupan un número exacto de líneas de la rejilla
 function snapRich(el){
   const lh=parseFloat(getComputedStyle(el).lineHeight)||24;
+  hxMountAll(el);                                   // primero las barras horizontales (si hacen falta, ocupan sitio)
   for(const n of el.querySelectorAll(".mn-math,.mn-mermaid")){ n.style.height=""; n.style.height=Math.ceil((n.offsetHeight-0.5)/lh)*lh+"px"; }
 }
+// ---- Barras horizontales de la libreta ----
+// Lo que no cabe a lo ancho (una fórmula muy larga) se recorre en horizontal con una barra igual que la barra
+// lateral de la libreta, pero tumbada: mismo carril, mismo tirador (siempre del mismo tamaño), mismo brillo.
+// Se arrastra el tirador, se pulsa en el carril o se usa Mayús + rueda (o el gesto horizontal del panel táctil).
+const HX_RAIL='<div class="hx-rail" hidden><span class="hx-thumb"></span></div>';
+function hxSync(sc){
+  const rail=sc.nextElementSibling; if(!rail||!rail.classList.contains("hx-rail")) return;
+  const over=sc.scrollWidth>sc.clientWidth+1;
+  if(rail.hidden===over){ rail.hidden=!over; }
+  if(!over) return;
+  const W=rail.clientWidth, tw=Math.min(W,64), max=Math.max(1,sc.scrollWidth-sc.clientWidth);
+  const th=rail.firstChild; th.style.width=tw+"px"; th.style.transform=`translateX(${(W-tw)*Math.min(1,sc.scrollLeft/max)}px)`;
+}
+function hxMount(sc){
+  if(sc._hx) { hxSync(sc); return; }
+  sc._hx=true;
+  const rail=sc.nextElementSibling; if(!rail) return;
+  sc.addEventListener("scroll",()=>hxSync(sc),{passive:true});
+  rail.addEventListener("pointerdown",e=>{
+    if(e.button!==0) return;
+    e.preventDefault(); e.stopPropagation(); rail.setPointerCapture(e.pointerId);
+    const R=rail.getBoundingClientRect(), tr=rail.firstChild.getBoundingClientRect(), max=Math.max(1,sc.scrollWidth-sc.clientWidth);
+    const free=Math.max(1,R.width-tr.width), onThumb=e.clientX>=tr.left && e.clientX<=tr.right;
+    // Pulsar en el carril: salta a ese punto y se puede seguir arrastrando desde ahí
+    if(!onThumb) sc.scrollLeft=Math.min(1,Math.max(0,(e.clientX-R.left-tr.width/2)/free))*max;
+    const x0=e.clientX, s0=sc.scrollLeft; rail.classList.add("dragging");
+    const mv=ev=>{ sc.scrollLeft=Math.min(max,Math.max(0,s0+(ev.clientX-x0)*max/free)); };
+    const up=()=>{ rail.removeEventListener("pointermove",mv); rail.removeEventListener("pointerup",up); rail.removeEventListener("pointercancel",up); rail.classList.remove("dragging"); };
+    rail.addEventListener("pointermove",mv); rail.addEventListener("pointerup",up); rail.addEventListener("pointercancel",up);
+  });
+  hxSync(sc);
+}
+const hxMountAll=el=>el.querySelectorAll(".hx-scroll").forEach(hxMount);
 // Títulos para el índice (Ctrl+I): # ## ###, sin contar los que hay dentro de un bloque de código
 function headingsOf(text){
   const out=[]; let fence=null;
@@ -2092,6 +2126,7 @@ function npScrollBy(dy, tiron){
 }
 function npWheel(e){
   if(e.ctrlKey) return;                                      // Ctrl + rueda: zoom del navegador
+  if((e.shiftKey || Math.abs(e.deltaX)>Math.abs(e.deltaY)) && e.target.closest && e.target.closest(".hx-scroll")) return;  // en horizontal, dentro de una fórmula ancha
   e.preventDefault();
   const now=performance.now();
   // Tras pasar de hoja, el resto del mismo gesto se descarta (hasta una pausa en la rueda)
@@ -2903,6 +2938,7 @@ bvBody.addEventListener("click",e=>{
   if((el=q("[data-ckline]"))){ const s=noteSubject(), lines=s.o.notes.split("\n"), i=+el.dataset.ckline;
     mRemember(); lines[i]=lines[i].replace(/\[( |x|X)\]/, el.checked?"[x]":"[ ]"); s.o.notes=lines.join("\n"); save(); renderMapNote(); mgDraw(); return; }
   if((el=q("[data-copy]"))){ copyCodeBlock(+el.dataset.copy); return; }
+  if(q(".hx-rail")) return;                       // la barra de una fórmula ancha no pasa a escribir
   if(q("#mn-md") && !q("a") && !q(".ln-img")){ NP.pendingCaret=caretFromClick(e);
     { const md=document.getElementById("mn-md"), ln=t.closest("[data-line]"); if(md&&ln&&NP.pendingCaret.line!=null) NP.pendingCaret.y=ln.getBoundingClientRect().top-md.getBoundingClientRect().top; } mNoteEditing=true; mTyping=false; renderMapNote(); }
 }, true);

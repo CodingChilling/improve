@@ -4162,11 +4162,63 @@ body.img-dragging * {
 /* ---------- Fórmulas (KaTeX) y diagramas (Mermaid) en la libreta ---------- */
 .mn-math {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
+  overflow: hidden;
+}
+/* Zona que se recorre en horizontal: sin la barra del sistema (la sustituye la barra de Ascenso de debajo) */
+.hx-scroll {
+  display: flex;
+  justify-content: safe center;   /* centrada; si no cabe, se recorre desde el principio */
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+.hx-scroll::-webkit-scrollbar {
+  display: none;
+}
+/* Barra horizontal: la barra lateral de la libreta, tumbada (mismo carril, mismo tirador, mismo brillo) */
+.hx-rail {
+  position: relative;
+  flex: none;
+  height: 12px;
+  margin: 2px 6px 6px;            /* sitio para el brillo del tirador */
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent 3px, var(--soft) 3px, var(--soft) 9px, transparent 9px);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.hx-rail[hidden] {
+  display: none;
+}
+.hx-thumb {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 82%, #fff), var(--acc));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--acc) 55%, transparent),
+    0 4px 12px -4px color-mix(in srgb, var(--acc) 70%, transparent);
+  transition:
+    top 0.15s,
+    bottom 0.15s,
+    box-shadow 0.15s;
+  will-change: transform;
+}
+.hx-rail:hover .hx-thumb,
+.hx-rail.dragging .hx-thumb {
+  top: 0;
+  bottom: 0;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent),
+    0 6px 16px -4px color-mix(in srgb, var(--acc) 80%, transparent);
+}
+.hx-rail.dragging {
+  cursor: grabbing;
 }
 .mn-math .katex-display {
   margin: 0;
