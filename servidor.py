@@ -141,7 +141,8 @@ CREATE TABLE IF NOT EXISTS tareas (
   prioridad   TEXT NOT NULL CHECK (prioridad IN ('urgente', 'alta', 'media', 'baja')),
   lista       TEXT NOT NULL CHECK (lista IN ('pendiente', 'proceso', 'hecha')),
   creada      TEXT NOT NULL,
-  actualizada TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  actualizada TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  archivada   TEXT            -- vacío: activa; con fecha: archivada (no aparece en las listas, aún no está borrada)
 );
 CREATE INDEX IF NOT EXISTS tareas_por_fecha ON tareas(fecha);
 CREATE TABLE IF NOT EXISTS tarea_etiquetas (
@@ -199,7 +200,8 @@ CREATE TABLE IF NOT EXISTS tarjetas (
   fecha_limite TEXT,              -- AAAA-MM-DD, o vacío si no tiene
   orden        INTEGER NOT NULL DEFAULT 0,
   creada       TEXT NOT NULL,
-  actualizada  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  actualizada  TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  archivada    TEXT             -- vacío: activa; con fecha: archivada (no aparece en su lista, aún no está borrada)
 );
 CREATE INDEX IF NOT EXISTS tarjetas_por_lista ON tarjetas(lista_id, orden);
 CREATE TABLE IF NOT EXISTS tarjeta_etiquetas_tablero (
@@ -258,9 +260,9 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   huerfano_desde TEXT
 );
 """
-VERSION_BD = 8
+VERSION_BD = 10
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 9
+VERSION_APP = 11
 
 
 class ErrorDatos(Exception):
@@ -276,9 +278,20 @@ def conectar():
     # Crea o actualiza las tablas si la base de datos es nueva o de una versión anterior
     if con.execute("PRAGMA user_version").fetchone()[0] < VERSION_BD:
         con.executescript(ESQUEMA)
+        migrar(con)
         con.execute("PRAGMA journal_mode = WAL")
         con.execute("PRAGMA user_version = %d" % VERSION_BD)
     return con
+
+
+def migrar(con):
+    """Columnas nuevas en tablas que ya existían (las tablas nuevas las crea el esquema)."""
+    columnas = {r[1] for r in con.execute("PRAGMA table_info(tareas)")}
+    if "archivada" not in columnas:
+        con.execute("ALTER TABLE tareas ADD COLUMN archivada TEXT")
+    columnas = {r[1] for r in con.execute("PRAGMA table_info(tarjetas)")}
+    if "archivada" not in columnas:
+        con.execute("ALTER TABLE tarjetas ADD COLUMN archivada TEXT")
 
 
 def iniciar_bd():
@@ -324,6 +337,7 @@ def leer_estado(con):
         tareas[r["id"]] = {
             "date": r["fecha"], "title": r["titulo"], "notes": r["notas"],
             "prio": r["prioridad"], "list": r["lista"], "created": r["creada"], "tags": [],
+            "archived": r["archivada"],
         }
     for r in con.execute("SELECT tarea_id, etiqueta_id FROM tarea_etiquetas ORDER BY rowid"):
         if r["tarea_id"] in tareas:
@@ -355,6 +369,7 @@ def leer_estado(con):
         tarjetas[r["id"]] = {
             "list": r["lista_id"], "title": r["titulo"], "desc": r["descripcion"], "prio": r["prioridad"],
             "due": r["fecha_limite"] or "", "labels": [], "check": [], "order": r["orden"], "created": r["creada"],
+            "archived": r["archivada"],
         }
     for r in con.execute("SELECT tarjeta_id, etiqueta_id FROM tarjeta_etiquetas_tablero ORDER BY rowid"):
         if r["tarjeta_id"] in tarjetas:
@@ -568,14 +583,17 @@ def guardar_tarea(con, tid, datos):
     if lista not in LISTAS:
         raise ErrorDatos("lista no válida")
     creada = str(datos.get("created") or "")[:40] or fecha
+    archivada = datos.get("archived")
+    archivada = str(archivada)[:40] if archivada else None
     etiquetas = datos.get("tags") or []
     if not isinstance(etiquetas, list):
         raise ErrorDatos("etiquetas no válidas")
     con.execute(
-        """INSERT INTO tareas (id, fecha, titulo, notas, prioridad, lista, creada) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO tareas (id, fecha, titulo, notas, prioridad, lista, creada, archivada) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET fecha=excluded.fecha, titulo=excluded.titulo, notas=excluded.notas,
-             prioridad=excluded.prioridad, lista=excluded.lista, actualizada=datetime('now', 'localtime')""",
-        (tid, fecha, titulo, notas, prioridad, lista, creada),
+             prioridad=excluded.prioridad, lista=excluded.lista, archivada=excluded.archivada,
+             actualizada=datetime('now', 'localtime')""",
+        (tid, fecha, titulo, notas, prioridad, lista, creada, archivada),
     )
     con.execute("DELETE FROM tarea_etiquetas WHERE tarea_id = ?", (tid,))
     for eid in etiquetas:
@@ -726,13 +744,14 @@ def guardar_tarjeta(con, cid, datos):
     if not isinstance(etiquetas, list) or not isinstance(checklist, list) or len(checklist) > 100:
         raise ErrorDatos("tarjeta no válida")
     con.execute(
-        """INSERT INTO tarjetas (id, lista_id, titulo, descripcion, prioridad, fecha_limite, orden, creada)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO tarjetas (id, lista_id, titulo, descripcion, prioridad, fecha_limite, orden, creada, archivada)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET lista_id=excluded.lista_id, titulo=excluded.titulo,
              descripcion=excluded.descripcion, prioridad=excluded.prioridad, fecha_limite=excluded.fecha_limite,
-             orden=excluded.orden, actualizada=datetime('now', 'localtime')""",
+             orden=excluded.orden, archivada=excluded.archivada, actualizada=datetime('now', 'localtime')""",
         (cid, lista, titulo, str(datos.get("desc") or "")[:10000], prioridad, limite or None,
-         entero(datos.get("order", 0), "orden"), str(datos.get("created") or "")[:40]),
+         entero(datos.get("order", 0), "orden"), str(datos.get("created") or "")[:40],
+         str(datos.get("archived"))[:40] if datos.get("archived") else None),
     )
     con.execute("DELETE FROM tarjeta_etiquetas_tablero WHERE tarjeta_id = ?", (cid,))
     for eid in etiquetas:

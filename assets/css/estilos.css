@@ -4295,3 +4295,196 @@ body.img-dragging * {
 .mn-code pre {
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji";
 }
+
+/* ---------- Tareas archivadas ---------- */
+.tarch {
+  margin-top: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 2px 12px;
+}
+.tarch[open] {
+  padding-bottom: 10px;
+}
+.tarch summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+.tarch summary::-webkit-details-marker {
+  display: none;
+}
+.tarch summary::before {
+  content: "📦";
+}
+.tarch summary::after {
+  content: "▾";
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+.tarch[open] summary::after {
+  transform: rotate(180deg);
+}
+.tarch summary span {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 0.78rem;
+}
+.tarch summary em {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+.tarch ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.ta-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--soft);
+  opacity: 0.85;
+}
+.ta-item:hover {
+  opacity: 1;
+}
+.ta-item .prio {
+  font-size: 0.7rem;
+}
+.ta-title {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--ink);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ta-title:hover {
+  text-decoration-color: transparent;
+}
+.ta-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.ta-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ta-btn:hover {
+  border-color: var(--gold, var(--ink));
+}
+.ta-btn.danger {
+  color: var(--p-urgente);
+}
+.ta-btn.danger:hover {
+  border-color: var(--p-urgente);
+}
+.ta-empty {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.ta-toggle {
+  margin-top: 8px;
+  font-size: 0.82rem;
+}
+/* En la ficha de una tarea archivada */
+.d-archived {
+  margin: 0 20px 10px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: var(--soft);
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+
+/* ---------- Tarjetas archivadas (menú ⋯ del tablero) ---------- */
+.bmenu.bm-arch {
+  width: min(400px, 92vw);
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.ca-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.ca-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--soft);
+  border-left: 3px solid transparent;
+}
+.ca-item.p-urgente { border-left-color: var(--p-urgente); }
+.ca-item.p-alta { border-left-color: var(--p-alta, #d97706); }
+.ca-item.p-media { border-left-color: var(--p-media, #2563eb); }
+.ca-item.p-baja { border-left-color: var(--p-baja, #6b7280); }
+.ca-title {
+  grid-column: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ca-title:hover {
+  text-decoration: underline;
+}
+.ca-meta {
+  grid-column: 1;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.ca-acts {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  gap: 6px;
+}
+.ca-empty {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}

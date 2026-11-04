@@ -91,7 +91,8 @@ function cleanTasks(x){
       prio:t.prio in PRIO_RANK?t.prio:"media",
       list:["pendiente","proceso","hecha"].includes(t.list)?t.list:"pendiente",
       tags:Array.isArray(t.tags)?t.tags.filter(v=>typeof v==="string"&&ID_OK.test(v)):[],
-      created:String(t.created||t.date).slice(0,40)};
+      created:String(t.created||t.date).slice(0,40),
+      archived:t.archived?String(t.archived).slice(0,40):null};   // archivada: fuera de las listas, aún sin borrar
   }
   return o;
 }
@@ -170,7 +171,8 @@ function cleanBoardData(x){
       labels:Array.isArray(c.labels)?c.labels.filter((l,i,a)=>blabels[l]&&blabels[l].board===bid&&a.indexOf(l)===i):[],
       check:Array.isArray(c.check)?c.check.filter(k=>k&&ID.test(k.id||"")&&String(k.t||"").trim()).slice(0,100)
         .map(k=>({id:k.id, t:String(k.t).trim().slice(0,300), d:!!k.d})):[],
-      order:num(c.order), created:String(c.created||"").slice(0,40)};
+      order:num(c.order), created:String(c.created||"").slice(0,40),
+      archived:c.archived?String(c.archived).slice(0,40):null};   // archivada: fuera de su lista, aún sin borrar
   }
   return {boards, blabels, blists, cards};
 }
@@ -779,7 +781,10 @@ let openMenuKey=null, pickerOpen=false, editingBoardName=false, editingList=null
 let nbOpen=false, nbDraft={name:"", tpl:"basic", color:B_COLORS[0]};
 
 const boardLists=bid=>Object.entries(state.blists).filter(([,l])=>l.board===bid).sort((a,b)=>a[1].order-b[1].order);
-const listCards=lid=>Object.entries(state.cards).filter(([,c])=>c.list===lid).sort((a,b)=>a[1].order-b[1].order);
+const listCards=lid=>Object.entries(state.cards).filter(([,c])=>c.list===lid&&!c.archived).sort((a,b)=>a[1].order-b[1].order);
+const listCardsAll=lid=>Object.entries(state.cards).filter(([,c])=>c.list===lid).sort((a,b)=>a[1].order-b[1].order);
+const boardArchived=bid=>Object.entries(state.cards).filter(([,c])=>c.archived&&state.blists[c.list]&&state.blists[c.list].board===bid)
+  .sort((a,b)=>b[1].archived.localeCompare(a[1].archived));
 const boardLabels=bid=>Object.entries(state.blabels).filter(([,l])=>l.board===bid).sort((a,b)=>a[1].name.localeCompare(b[1].name,"es"));
 const boardsSorted=()=>Object.entries(state.boards).sort((a,b)=>(b[1].fav-a[1].fav)||(a[1].order-b[1].order));
 const renumber=(entries,coll)=>entries.forEach(([id],i)=>{ coll[id].order=i; });
@@ -885,8 +890,8 @@ function boardHTML(bid,b){
       <button type="button" class="bfav" data-fav="${bid}" aria-pressed="${b.fav}" aria-label="${b.fav?"Quitar de favoritos":"Marcar como favorito"}">★</button>
       <span class="bd-sp"></span>
       <div class="menu-wrap">
-        <button type="button" class="bd-more" data-menu="board" aria-label="Opciones del tablero" aria-expanded="${openMenuKey==="board"||openMenuKey==="labels"}">⋯</button>
-        ${openMenuKey==="board"?boardMenuHTML(bid,b):openMenuKey==="labels"?labelsMenuHTML(bid):""}
+        <button type="button" class="bd-more" data-menu="board" aria-label="Opciones del tablero" aria-expanded="${openMenuKey==="board"||openMenuKey==="labels"||openMenuKey==="carch"}">⋯</button>
+        ${openMenuKey==="board"?boardMenuHTML(bid,b):openMenuKey==="labels"?labelsMenuHTML(bid):openMenuKey==="carch"?carchMenuHTML(bid):""}
       </div>
     </div>
     <div class="bd-lists" id="bd-lists">${lists.map(([lid,l])=>listHTML(lid,l)).join("")}
@@ -901,9 +906,33 @@ function boardMenuHTML(bid,b){
     <p class="bm-h">Color del tablero</p>
     <div class="swatches">${B_COLORS.map(c=>`<button type="button" class="sw" data-bcolor="${c}" aria-pressed="${c===b.color}" style="--c:${c}" aria-label="Color"></button>`).join("")}</div>
     <button type="button" class="bm-item" data-menu="labels">Etiquetas del tablero…</button>
+    <button type="button" class="bm-item" data-menu="carch">📦 Tarjetas archivadas${boardArchived(bid).length?` (${boardArchived(bid).length})`:""}…</button>
     <button type="button" class="bm-item danger" data-delboard>Eliminar tablero</button>
   </div>`;
 }
+// ---- Tarjetas archivadas ----
+// Igual que las tareas: una tarjeta primero se archiva (sale de su lista pero se conserva) y, desde
+// «Tarjetas archivadas» (menú ⋯ del tablero), se restaura o se elimina definitivamente.
+const fmtArchC=iso=>{ const d=new Date(iso); return isNaN(d)?"":d.toLocaleDateString("es-ES",{day:"numeric",month:"short"}); };
+function carchMenuHTML(bid){
+  const items=boardArchived(bid);
+  return `<div class="bmenu bm-arch" role="menu">
+    <p class="bm-h">📦 Tarjetas archivadas</p>
+    ${items.length?`<ul class="ca-list">${items.map(([id,c])=>`<li class="ca-item p-${c.prio}">
+        <button type="button" class="ca-title" data-caopen="${id}">${esc(c.title)}</button>
+        <span class="ca-meta">en ${esc(state.blists[c.list].title)} · archivada el ${fmtArchC(c.archived)}</span>
+        <span class="ca-acts"><button type="button" class="ta-btn" data-carestore="${id}">Restaurar</button>
+        <button type="button" class="ta-btn danger" data-cadel="${id}">Eliminar</button></span>
+      </li>`).join("")}</ul>`:`<p class="ca-empty">No hay tarjetas archivadas en este tablero.</p>`}
+  </div>`;
+}
+function archiveCard(cid){ const c=state.cards[cid]; if(!c) return; c.archived=new Date().toISOString(); renumber(listCards(c.list),state.cards); }
+function restoreCard(cid){
+  const c=state.cards[cid]; if(!c) return;
+  c.order=listCards(c.list).length; c.archived=null;      // vuelve al final de su lista
+  renumber(listCards(c.list),state.cards);
+}
+function deleteCardForever(cid){ delete state.cards[cid]; }
 function labelsMenuHTML(bid){
   const labs=boardLabels(bid), used=labs.map(([,l])=>l.color);
   const uses=id=>Object.values(state.cards).filter(c=>c.labels.includes(id)).length;
@@ -1009,10 +1038,10 @@ function labelInBoard(bid,name,color){
 function moveListToBoard(lid,bid){
   const l=state.blists[lid];
   l.board=bid; l.order=boardLists(bid).filter(([id])=>id!==lid).length;
-  for(const [,c] of listCards(lid)) c.labels=c.labels.map(x=>{ const L=state.blabels[x]; return L?labelInBoard(bid,L.name,L.color):null; }).filter(Boolean);
+  for(const [,c] of listCardsAll(lid)) c.labels=c.labels.map(x=>{ const L=state.blabels[x]; return L?labelInBoard(bid,L.name,L.color):null; }).filter(Boolean);
 }
 function deleteList(lid,dest){
-  const bid=state.blists[lid].board, cards=listCards(lid);
+  const bid=state.blists[lid].board, cards=listCardsAll(lid);
   if(dest && state.blists[dest]){
     let n=listCards(dest).length;
     for(const [cid] of cards){ state.cards[cid].list=dest; state.cards[cid].order=n++; }
@@ -1058,7 +1087,10 @@ bvBody.addEventListener("click",e=>{
   if(q("[data-nbcancel]")){ nbOpen=false; renderBoards(); return; }
   if((el=q(".bcard[data-board]"))){ setBoard(el.dataset.board); return; }
   if(q("[data-rename-board]")){ editingBoardName=true; renderBoards(); const f=document.getElementById("bd-name-in"); f.focus(); f.select(); return; }
-  if((el=q("[data-menu]"))){ const k=el.dataset.menu; openMenuKey = openMenuKey===k||(k==="board"&&openMenuKey==="labels") ? null : k; renderBoards(); return; }
+  if((el=q("[data-menu]"))){ const k=el.dataset.menu; openMenuKey = openMenuKey===k||(k==="board"&&(openMenuKey==="labels"||openMenuKey==="carch")) ? null : k; renderBoards(); return; }
+  if((el=q("[data-carestore]"))){ restoreCard(el.dataset.carestore); boardsChanged(); return; }
+  if((el=q("[data-cadel]"))){ armDelete(el,()=>{ deleteCardForever(el.dataset.cadel); boardsChanged(); },"Pulsa otra vez: se borra para siempre"); return; }
+  if((el=q("[data-caopen]"))){ openMenuKey=null; renderBoards(); openCard(el.dataset.caopen); return; }
   if((el=q("[data-bcolor]"))){ state.boards[curBoard].color=el.dataset.bcolor; boardsChanged(); return; }
   if((el=q("[data-delboard]"))){ armDelete(el,()=>deleteBoard(curBoard),"Pulsa otra vez para eliminar el tablero"); return; }
   if(q("[data-addlist]")){ addingList=true; renderBoards(); document.getElementById("bl-new").focus(); return; }
@@ -1142,7 +1174,7 @@ function renderSearch(){
     .sort((a,b)=>(fold(b[1].title).includes(q))-(fold(a[1].title).includes(q))).slice(0,30);
   const where=n=>{ const p=[]; let x=n.parent; while(x&&state.mnodes[x]){ p.unshift(state.mnodes[x].title); x=state.mnodes[x].parent; } return [state.maps[n.map].title,...p].map(esc).join(" › "); };
   const html=res.map(([id,c])=>{ const l=state.blists[c.list], b=state.boards[l.board];
-      return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">Tarjeta · ${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")+
+      return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">${c.archived?"📦 Archivada":"Tarjeta"} · ${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")+
     nodes.map(([id,n])=>`<button type="button" class="sr sr-node" data-srn="${id}" style="--c:${n.color||state.maps[n.map].color}"><span class="sr-t">${esc(n.title)}</span><span class="sr-w">Nodo · ${where(n)}</span></button>`).join("");
   bvResults.innerHTML = html || `<p class="sr-empty">No hay tarjetas ni nodos con «${esc(bvQ.value.trim())}».</p>`;
   bvResults.hidden=false;
@@ -3138,6 +3170,7 @@ function renderCardDlg(){
       <textarea class="dlg-title" rows="1" maxlength="200" aria-label="Título de la tarjeta" spellcheck="false">${esc(c.title)}</textarea>
       <button type="button" class="dlg-x" aria-label="Cerrar">×</button>
     </div>
+    ${c.archived?`<p class="d-archived">📦 Tarjeta archivada el ${fmtArchC(c.archived)}: no aparece en su lista. Puedes restaurarla o eliminarla definitivamente.</p>`:""}
     <p class="dlg-where">en la lista <select class="c-list" aria-label="Lista">${lists.map(([id,x])=>`<option value="${id}"${id===c.list?" selected":""}>${esc(x.title)}</option>`).join("")}</select>
       del tablero <b style="color:${b.color}">${esc(b.name)}</b></p>
     <div class="dlg-body">
@@ -3164,11 +3197,14 @@ function renderCardDlg(){
       </div>
       <aside class="dlg-side">
         <h4>Acciones</h4>
-        <button type="button" class="side-btn" data-cdup>Duplicar</button>
+        ${c.archived
+          ? `<button type="button" class="side-btn" data-cunarch>↺ Restaurar</button>
+             <button type="button" class="side-btn d-del" data-cdel>Eliminar definitivamente</button>`
+          : `<button type="button" class="side-btn" data-cdup>Duplicar</button>
         <button type="button" class="side-btn" data-ctask aria-expanded="${ctaskOpen}">Pasar a tareas del día</button>
         ${ctaskOpen?`<div class="move-panel"><label>Día <input type="date" id="ct-date" value="${c.due||key(today())}"></label>
           <button type="button" class="add" data-ctask-go>Pasar</button></div>`:""}
-        <button type="button" class="side-btn d-del" data-cdel>Eliminar tarjeta</button>
+        <button type="button" class="side-btn" data-carch>Archivar tarjeta</button>`}
         ${created?`<p class="d-meta">Creada el ${created}</p>`:""}
       </aside>
     </div>`;
@@ -3217,7 +3253,9 @@ cdlg.addEventListener("click",e=>{
   if(q("[data-cdup]")){ duplicateCard(cardOpen); cardChanged(); return; }
   if(q("[data-ctask]")){ ctaskOpen=!ctaskOpen; renderCardDlg(); return; }
   if(q("[data-ctask-go]")){ const v=document.getElementById("ct-date").value; if(/^\d{4}-\d{2}-\d{2}$/.test(v)) cardToTask(cardOpen,v); return; }
-  if((el=q("[data-cdel]"))){ armDelete(el,()=>{ const lid=c.list; delete state.cards[cardOpen]; renumber(listCards(lid),state.cards); cdlg.close(); save(); renderBoards(); },"Pulsa otra vez para eliminar"); }
+  if(q("[data-carch]")){ archiveCard(cardOpen); cdlg.close(); save(); renderBoards(); return; }
+  if(q("[data-cunarch]")){ restoreCard(cardOpen); cardChanged(); return; }
+  if((el=q("[data-cdel]"))){ if(!c.archived) return; armDelete(el,()=>{ deleteCardForever(cardOpen); cdlg.close(); save(); renderBoards(); },"Pulsa otra vez: se borra para siempre"); return; }
 });
 cdlg.addEventListener("change",e=>{
   const c=state.cards[cardOpen]; if(!c) return; const t=e.target;
@@ -3340,7 +3378,7 @@ function renderTasks(){
   document.getElementById("tdate").textContent = k===key(today()) ? "de hoy"
     : "del "+sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
   document.getElementById("tnewtags").innerHTML=tagPickerHTML(newTaskTags);
-  const tasks=Object.entries(state.tasks).filter(([,t])=>t.date===k)
+  const tasks=Object.entries(state.tasks).filter(([,t])=>t.date===k && !t.archived)
     .sort((a,b)=>PRIO_RANK[a[1].prio]-PRIO_RANK[b[1].prio] || a[1].created.localeCompare(b[1].created));
   const count=l=>tasks.filter(([,t])=>t.list===l).length;
   document.getElementById("ttabs").innerHTML=LISTS.map(([id,n])=>
@@ -3353,7 +3391,46 @@ function renderTasks(){
         || `<li class="tempty">${id==="hecha"?"Aún nada terminado.":"Sin tareas."}</li>`}</ul>
     </div>`;
   }).join("");
+  renderArchive();
 }
+// ---- Tareas archivadas ----
+// Eliminar una tarea es un proceso en dos pasos: primero se archiva (sale de las listas pero se conserva) y,
+// desde «Archivadas», se puede restaurar o eliminar definitivamente.
+let archOpen=false, archAll=false;
+const fmtArch=iso=>{ const d=new Date(iso); return isNaN(d)?"":d.toLocaleDateString("es-ES",{day:"numeric",month:"short"}); };
+function renderArchive(){
+  const board=document.getElementById("board"); if(!board) return;
+  let box=document.getElementById("tarch");
+  if(!box){ box=document.createElement("div"); box.id="tarch"; board.after(box); }
+  const k=key(sel), all=Object.entries(state.tasks).filter(([,t])=>t.archived)
+    .sort((a,b)=>b[1].archived.localeCompare(a[1].archived));
+  const here=all.filter(([,t])=>t.date===k), others=all.length-here.length;
+  if(!all.length){ box.innerHTML=""; return; }
+  const list=archAll?all:here;
+  box.innerHTML=`<details class="tarch"${archOpen?" open":""}>
+    <summary>Archivadas <span>${here.length}</span>${others?`<em>+${others} de otros días</em>`:""}</summary>
+    ${list.length?`<ul>${list.map(([id,t])=>`<li class="ta-item p-${t.prio}" data-aid="${id}">
+        <span class="prio">${prioName(t.prio)}</span>
+        <button type="button" class="ta-title" data-aopen="${id}">${esc(t.title)}</button>
+        <span class="ta-meta">${archAll&&t.date!==k?`${new Date(t.date+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"short"})} · `:""}archivada el ${fmtArch(t.archived)}</span>
+        <button type="button" class="ta-btn" data-arestore="${id}">Restaurar</button>
+        <button type="button" class="ta-btn danger" data-adel="${id}">Eliminar</button>
+      </li>`).join("")}</ul>`:`<p class="ta-empty">No hay tareas archivadas de este día.</p>`}
+    ${others?`<button type="button" class="linklike ta-toggle" data-aall>${archAll?"Ver solo las de este día":"Ver también las de otros días"}</button>`:""}
+  </details>`;
+}
+function archiveTask(id){ const t=state.tasks[id]; if(!t) return; t.archived=new Date().toISOString(); save(); renderTasks(); }
+function restoreTask(id){ const t=state.tasks[id]; if(!t) return; t.archived=null; save(); renderTasks(); }
+function deleteTaskForever(id){ delete state.tasks[id]; save(); renderTasks(); renderTagMgr(); }
+document.addEventListener("click",e=>{
+  const box=e.target.closest&&e.target.closest("#tarch"); if(!box) return;
+  let el;
+  if((el=e.target.closest("[data-arestore]"))){ restoreTask(el.dataset.arestore); return; }
+  if((el=e.target.closest("[data-adel]"))){ armDelete(el,()=>deleteTaskForever(el.dataset.adel),"Pulsa otra vez: se borra para siempre"); return; }
+  if((el=e.target.closest("[data-aopen]"))){ openTask(el.dataset.aopen); return; }
+  if(e.target.closest("[data-aall]")){ archAll=!archAll; renderArchive(); return; }
+});
+document.addEventListener("toggle",e=>{ if(e.target.matches&&e.target.matches("details.tarch")) archOpen=e.target.open; },true);
 function renderTagMgr(){
   const box=document.getElementById("taglist");
   const ids=Object.keys(state.tags).sort((a,b)=>state.tags[a].name.localeCompare(state.tags[b].name,"es"));
@@ -3492,6 +3569,7 @@ function renderTaskDlg(){
       <textarea class="dlg-title" rows="1" maxlength="120" aria-label="Título de la tarea" spellcheck="false">${esc(t.title)}</textarea>
       <button type="button" class="dlg-x" aria-label="Cerrar">×</button>
     </div>
+    ${t.archived?`<p class="d-archived">📦 Tarea archivada el ${fmtArch(t.archived)}: no aparece en las listas. Puedes restaurarla o eliminarla definitivamente.</p>`:""}
     <p class="dlg-where">en la lista <select class="d-list" aria-label="Lista">${listOptions(t.list)}</select>
       para el día <input type="date" class="d-date" value="${t.date}" aria-label="Día"></p>
     <div class="dlg-body">
@@ -3513,7 +3591,10 @@ function renderTaskDlg(){
         <button type="button" class="side-btn d-done">${t.list==="hecha"?"↺ Reabrir":"✓ Marcar como hecha"}</button>
         <button type="button" class="side-btn d-toboard" aria-expanded="${toBoardOpen}">Pasar a un tablero</button>
         ${toBoardOpen?toBoardPanel():""}
-        <button type="button" class="side-btn d-del">Eliminar tarea</button>
+        ${t.archived
+          ? `<button type="button" class="side-btn d-unarch">↺ Restaurar</button>
+             <button type="button" class="side-btn d-del">Eliminar definitivamente</button>`
+          : `<button type="button" class="side-btn d-arch">Archivar tarea</button>`}
         ${created?`<p class="d-meta">Creada el ${created}</p>`:""}
       </aside>
     </div>`;
@@ -3555,8 +3636,10 @@ dlg.addEventListener("click",e=>{
     closeTask(); const m=document.querySelector("details.tagmgr"); m.open=true;
     m.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>document.getElementById("tagname").focus(),400); return;
   }
+  if(e.target.closest(".d-arch")){ const id=openTaskId; closeTask(); archiveTask(id); return; }
+  if(e.target.closest(".d-unarch")){ restoreTask(openTaskId); renderTaskDlg(); return; }
   const del=e.target.closest(".d-del");
-  if(del) armDelete(del,()=>{ delete state.tasks[openTaskId]; closeTask(); save(); renderTasks(); renderTagMgr(); },"Pulsa otra vez para eliminar");
+  if(del && t.archived) armDelete(del,()=>{ const id=openTaskId; closeTask(); deleteTaskForever(id); },"Pulsa otra vez: se borra para siempre");
 });
 dlg.addEventListener("change",e=>{
   if(e.target.matches(".tb-board")){ toBoardSel=e.target.value; renderTaskDlg(); return; }
@@ -3611,7 +3694,7 @@ function setStatus(t,nivel="ok"){
     b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso" ? "Solo en este navegador" : "Sin guardar";
   }
 }
-const VERSION_NECESARIA=9;
+const VERSION_NECESARIA=11;
 function saveLocal(){
   try{
     const j=JSON.stringify(state);
