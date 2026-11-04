@@ -5,6 +5,9 @@ const TYPES = {
   active:  {name:"Descanso activo", cls:"k-active"},
   rest:    {name:"Descanso", cls:"k-rest"}
 };
+// Nombre de cada tipo: el que elijas en «Tipos de entreno» o, si no, el de siempre
+const typeName=id=>(state.tipos&&state.tipos[id])||TYPES[id].short||TYPES[id].name;
+const typeLong=id=>(state.tipos&&state.tipos[id])||TYPES[id].name;
 const ALL7=[true,true,true,true,true,true,true];
 const DEFAULT_HABITS = [
   {id:"train",   t:"Entreno del día hecho", s:"Lo que toque según el plan"},
@@ -22,6 +25,7 @@ const cleanState = (x,fallbackDays) => ({
   days:Object.assign({}, fallbackDays||{}, x.days||{}),
   habits:cleanHabits(x.habits),
   thr:[0.5,0.66,0.75,1].includes(+x.thr)?+x.thr:0.66,
+  tipos:(()=>{ const o={}, t=x.tipos&&typeof x.tipos==="object"?x.tipos:{}; for(const k of Object.keys(TYPES)){ const v=String(t[k]??"").trim().slice(0,30); if(v) o[k]=v; } return o; })(),
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
@@ -200,12 +204,12 @@ function renderWeek(){
   for(let i=0;i<7;i++){
     const d=addDays(m,i), b=document.createElement("button");
     b.className="day"+(key(d)===key(sel)?" sel":"");
-    b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+TYPES[typeFor(d)].name);
+    b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+typeLong(typeFor(d)));
     b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
     b.onclick=()=>{sel=d;render();};
     w.appendChild(b);
   }
-  document.getElementById("legend").innerHTML=Object.values(TYPES).map(t=>`<span><b class="${t.cls}"></b>${t.short||t.name}</span>`).join("");
+  document.getElementById("legend").innerHTML=Object.entries(TYPES).map(([id,t])=>`<span><b class="${t.cls}"></b>${esc(typeName(id))}</span>`).join("");
 }
 
 function renderDay(){
@@ -217,7 +221,7 @@ function renderDay(){
   for(const [id,t] of Object.entries(TYPES)){
     const b=document.createElement("button");
     b.setAttribute("aria-pressed", id===cur);
-    b.innerHTML=`<b class="${t.cls}"></b>${t.short||t.name}`;
+    b.innerHTML=`<b class="${t.cls}"></b>${esc(typeName(id))}`;
     b.onclick=()=>{
       // Cambia el plan fijo de ese día de la semana
       state.plan[dowIdx(sel)]=id;
@@ -234,7 +238,7 @@ function renderDay(){
     const li=document.createElement("li"), b=document.createElement("button");
     b.setAttribute("role","checkbox"); b.setAttribute("aria-checked", !!c[h.id]);
     let sub=esc(h.s);
-    if(h.id==="train") sub = cur==="rest" ? "Hoy toca descansar: márcalo si descansaste" : "Hoy: "+TYPES[cur].name;
+    if(h.id==="train") sub = cur==="rest" ? "Hoy toca descansar: márcalo si descansaste" : "Hoy: "+typeLong(cur);
     b.innerHTML=`<span class="box"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="var(--bg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="t">${esc(h.t)}${sub?`<small>${sub}</small>`:""}</span>`;
     b.onclick=()=>{
       const k=key(sel); state.days[k]=state.days[k]||{}; state.days[k].c=state.days[k].c||{};
@@ -3307,6 +3311,7 @@ setInterval(checkNewDay,60000);
 
 function renderCfg(){
   document.getElementById("thr").value=String(state.thr);
+  renderTypeCfg();
   const box=document.getElementById("hlist"); box.innerHTML="";
   state.habits.forEach((h,i)=>{
     const el=document.createElement("div"); el.className="hcfg";
@@ -3356,6 +3361,20 @@ document.getElementById("imp").addEventListener("change",async e=>{
   e.target.value="";
 });
 document.getElementById("thr").addEventListener("change",e=>{ state.thr=+e.target.value; save(); render(); });
+// ---- Tipos de entreno: cada uno con el nombre que quieras (el color y su función no cambian) ----
+function renderTypeCfg(){
+  const box=document.getElementById("typecfg"); if(!box) return;
+  if(box.contains(document.activeElement)) return;          // no se repinta mientras escribes
+  box.innerHTML=Object.entries(TYPES).map(([id,t])=>`<label class="tc-row"><b class="${t.cls}"></b>
+      <input type="text" maxlength="30" data-tipo="${id}" value="${esc(state.tipos[id]||"")}" placeholder="${esc(t.short||t.name)}" aria-label="Nombre de «${esc(t.short||t.name)}»"></label>`).join("");
+}
+document.getElementById("typecfg")?.addEventListener("input",e=>{
+  const i=e.target.closest("[data-tipo]"); if(!i) return;
+  const v=i.value.trim().slice(0,30);
+  if(v) state.tipos[i.dataset.tipo]=v; else delete state.tipos[i.dataset.tipo];   // vacío: vuelve al nombre de siempre
+  save(); renderWeek(); renderDay();
+});
+document.getElementById("typereset")?.addEventListener("click",()=>{ state.tipos={}; save(); const b=document.getElementById("typecfg"); if(b) b.innerHTML=""; renderTypeCfg(); render(); });
 
 // ---------- Tareas: pintar y editar ----------
 // Texto oscuro o claro según lo clara que sea la etiqueta
@@ -3699,7 +3718,7 @@ function setStatus(t,nivel="ok"){
     b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso" ? "Solo en este navegador" : "Sin guardar";
   }
 }
-const VERSION_NECESARIA=11;
+const VERSION_NECESARIA=12;
 function saveLocal(){
   try{
     const j=JSON.stringify(state);
@@ -3708,7 +3727,7 @@ function saveLocal(){
     localStorage.setItem(STORE,j); return true;
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
   boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks})); }
 async function api(method,path,body){
   const opt={method, headers:{"X-Ascenso":"1"}};
@@ -3752,8 +3771,8 @@ async function sync(){
   const enviar=async(metodo,ruta,datos)=>{ try{ await api(metodo,ruta,datos); return true; }catch(e){ errores.push(e); return false; } };
   try{
     const now=snapshot();
-    if(JSON.stringify([now.plan,now.thr])!==JSON.stringify([synced.plan,synced.thr])){
-      if(await enviar("PUT","config",{plan:now.plan,thr:now.thr})){ synced.plan=now.plan; synced.thr=now.thr; }
+    if(JSON.stringify([now.plan,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.thr,synced.tipos])){
+      if(await enviar("PUT","config",{plan:now.plan,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.thr=now.thr; synced.tipos=now.tipos; }
     }
     if(JSON.stringify(now.habits)!==JSON.stringify(synced.habits)){
       if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;

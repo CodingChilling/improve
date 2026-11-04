@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS adjuntos (
 """
 VERSION_BD = 10
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 11
+VERSION_APP = 12
 
 
 class ErrorDatos(Exception):
@@ -395,6 +395,7 @@ def leer_estado(con):
     return {
         "plan": config.get("plan"),
         "thr": config.get("thr"),
+        "tipos": config.get("tipos"),
         "habits": habitos,
         "days": dias,
         "hist": historial,
@@ -419,6 +420,13 @@ def validar_plan(plan):
     if not isinstance(plan, list) or len(plan) != 7 or any(p not in TIPOS for p in plan):
         raise ErrorDatos("plan semanal no válido")
     return plan
+
+
+def validar_tipos(tipos):
+    """Nombres propios de los tipos de entreno (Escalada, Fuerza…): solo los cuatro tipos, con texto breve."""
+    if not isinstance(tipos, dict):
+        raise ErrorDatos("nombres de los tipos no válidos")
+    return {k: str(v).strip()[:30] for k, v in tipos.items() if k in TIPOS and str(v).strip()}
 
 
 def validar_umbral(thr):
@@ -482,6 +490,8 @@ def guardar_config(con, datos):
         con.execute("INSERT OR REPLACE INTO config VALUES ('plan', ?)", (json.dumps(validar_plan(datos["plan"])),))
     if "thr" in datos:
         con.execute("INSERT OR REPLACE INTO config VALUES ('thr', ?)", (json.dumps(validar_umbral(datos["thr"])),))
+    if "tipos" in datos:
+        con.execute("INSERT OR REPLACE INTO config VALUES ('tipos', ?)", (json.dumps(validar_tipos(datos["tipos"])),))
 
 
 def guardar_habitos(con, lista):
@@ -965,7 +975,7 @@ def importar(con, estado):
     con.execute("DELETE FROM dias")
     con.execute("DELETE FROM habitos")
     con.execute("DELETE FROM config")
-    guardar_config(con, {k: estado[k] for k in ("plan", "thr") if estado.get(k) is not None})
+    guardar_config(con, {k: estado[k] for k in ("plan", "thr", "tipos") if estado.get(k) is not None})
     guardar_habitos(con, estado.get("habits") or [])
     for fecha, d in estado["days"].items():
         guardar_dia(con, str(fecha), d)
