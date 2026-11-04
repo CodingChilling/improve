@@ -130,6 +130,15 @@ def macos(quitar):
     if quitar:
         subprocess.run(["rm", "-rf", app], check=True)
         return "Aplicación quitada de tu carpeta Aplicaciones."
+    # La carpeta descargada lleva la marca de «descargado de internet» (cuarentena): se quita para que macOS no
+    # vuelva a pedir permiso al abrir Ascenso, y se dejan ejecutables los lanzadores de doble clic
+    subprocess.run(["xattr", "-dr", "com.apple.quarantine", BASE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for nombre in os.listdir(BASE):
+        if nombre.endswith(".command"):
+            try:
+                os.chmod(os.path.join(BASE, nombre), 0o755)
+            except OSError:
+                pass
     macos_dir = os.path.join(app, "Contents", "MacOS")
     recursos = os.path.join(app, "Contents", "Resources")
     os.makedirs(macos_dir, exist_ok=True)
@@ -158,7 +167,9 @@ def macos(quitar):
     with open(os.path.join(ICONOS, "ascenso.icns"), "rb") as src, open(os.path.join(recursos, "ascenso.icns"), "wb") as dst:
         dst.write(src.read())
     subprocess.run(["touch", app])   # para que el Finder refresque el icono
-    return f"Aplicación creada en {app}. Puedes arrastrarla al Dock."
+    return (f"Aplicación creada en {app}.\n"
+            "Ábrela desde Finder > Aplicaciones (la de tu carpeta de usuario) y, si quieres, arrástrala al Dock.\n"
+            "Ascenso se abre en su propia ventana con Chrome, Edge o Brave; si no tienes ninguno, en Safari.")
 
 
 # ------------------------------------------------------------------ Linux

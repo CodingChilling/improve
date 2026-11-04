@@ -1253,12 +1253,14 @@ def buscar_navegador():
                 os.path.join(raiz, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
             ]
     elif sys.platform == "darwin":
-        candidatos = [
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-            "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        ]
+        # En la carpeta Aplicaciones del sistema o en la del usuario (~/Applications)
+        for raiz in ("/Applications", os.path.expanduser("~/Applications")):
+            candidatos += [
+                os.path.join(raiz, "Google Chrome.app/Contents/MacOS/Google Chrome"),
+                os.path.join(raiz, "Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+                os.path.join(raiz, "Brave Browser.app/Contents/MacOS/Brave Browser"),
+                os.path.join(raiz, "Chromium.app/Contents/MacOS/Chromium"),
+            ]
     else:
         for nombre in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "brave-browser"):
             ruta = shutil.which(nombre)
@@ -1425,6 +1427,9 @@ def apuntar(texto):
     print(time.strftime("%Y-%m-%d %H:%M:%S ") + texto, flush=True)
 
 
+SIN_SENALES = 150      # segundos sin avisos de la ventana tras los que el modo aplicación se cierra
+
+
 def modo_aplicacion(servidor, url):
     """Ventana propia: el servidor vive mientras la ventana esté abierta.
 
@@ -1445,15 +1450,40 @@ def modo_aplicacion(servidor, url):
                 ventana = abrir_ventana(navegador, url)
             except OSError as e:
                 apuntar("No se pudo abrir %s: %s" % (navegador, e))
-        if ventana:
-            ventana.wait()
-            apuntar("El proceso del navegador terminó (código %s)" % ventana.returncode)
-        else:
+        if not ventana:
             webbrowser.open(url)
-        # Se sigue sirviendo mientras la página dé señales de vida
-        while time.time() - ultimo_latido < 50:
+        # Se sigue sirviendo:
+        #  · en Windows y Linux, mientras viva el proceso del navegador que se abrió (como siempre);
+        #  · después (o si el navegador pasó la ventana a otro proceso), y en macOS, donde el navegador sigue
+        #    abierto sin ventanas aunque se cierre la de Ascenso, mientras la página dé señales de vida.
+        # El margen sin señales es amplio porque el navegador espacia los avisos de una ventana minimizada.
+        mac = sys.platform == "darwin"
+        anterior = time.time()
+        aviso_fin = False
+        while True:
+            ahora = time.time()
+            if ahora - anterior > 30:
+                # El equipo ha estado en reposo: margen para que la ventana vuelva a dar señales
+                apuntar("El equipo ha estado en reposo; se espera a la ventana")
+                ultimo_latido = ahora
+            anterior = ahora
+            vivo = bool(ventana) and ventana.poll() is None
+            if ventana and not vivo and not aviso_fin:
+                apuntar("El proceso del navegador terminó (código %s)" % ventana.returncode)
+                aviso_fin = True
+            if vivo and not mac:
+                ultimo_latido = max(ultimo_latido, ahora)
+            if ahora - ultimo_latido >= SIN_SENALES:
+                break
             time.sleep(2)
         apuntar("La ventana ya no da señales: cierre")
+        # En macOS, el navegador abierto para Ascenso (con su perfil propio) se cierra también, para que no se
+        # quede en el Dock sin ventanas
+        if sys.platform == "darwin" and ventana and ventana.poll() is None:
+            try:
+                ventana.terminate()
+            except OSError:
+                pass
     finally:
         servidor.shutdown()
         servidor.server_close()

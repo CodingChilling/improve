@@ -1346,7 +1346,11 @@ function mapViewHTML(mid,m){
 }
 // ---- ayuda: comandos y atajos («?» arriba a la derecha) ----
 let mHelpOpen=false;
-const K=t=>t.split("+").map(k=>`<kbd>${k}</kbd>`).join("+");
+// En Mac los atajos se muestran con sus teclas: ⌘ en lugar de Ctrl, ⌥ en lugar de Alt, etc.
+const IS_MAC=/Mac|iPhone|iPad|iPod/.test(navigator.platform||"")||/Mac OS X/.test(navigator.userAgent||"");
+const MAC_KEYS={Ctrl:"⌘", Alt:"⌥", "Mayús":"⇧", Intro:"↩", Retroceso:"⌫", Supr:"⌘⌫", F2:"fn F2"};
+const keyName=t=>IS_MAC?t.replace(/\b(Ctrl|Alt|Mayús|Intro|Retroceso|Supr|F2)\b/g,m=>MAC_KEYS[m]):t;
+const K=t=>keyName(t).split("+").map(k=>`<kbd>${k}</kbd>`).join("+");
 function helpHTML(){
   const groups=[
     ["Crear",[["Doble clic en un hueco","Nuevo nodo"],[K("Tab"),"Nuevo nodo conectado al seleccionado"],[K("Intro")+" al nombrar un nodo nuevo","Otro nodo al mismo nivel"],
@@ -1357,7 +1361,7 @@ function helpHTML(){
       [K("Ctrl+C")+" · "+K("Ctrl+X")+" · "+K("Ctrl+V"),"Copiar, cortar y pegar (también entre mapas)"],["Pegar una lista de texto","Un nodo por línea; las sangradas, dentro"],
       [K("Supr"),"Eliminar"],[K("Ctrl+Z")+" · "+K("Ctrl+Y"),"Deshacer y rehacer"]]],
     ["Exportar",[["Menú ⋯ › Exportar como imagen","Guardar el nivel que ves como PNG"],["Clic derecho en el fondo","También ahí"]]],
-    ["Moverse",[["Doble clic en un nodo o "+K("Intro"),"Entrar en su nivel"],[K("Retroceso")+" o "+K("Alt")+"+"+K("←"),"Subir un nivel"],["La ruta de arriba","Ir a cualquier nivel"],
+    ["Moverse",[["Doble clic en un nodo o "+K("Intro"),"Entrar en su nivel"],[IS_MAC?K("⌫")+" o "+K("⌘")+"+"+K("[")+" o "+K("⌘")+"+"+K("↑"):K("Retroceso")+" o "+K("Alt")+"+"+K("←"),"Subir un nivel"],["La ruta de arriba","Ir a cualquier nivel"],
       ["Rueda del ratón","Acercar y alejar"],["Arrastrar el fondo","Desplazarse"],["Botón ⤢","Ajustar a la pantalla"]]],
     ["Libreta",[[K("F2"),"Cambiar el nombre"],["Clic en el texto","Escribir justo ahí"],[K("Ctrl+I"),"Índice de títulos"],["Rueda o segmentos de la barra","Pasar de tramo; el número de arriba, de página"],
       ["<code># título</code> · <code>**negrita**</code> · <code>*cursiva*</code> · <code>~~tachado~~</code> · <code>`código`</code>","Formato de texto"],
@@ -2028,8 +2032,8 @@ function renderMapNoteNow(){
         ${M_COLORS.map(cc=>`<button type="button" class="sw" data-mcolor="${cc}" style="--c:${cc}" aria-label="Color"></button>`).join("")}</div>
       <ul class="mn-multi-tips">
         <li>Arrástralos juntos, o suéltalos encima de otro nodo para meterlos dentro.</li>
-        <li><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> para copiarlos o cortarlos, y <kbd>Ctrl</kbd>+<kbd>V</kbd> para pegarlos aquí o en otro mapa.</li>
-        <li><kbd>Supr</kbd> para eliminarlos · clic derecho para más opciones.</li>
+        <li>${K("Ctrl+C")} / ${K("Ctrl+X")} para copiarlos o cortarlos, y ${K("Ctrl+V")} para pegarlos aquí o en otro mapa.</li>
+        <li>${K("Supr")} para eliminarlos · clic derecho para más opciones.</li>
       </ul>
       <div class="eacts"><button type="button" class="add alt" data-mmove>Mover a…</button><button type="button" class="add alt" data-mdel>Eliminar</button></div>
     </div>`;
@@ -2048,7 +2052,7 @@ function renderMapNoteNow(){
       <label class="mn-page" title="Escribe un número para ir a esa página">Página
         <input type="number" id="mn-pg" min="1" value="1" aria-label="Página actual"> de <b id="mn-pgs">1</b></label>
     </div>
-    <div class="mn-meta"><span>${meta}</span><span class="mn-key">Ctrl+I: índice</span><label class="mn-addimg" title="Añadir imágenes (también puedes pegarlas con Ctrl+V o arrastrarlas)">+ Imagen<input type="file" id="mn-file" accept="image/*" multiple hidden></label><span class="mn-count" id="mn-count" hidden></span>${colors}</div>
+    <div class="mn-meta"><span>${meta}</span><span class="mn-key">${keyName("Ctrl+I")}: índice</span><label class="mn-addimg" title="${keyName("Añadir imágenes (también puedes pegarlas con Ctrl+V")} o arrastrarlas)">+ Imagen<input type="file" id="mn-file" accept="image/*" multiple hidden></label><span class="mn-count" id="mn-count" hidden></span>${colors}</div>
     ${addSub?`<button type="button" class="mn-addsub" data-maddsub>+ Añadir subnodos</button>`:""}
     <div class="mn-body" id="mn-body">
       ${mNoteEditing
@@ -2436,7 +2440,7 @@ function askDeleteNode(id){
 function mvConfirm(text,ok){
   const box=document.getElementById("mv-confirm"); if(!box) return;
   box.innerHTML=`<span></span><button type="button" class="add" data-cok>Eliminar</button><button type="button" class="add alt" data-cno>Cancelar</button>`;
-  box.querySelector("span").textContent=text+" Podrás deshacerlo con Ctrl+Z.";
+  box.querySelector("span").textContent=keyName(text+" Podrás deshacerlo con Ctrl+Z.");
   box.hidden=false; box.querySelector("[data-cok]").focus();
   box.onclick=e=>{ if(e.target.closest("[data-cok]")){ box.hidden=true; ok(); } else if(e.target.closest("[data-cno]")) box.hidden=true; };
   box.onkeydown=e=>{ if(e.key==="Escape"){ e.stopPropagation(); box.hidden=true; } };
@@ -2626,6 +2630,7 @@ const isTyping=()=>{ const a=document.activeElement; return !!a && (/^(INPUT|TEX
 
 // ---- avisos breves con «Deshacer» ----
 function mvToast(text, undo=true){
+  text=keyName(text);
   const g=document.getElementById("mv-graph"); if(!g) return;
   let t=g.querySelector(".mv-toast"); if(!t){ t=document.createElement("div"); t.className="mv-toast"; t.setAttribute("role","status"); g.appendChild(t); }
   t.innerHTML=`<span></span>${undo?'<button type="button">Deshacer</button>':""}`; t.querySelector("span").textContent=text;
@@ -3039,9 +3044,9 @@ document.addEventListener("keydown",e=>{
   if(mod && (k==="a"||k==="A")){ e.preventDefault(); const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); return; }
   if(k==="Tab" && mSel && selIds().length===1){ e.preventDefault(); createNear(mSel,mSel); return; }
   if(k==="F2" && (mSel||mapLevel)){ e.preventDefault(); focusTitle(); return; }
-  if(k==="Delete"){ const ids=selIds(); if(ids.length) askDeleteNodes(ids); else if(mSelLink){ mRemember(); delete state.mlinks[mSelLink]; mSelLink=null; save(); mgDraw(); } return; }
+  if(k==="Delete" || (e.metaKey && k==="Backspace")){ e.preventDefault(); const ids=selIds(); if(ids.length) askDeleteNodes(ids); else if(mSelLink){ mRemember(); delete state.mlinks[mSelLink]; mSelLink=null; save(); mgDraw(); } return; }
   if(k==="Enter" && mSel){ e.preventDefault(); goLevel(mSel); return; }
-  if(k==="Backspace" || (e.altKey && k==="ArrowLeft")){ if(mapLevel){ e.preventDefault(); goUp(); } }
+  if(k==="Backspace" || (e.altKey && k==="ArrowLeft") || (e.metaKey && (k==="[" || k==="ArrowUp"))){ if(mapLevel){ e.preventDefault(); goUp(); } }
 });
 
 // ---- arrastrar tarjetas, listas y tableros ----
@@ -3852,5 +3857,7 @@ async function init(){
 }
 init();
 // Señal periódica al servidor: así sabe que la ventana sigue abierta (modo aplicación)
-if(API){ const latido=()=>fetch("api/ping").catch(()=>{}); latido(); setInterval(latido,20000); }
+// Aviso al servidor de que la ventana sigue abierta (y otro al volver a verla, tras minimizarla o al despertar el equipo)
+if(API){ const latido=()=>fetch("api/ping").catch(()=>{}); latido(); setInterval(latido,20000);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) latido(); }); }
 
