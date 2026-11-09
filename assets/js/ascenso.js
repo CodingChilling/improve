@@ -212,7 +212,64 @@ function renderWeek(){
   document.getElementById("legend").innerHTML=Object.entries(TYPES).map(([id,t])=>`<span><b class="${t.cls}"></b>${esc(typeName(id))}</span>`).join("");
 }
 
+// ---- Eventos del día, al lado de la racha ----
+// Los eventos del calendario que caen en el día que estás viendo (también los de varios días), con su color.
+// Al pulsar uno se ve su información; desde ahí se puede abrir en el calendario para editarlo.
+const EV_VISIBLES=3;
+let evPopId=null, evPopAll=false;
+function evDayInfo(e,k){
+  const total=Math.round((parseKey(e.end)-parseKey(e.start))/86400000)+1, n=Math.round((parseKey(k)-parseKey(e.start))/86400000)+1;
+  return {total, n};
+}
+function renderDayEvents(){
+  const box=document.getElementById("dayev"); if(!box) return;
+  const k=key(sel), evs=eventsOn(k);
+  if(box.dataset.k!==k){ box.dataset.k=k; if(evPopId||evPopAll) closeEvPop(); }   // otro día: se cierra la ficha
+  box.innerHTML=evs.slice(0,EV_VISIBLES).map(([id,e])=>{ const {total,n}=evDayInfo(e,k);
+    return `<button type="button" class="dev" data-dev="${id}" style="--c:${e.color}" aria-haspopup="dialog" aria-expanded="${evPopId===id}">
+      <i aria-hidden="true"></i><span class="dev-t">${esc(e.title)}</span>${e.time?`<span class="dev-x">${e.time}</span>`:""}${total>1?`<span class="dev-x">${n}/${total}</span>`:""}</button>`; }).join("")
+    + (evs.length>EV_VISIBLES?`<button type="button" class="dev dev-more" data-devall aria-haspopup="dialog">+${evs.length-EV_VISIBLES}</button>`:"");
+  box.hidden=!evs.length; box.parentElement.classList.toggle("has-ev",!!evs.length);
+  if(evPopId && !(evPopAll || state.events[evPopId])) closeEvPop();
+  else if(evPopId||evPopAll) renderEvPop();
+}
+function evDetailHTML(id){
+  const e=state.events[id], k=key(sel); if(!e) return "";
+  const {total,n}=evDayInfo(e,k), largo=d=>parseKey(d).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+  const cuando=total>1?`Del ${largo(e.start)} al ${largo(e.end)} · ${total} días (este es el ${n}.º)`:largo(e.start).replace(/^./,c=>c.toUpperCase());
+  return `<div class="ep-head" style="--c:${e.color}"><i aria-hidden="true"></i><h3>${esc(e.title)}</h3></div>
+    <p class="ep-row">📅 ${esc(cuando)}</p>
+    <p class="ep-row">🕒 ${e.time?`A las ${e.time}`:"Todo el día"}</p>
+    <div class="ep-acts"><button type="button" class="add" data-epopen="${id}">Abrir en el calendario</button></div>`;
+}
+function renderEvPop(){
+  const pop=document.getElementById("evpop"); if(!pop) return;
+  if(evPopAll && !evPopId){
+    pop.innerHTML=`<h3 class="ep-title">Eventos del día</h3><ul class="ep-list">${eventsOn(key(sel)).map(([id,e])=>
+      `<li><button type="button" class="dev" data-dev="${id}" style="--c:${e.color}"><i aria-hidden="true"></i><span class="dev-t">${esc(e.title)}</span>${e.time?`<span class="dev-x">${e.time}</span>`:""}</button></li>`).join("")}</ul>`;
+  } else pop.innerHTML=(evPopAll?`<button type="button" class="linklike ep-back" data-epback>← Todos los eventos del día</button>`:"")+evDetailHTML(evPopId);
+  pop.hidden=false;
+  // Debajo de los eventos (sin tapar ninguno), alineada con el evento pulsado y sin salirse de la fila
+  const sum=pop.offsetParent||pop.parentElement, zona=document.getElementById("dayev"), anchor=(evPopId&&!evPopAll&&zona.querySelector(`[data-dev="${evPopId}"]`))||zona;
+  const sr=sum.getBoundingClientRect(), zr=zona.getBoundingClientRect(), ar=anchor.getBoundingClientRect();
+  pop.style.top=(zr.bottom-sr.top+8)+"px";
+  pop.style.left=Math.max(8,Math.min(ar.left-sr.left, sr.width-pop.offsetWidth-8))+"px";
+}
+function openEvPop(id,all){ evPopId=id||null; evPopAll=!!all; renderDayEvents(); }
+function closeEvPop(){ evPopId=null; evPopAll=false; const p=document.getElementById("evpop"); if(p){ p.hidden=true; p.innerHTML=""; }
+  document.querySelectorAll("#dayev [aria-expanded=true]").forEach(b=>b.setAttribute("aria-expanded","false")); }
+document.addEventListener("click",e=>{
+  const t=e.target; let el;
+  if((el=t.closest&&t.closest("#dayev [data-dev]"))){ const id=el.dataset.dev; if(evPopId===id&&!evPopAll) closeEvPop(); else openEvPop(id,false); return; }
+  if(t.closest&&t.closest("#dayev [data-devall]")){ if(evPopAll&&!evPopId) closeEvPop(); else openEvPop(null,true); return; }
+  if((el=t.closest&&t.closest("#evpop [data-dev]"))){ evPopId=el.dataset.dev; renderEvPop(); return; }
+  if(t.closest&&t.closest("#evpop [data-epback]")){ evPopId=null; renderEvPop(); return; }
+  if((el=t.closest&&t.closest("#evpop [data-epopen]"))){ const id=el.dataset.epopen; closeEvPop(); openCal(); calEditing=id; renderCal(); return; }
+  if(!(t.closest&&t.closest("#evpop")) && (evPopId||evPopAll)) closeEvPop();
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && (evPopId||evPopAll)) closeEvPop(); });
 function renderDay(){
+  renderDayEvents();
   const isToday = key(sel)===key(today());
   document.getElementById("h-day").textContent = isToday ? "Hoy" :
     sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}).replace(/^./,c=>c.toUpperCase());
@@ -506,7 +563,7 @@ function renderQuote(){
   const t=sel, k=key(sel);
   const [q,a,src]=quoteFor(k);
   const bq=document.getElementById("quote");
-  if(lastQuote!==null && lastQuote!==q){ bq.style.animation="none"; void bq.offsetWidth; bq.style.animation="rise .7s both cubic-bezier(.2,.7,.2,1)"; }
+  if(lastQuote!==null && lastQuote!==q){ bq.style.animation="none"; void bq.offsetWidth; bq.style.animation="quoteIn .7s cubic-bezier(.2,.7,.2,1)"; }
   lastQuote=q;
   bq.querySelector("p").textContent=q;
   bq.querySelector("footer").innerHTML=esc(a)+"<cite>"+esc(src)+"</cite>";
@@ -3837,6 +3894,9 @@ function readLocal(){
 async function init(){
   const local=readLocal();
   state=cleanState(local||SEED);
+  // La frase del día solo depende de la fecha: se pinta ya, sin esperar a que el servidor mande todos los datos
+  // (que tardan más cuanto más pesan las libretas). Después, renderAll lo completa todo.
+  try{ renderQuote(); }catch(e){}
   if(API){
     try{
       let remote=await api("GET","estado");
