@@ -1101,6 +1101,15 @@ class Manejador(SimpleHTTPRequestHandler):
             return
         if ruta.startswith("/api/"):
             return self.api("GET", ruta)
+        if ruta == "/assets/js/config.js":
+            # Versión clásica: la página guarda en este servidor (ascenso.db) y no usa la cuenta en línea
+            cuerpo = b"window.ASCENSO_CONFIG = { clasico: true };\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript; charset=utf-8")
+            self.send_header("Content-Length", str(len(cuerpo)))
+            self.end_headers()
+            self.wfile.write(cuerpo)
+            return
         if not self.ruta_permitida():
             return self.send_error(404, "No encontrado")
         return super().do_GET()

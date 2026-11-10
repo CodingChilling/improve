@@ -621,8 +621,10 @@ function persistPadNow(){
   const pending=padPending; clearTimeout(padTimer); padPending=false; storePad(); saveLocal();
   if(pending && online){
     const v=state.notes[padDay]||{r:"",n:""};
-    fetch(API+"notas/"+padDay,{method:"PUT",keepalive:true,headers:{"X-Ascenso":"1","Content-Type":"application/json"},body:JSON.stringify(v)})
-      .then(r=>{ if(r.ok){ if(state.notes[padDay]) synced.notes[padDay]=JSON.parse(JSON.stringify(v)); else delete synced.notes[padDay]; } }).catch(()=>{});
+    const dia=padDay;
+    (LOCAL ? api("PUT","notas/"+dia,v).then(()=>({ok:true}))
+           : fetch(API+"notas/"+dia,{method:"PUT",keepalive:true,headers:{"X-Ascenso":"1","Content-Type":"application/json"},body:JSON.stringify(v)}))
+      .then(r=>{ const padDay=dia; if(r.ok){ if(state.notes[padDay]) synced.notes[padDay]=JSON.parse(JSON.stringify(v)); else delete synced.notes[padDay]; } }).catch(()=>{});
   } else if(pending) save();
 }
 document.addEventListener("ascenso:guardado",()=>{
@@ -1651,7 +1653,7 @@ const fmt3=n=>String(Math.round(n*1000)/1000);
 const imgRefText=r=>{ const o=[]; if(r.w!=null&&r.w<0.999) o.push("w="+fmt3(r.w)); if(r.x!=null) o.push("x="+fmt3(r.x));
   return `![${(r.cap||"").replace(/[\]\n]/g,"")}](imagen:${r.id}${o.length?"|"+o.join(","):""})`; };
 const imgLineText=refs=>refs.map(imgRefText).join(" ");
-const imgURL=id=>API?API+"adjuntos/"+encodeURIComponent(id):"";
+const imgURL=id=>LOCAL?AscensoLocal.urlAdjunto(id):API?API+"adjuntos/"+encodeURIComponent(id):"";
 const countImages=t=>t.indexOf("imagen:")<0?0:(t.match(IMG_REF)||[]).length;
 
 // Medidas de un bloque de imagen: filas que ocupa y tamaño y posición de cada imagen
@@ -1672,7 +1674,7 @@ function imgBlockHTML(b, srcLine, lh){ return `<div class="mi-row" style="height
 function cellsHTML(b, lh){
   return b.cells.map((c,k)=>`
     <figure class="mi-cell${NP.newImgs&&NP.newImgs.has(c.id)?" mi-new":""}" data-ref="${k}" style="left:${c.x}px;width:${c.w}px">
-      ${attMeta[c.id]?`<img src="${imgURL(c.id)}" alt="${esc(c.cap)}" style="height:${c.h}px" draggable="false" loading="lazy" title="Arrastra para moverla · clic para verla en grande">`
+      ${attMeta[c.id]?`<img src="${imgURL(c.id)}" data-adj="${esc(c.id)}" alt="${esc(c.cap)}" style="height:${c.h}px" draggable="false" loading="lazy" title="Arrastra para moverla · clic para verla en grande">`
                      :`<div class="mi-missing" style="height:${c.h}px">Imagen no disponible</div>`}
       ${b.capRows?`<figcaption style="height:${lh}px">${esc(c.cap)}</figcaption>`:""}
       <div class="mi-tb">
@@ -1842,7 +1844,7 @@ async function uploadImages(files){
 // where: {line: línea de los apuntes tras la que va la imagen} o {caret: posición en los apuntes}
 async function addImagesToNote(files, where){
   files=[...files].filter(f=>/^image\/(png|jpeg|webp|gif|bmp)$/.test(f.type)); if(!files.length) return false;
-  if(!online||!API){ mvToast("Para añadir imágenes, abre Ascenso con su servidor (necesitan la base de datos)."); return true; }
+  if(!online||!API){ mvToast(LOCAL?"Ahora mismo no se pueden guardar imágenes en este dispositivo.":"Para añadir imágenes, abre Ascenso con su servidor (necesitan la base de datos)."); return true; }
   const s=noteSubject(); if(!s.o) return true;
   let ids; try{ ids=await uploadImages(files); }catch(err){ mvToast("No se pudo guardar la imagen: "+err.message); return true; }
   // Una sola imagen se pega a su tamaño natural (una captura pequeña no se agranda); varias, en fila
@@ -2853,6 +2855,37 @@ document.addEventListener("paste",e=>{
 // ---- lienzo: ratón ----
 function bindCanvas(cv){
   const pos=e=>{ const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+  // Con dos dedos: pellizcar para acercar o alejar, y mover el mapa. (Van antes que el resto: mientras dura, lo demás no se entera.)
+  const dedos=new Map(); let pellizco=null;
+  const medir=()=>{ const [a,b]=[...dedos.values()]; return {d:Math.hypot(a[0]-b[0],a[1]-b[1])||1, mx:(a[0]+b[0])/2, my:(a[1]+b[1])/2}; };
+  cv.addEventListener("pointerdown",e=>{
+    if(e.pointerType!=="touch") return;
+    dedos.set(e.pointerId,pos(e));
+    if(dedos.size<2) return;
+    e.stopImmediatePropagation();
+    if(dedos.size>2) return;
+    // Lo que hubiera empezado el primer dedo (mover un nodo, el mapa…) se deja como estaba
+    if(MG.drag){ for(const id of MG.drag.ids){ const n=state.mnodes[id], f=MG.drag.from[id]; if(n){ n.x=f.x; n.y=f.y; } } MG.drag=null; MG.dropTarget=null; }
+    MG.pan=null; MG.rect=null; if(MG.wire&&!MG.wire.pick) MG.wire=null; cv.classList.remove("panning");
+    pellizco=medir();
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(!dedos.has(e.pointerId)) return;
+    dedos.set(e.pointerId,pos(e));
+    if(!pellizco) return;
+    e.stopImmediatePropagation();
+    if(dedos.size!==2) return;
+    const m=medir(), c=cam();
+    c.ox+=m.mx-pellizco.mx; c.oy+=m.my-pellizco.my; c.user=true;
+    zoomAt(m.mx,m.my,m.d/pellizco.d);
+    pellizco=m;
+  });
+  const dedoFuera=e=>{
+    if(!dedos.delete(e.pointerId)) return;
+    if(pellizco){ e.stopImmediatePropagation(); if(!dedos.size) pellizco=null; }
+    else if(e.type==="pointercancel"){ MG.pan=null; MG.rect=null; MG.drag=null; MG.dropTarget=null; cv.classList.remove("panning"); mgDraw(); }
+  };
+  cv.addEventListener("pointerup",dedoFuera); cv.addEventListener("pointercancel",dedoFuera);
   cv.addEventListener("pointerdown",e=>{
     if(e.button===2) return;
     closeMgMenu(); const mv=document.querySelector(".mv-move"); if(mv) mv.remove();
@@ -3762,9 +3795,16 @@ tagBox.addEventListener("click",e=>{
   },"Pulsa otra vez para quitar");
 });
 
-// ---------- Guardado: base de datos local (servidor.py) o, si no hay, este navegador ----------
+// ---------- Guardado ----------
+// Por defecto, en este mismo dispositivo (servidor-local.js, sobre IndexedDB). En la versión clásica,
+// servidor.py responde a config.js con «clasico» y entonces se guarda en su base de datos (ascenso.db).
 const STORE="ascenso-v1";
-const API=/^https?:$/.test(location.protocol) ? "api/" : null;
+const CLASICO=!!(window.ASCENSO_CONFIG&&window.ASCENSO_CONFIG.clasico);
+const LOCAL=!CLASICO&&!!window.AscensoLocal;
+const API=LOCAL||/^https?:$/.test(location.protocol) ? "api/" : null;
+const DONDE=LOCAL?"en este dispositivo":"en la base de datos (ascenso.db)";
+const SIN_BD=LOCAL?"Este navegador no permite guardar datos. Exporta una copia de seguridad para no perderlos."
+                  :"Sin conexión con la base de datos: guardado en este navegador.";
 let serverMsg=null;
 let online=false, synced=null, syncTimer=null, syncing=false, syncAgain=false, retryTimer=null;
 function setStatus(t,nivel="ok"){
@@ -3772,11 +3812,16 @@ function setStatus(t,nivel="ok"){
   const b=document.getElementById("bv-sync");
   if(b){
     b.dataset.nivel=nivel; b.title=t;
-    b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso" ? "Solo en este navegador" : "Sin guardar";
+    b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso"&&!LOCAL ? "Solo en este navegador" : "Sin guardar";
   }
+  // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
+  document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
 const VERSION_NECESARIA=12;
+// Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
+// Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){
+  if(LOCAL) return false;
   try{
     const j=JSON.stringify(state);
     // El navegador admite unos 5 MB: si los datos no caben, se quita la copia antigua para que nunca se use una copia desfasada
@@ -3787,6 +3832,7 @@ function saveLocal(){
 function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
   boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks})); }
 async function api(method,path,body){
+  if(LOCAL) return AscensoLocal.api(method,path,body);
   const opt={method, headers:{"X-Ascenso":"1"}};
   if(body!==undefined){ opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
   const r=await fetch(API+path,opt);
@@ -3813,12 +3859,17 @@ function save(){
   if(!online){
     if(okLocal) document.dispatchEvent(new Event("ascenso:guardado"));
     if(serverMsg){ setStatus(serverMsg,"error"); return; }
-    setStatus(okLocal ? (API?"Sin conexión con la base de datos: guardado en este navegador.":"Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.")
-                      : "Este navegador no permite guardar datos. Exporta una copia de seguridad para no perderlos.", okLocal?"aviso":"error");
+    setStatus(LOCAL ? SIN_BD : okLocal ? (API?"Sin conexión con la base de datos: guardado en este navegador.":"Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.")
+                      : "Este navegador no permite guardar datos. Exporta una copia de seguridad para no perderlos.", okLocal&&!LOCAL?"aviso":"error");
     return;
   }
-  clearTimeout(syncTimer); syncTimer=setTimeout(sync,350);
+  // En el dispositivo se guarda casi al momento (no hay red que ahorrar); en el servidor clásico, con una pequeña espera
+  clearTimeout(syncTimer); syncTimer=setTimeout(()=>{ syncTimer=null; sync(); },LOCAL?40:350);
 }
+// Al ocultar o cerrar la página, lo que estuviera esperando se guarda ya
+function saveNow(){ if(syncTimer){ clearTimeout(syncTimer); syncTimer=null; sync(); } }
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveNow(); });
+window.addEventListener("pagehide",saveNow);
 // Envía a la base de datos solo lo que ha cambiado
 async function sync(){
   if(syncing){ syncAgain=true; return; }
@@ -3860,12 +3911,12 @@ async function sync(){
       if(JSON.stringify(p)!==JSON.stringify(dayPayload(synced.days[k])) && await enviar("PUT","dias/"+k,p)) synced.days[k]=now.days[k];
     }
     if(!errores.length){
-      setStatus("Guardado en la base de datos (ascenso.db).");
+      setStatus("Guardado "+DONDE+".");
       document.dispatchEvent(new Event("ascenso:guardado"));
     } else {
       const e=errores[0];
       const why = e instanceof TypeError ? "el servidor no está en marcha" : e.message;
-      setStatus("No se pudo guardar todo en la base de datos ("+why+"). Queda guardado en este navegador y se reintentará.","error");
+      setStatus(LOCAL ? "No se pudo guardar todo ("+why+"). Se reintentará." : "No se pudo guardar todo en la base de datos ("+why+"). Queda guardado en este navegador y se reintentará.","error");
       retryTimer=setTimeout(sync,5000);
     }
   }finally{
@@ -3903,6 +3954,8 @@ async function init(){
       if(remote.vacia){
         // Primera conexión: la base de datos empieza con lo que ya había en este navegador
         await api("POST","importar",snapshot());
+        // Instalación nueva: se anota que, de momento, solo hay los datos iniciales (nada escrito por la persona)
+        if(LOCAL&&!local) await AscensoLocal.marcarSemilla();
         remote=await api("GET","estado");
       }
       if((remote.version||0)<VERSION_NECESARIA){
@@ -3926,8 +3979,10 @@ async function init(){
         }
       }
       saveLocal();
-      setStatus("Conectado a la base de datos (ascenso.db).");
-    }catch(e){ setStatus(serverMsg||"Sin conexión con la base de datos: guardado en este navegador.", serverMsg?"error":"aviso"); }
+      // Lo que quedaba en localStorage de versiones anteriores ya está en la base de datos del dispositivo
+      if(LOCAL){ try{ localStorage.removeItem(STORE); localStorage.removeItem("rutina-v1"); }catch(e2){} }
+      setStatus(LOCAL?"Guardado en este dispositivo.":"Conectado a la base de datos (ascenso.db).");
+    }catch(e){ setStatus(serverMsg||SIN_BD, serverMsg||LOCAL?"error":"aviso"); }
   } else {
     setStatus("Guardado en este navegador. Abre Ascenso con servidor.py para usar la base de datos.","aviso");
   }
@@ -3935,8 +3990,47 @@ async function init(){
   discoverImages();
 }
 init();
-// Señal periódica al servidor: así sabe que la ventana sigue abierta (modo aplicación)
-// Aviso al servidor de que la ventana sigue abierta (y otro al volver a verla, tras minimizarla o al despertar el equipo)
-if(API){ const latido=()=>fetch("api/ping").catch(()=>{}); latido(); setInterval(latido,20000);
+
+// ---------- Cambios llegados de fuera: otro dispositivo de la cuenta u otra pestaña ----------
+// Se vuelve a leer todo de la base de datos del dispositivo y se repinta la vista actual. Si la persona está
+// escribiendo, arrastrando o tiene una ficha abierta, se espera a que termine: no se le quita nada de las manos.
+let refrescoPendiente=false, refrescando=false;
+function estaEditando(){
+  const a=document.activeElement;
+  // (Los cuadros de «nueva tarea», «nuevo evento», «nueva etiqueta» y el buscador no se repintan: ahí se puede seguir escribiendo)
+  if(a&&a!==document.body&&(a.isContentEditable||(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!/^(checkbox|radio|button|file|color)$/.test(a.type||"")))
+     &&!a.matches("#tnew,#evnew,#tagname,#bv-q")&&!a.closest("#cuentadlg")) return true;
+  if(document.querySelector("dialog[open]:not(#cuentadlg)")) return true;
+  return !!(drag||bdrag||!pad.hidden||(MG&&(MG.drag||MG.wire||MG.rect)));
+}
+const guardadoEnCurso=()=>syncing||!!syncTimer||!!saveSoonT;
+async function refrescarDatos(){
+  if(!LOCAL||!online) return;
+  refrescoPendiente=true;
+  if(refrescando||estaEditando()||guardadoEnCurso()) return;      // se reintenta enseguida (ver más abajo)
+  refrescando=true;
+  try{
+    refrescoPendiente=false;
+    let remote=await api("GET","estado");
+    if(estaEditando()||guardadoEnCurso()){ refrescoPendiente=true; return; }
+    if(remote.vacia){
+      // Se han borrado los datos de este dispositivo (al cerrar sesión o al sustituirlos por los de una cuenta vacía)
+      state=cleanState(SEED);
+      await api("POST","importar",snapshot()); await AscensoLocal.marcarSemilla();
+      remote=await api("GET","estado");
+    }
+    state=cleanState(remote);
+    attMeta=remote.att&&typeof remote.att==="object"?remote.att:{};
+    synced=snapshot();
+    renderAll(); renderBoards(); renderCal();
+  }catch(e){ refrescoPendiente=true; }
+  finally{ refrescando=false; }
+}
+document.addEventListener("ascenso:datos-externos",refrescarDatos);
+setInterval(()=>{ if(refrescoPendiente) refrescarDatos(); },1200);
+document.addEventListener("focusout",()=>{ if(refrescoPendiente) setTimeout(refrescarDatos,150); });
+// Versión clásica: aviso al servidor de que la ventana sigue abierta (y otro al volver a verla, tras minimizarla
+// o al despertar el equipo). Con los datos en el dispositivo no hay servidor al que avisar.
+if(API&&!LOCAL){ const latido=()=>fetch("api/ping").catch(()=>{}); latido(); setInterval(latido,20000);
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden) latido(); }); }
 
