@@ -2855,6 +2855,37 @@ document.addEventListener("paste",e=>{
 // ---- lienzo: ratón ----
 function bindCanvas(cv){
   const pos=e=>{ const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+  // Con dos dedos: pellizcar para acercar o alejar, y mover el mapa. (Van antes que el resto: mientras dura, lo demás no se entera.)
+  const dedos=new Map(); let pellizco=null;
+  const medir=()=>{ const [a,b]=[...dedos.values()]; return {d:Math.hypot(a[0]-b[0],a[1]-b[1])||1, mx:(a[0]+b[0])/2, my:(a[1]+b[1])/2}; };
+  cv.addEventListener("pointerdown",e=>{
+    if(e.pointerType!=="touch") return;
+    dedos.set(e.pointerId,pos(e));
+    if(dedos.size<2) return;
+    e.stopImmediatePropagation();
+    if(dedos.size>2) return;
+    // Lo que hubiera empezado el primer dedo (mover un nodo, el mapa…) se deja como estaba
+    if(MG.drag){ for(const id of MG.drag.ids){ const n=state.mnodes[id], f=MG.drag.from[id]; if(n){ n.x=f.x; n.y=f.y; } } MG.drag=null; MG.dropTarget=null; }
+    MG.pan=null; MG.rect=null; if(MG.wire&&!MG.wire.pick) MG.wire=null; cv.classList.remove("panning");
+    pellizco=medir();
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(!dedos.has(e.pointerId)) return;
+    dedos.set(e.pointerId,pos(e));
+    if(!pellizco) return;
+    e.stopImmediatePropagation();
+    if(dedos.size!==2) return;
+    const m=medir(), c=cam();
+    c.ox+=m.mx-pellizco.mx; c.oy+=m.my-pellizco.my; c.user=true;
+    zoomAt(m.mx,m.my,m.d/pellizco.d);
+    pellizco=m;
+  });
+  const dedoFuera=e=>{
+    if(!dedos.delete(e.pointerId)) return;
+    if(pellizco){ e.stopImmediatePropagation(); if(!dedos.size) pellizco=null; }
+    else if(e.type==="pointercancel"){ MG.pan=null; MG.rect=null; MG.drag=null; MG.dropTarget=null; cv.classList.remove("panning"); mgDraw(); }
+  };
+  cv.addEventListener("pointerup",dedoFuera); cv.addEventListener("pointercancel",dedoFuera);
   cv.addEventListener("pointerdown",e=>{
     if(e.button===2) return;
     closeMgMenu(); const mv=document.querySelector(".mv-move"); if(mv) mv.remove();

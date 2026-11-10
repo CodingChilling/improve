@@ -25,6 +25,8 @@ desktop.ini
 .idea/
 # ---- Generado al publicar (herramientas/generar.py) ----
 assets/images/lista.json
+assets/precache.js
+_sitio/
 
 # ---- Pruebas ----
 node_modules/

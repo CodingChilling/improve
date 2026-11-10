@@ -114,7 +114,8 @@ main {
 .head {
   display: grid;
   gap: 16px 18px;
-  grid-template-columns: 1fr auto;
+  /* minmax(0, …): la columna del texto encoge lo que haga falta y el marco nunca se sale de la pantalla */
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "title frame" "summit frame" "quote quote";
   align-items: start;
 }
@@ -4747,4 +4748,52 @@ body.img-dragging * {
   .head:not(.no-img) .sum-row.has-ev .summit .l small {
     display: block;          /* aquí hay sitio: la frase de la racha se queda */
   }
+}
+
+/* Pantallas estrechas: los eventos del día van debajo de la racha, a todo lo ancho de su columna */
+@media (max-width: 699px) {
+  .head:not(.no-img) .sum-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .head:not(.no-img) .sum-ev {
+    flex: 1 1 100%;
+  }
+}
+
+/* Aviso de versión nueva (aplicación instalada) */
+.aviso-version {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 24px);
+  padding: 9px 10px 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  box-shadow: 0 14px 36px -18px rgba(0, 0, 0, 0.55);
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+.aviso-version button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aviso-version .av-x {
+  padding: 4px 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
 }

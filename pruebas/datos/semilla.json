@@ -1,0 +1,11 @@
+{"days":{},"boards":{"b1":{"name":"Casa","color":"#2E86AB","fav":true,"order":0,"created":"2026-01-01"},"b2":{"name":"Trabajo","color":"#A23B72","order":1,"created":"2026-01-01"}},
+"blabels":{"le1":{"board":"b1","name":"Urgente","color":"#C0392B"}},
+"blists":{"l1":{"board":"b1","title":"Por hacer","order":0},"l2":{"board":"b1","title":"En proceso","order":1},"l3":{"board":"b1","title":"Hecho","order":2}},
+"cards":{"c1":{"list":"l1","title":"Pintar la habitación","prio":"alta","labels":["le1"],"due":"2026-11-12","order":0,"check":[{"id":"k1","t":"Comprar pintura","d":true},{"id":"k2","t":"Mover muebles"}]},
+"c2":{"list":"l1","title":"Arreglar el grifo","prio":"media","order":1},"c3":{"list":"l1","title":"Ordenar el trastero","prio":"baja","order":2},"c4":{"list":"l2","title":"Cambiar bombillas","prio":"ninguna","order":0},"c5":{"list":"l3","title":"Limpiar ventanas","prio":"ninguna","order":0}},
+"maps":{"m1":{"title":"Estoicismo","color":"#3B7A57","order":0,"notes":"# Apuntes\n\nUna libreta con **texto** y una lista:\n\n- uno\n- dos","created":"2026-01-01"}},
+"mnodes":{"n1":{"map":"m1","title":"Séneca","x":0,"y":0,"notes":"Cartas a Lucilio"},"n2":{"map":"m1","title":"Epicteto","x":220,"y":80,"notes":""},"n3":{"map":"m1","title":"Marco Aurelio","x":-60,"y":190,"notes":""}},
+"mlinks":{"x1":{"a":"n1","b":"n2"},"x2":{"a":"n1","b":"n3"}},
+"events":{"v1":{"start":"2026-11-10","end":"2026-11-12","title":"Viaje a la sierra","color":"#2E86AB"},"v2":{"start":"2026-11-10","time":"18:30","title":"Dentista","color":"#C0392B"},"v3":{"start":"2026-11-20","title":"Cumpleaños","color":"#3B7A57"}},
+"tags":{"e1":{"name":"Casa","color":"#2E86AB"}},
+"tasks":{"t1":{"date":"2026-11-10","title":"Llamar al fontanero","prio":"urgente","list":"pendiente","tags":["e1"]},"t2":{"date":"2026-11-10","title":"Preparar la mochila","prio":"media","list":"pendiente"},"t3":{"date":"2026-11-10","title":"Leer 20 páginas","prio":"baja","list":"proceso"},"t4":{"date":"2026-11-10","title":"Hacer la compra","prio":"alta","list":"hecha"}}}
