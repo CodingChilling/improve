@@ -1,0 +1,12 @@
+{
+  "name": "ascenso-pruebas",
+  "private": true,
+  "description": "Pruebas automáticas de Ascenso (Playwright). La aplicación no depende de nada de esto.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 *.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

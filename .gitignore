@@ -23,3 +23,10 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+# ---- Generado al publicar (herramientas/generar.py) ----
+assets/images/lista.json
+
+# ---- Pruebas ----
+node_modules/
+pruebas/resultados/
+pruebas/.env
