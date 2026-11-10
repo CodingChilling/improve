@@ -124,14 +124,14 @@ export async function esperar(pagina, funcion, argumento, { limite = 8000, que =
   }
 }
 
-// Sirve la app apuntando a un Supabase simulado (pruebas/simulador-supabase.mjs): cambia config.js y,
-// en la política de seguridad de la página, el dominio de Supabase por la dirección del simulador
-export function servirAppConCuenta(sim) {
+// Sirve la app apuntando a otro Supabase (el simulado de simulador-supabase.mjs, o un proyecto de pruebas real):
+// cambia config.js y, en la política de seguridad de la página, el dominio permitido
+export function servirAppConCuenta({ url, clave = "sb_publishable_prueba" }) {
   const html = fs.readFileSync(path.join(RAIZ, "ascenso.html"), "utf8")
-    .replace(/connect-src [^;]*;/, `connect-src 'self' ${sim.url} ${sim.url.replace("http", "ws")};`);
+    .replace(/connect-src [^;]*;/, `connect-src 'self' ${url} ${url.replace(/^http/, "ws")};`);
   return servirApp({ extra: {
     "ascenso.html": html,
-    "assets/js/config.js": `window.ASCENSO_CONFIG = { supabaseUrl: ${JSON.stringify(sim.url)}, supabaseClave: "sb_publishable_prueba" };`,
+    "assets/js/config.js": `window.ASCENSO_CONFIG = { supabaseUrl: ${JSON.stringify(url)}, supabaseClave: ${JSON.stringify(clave)} };`,
   } });
 }
 
