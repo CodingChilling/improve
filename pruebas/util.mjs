@@ -67,7 +67,7 @@ export async function apiLocal(pagina, metodo, ruta, cuerpo) {
 export const PNG_1X1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 // Abre la app en un contexto nuevo y la deja con los datos de ejemplo (pruebas/datos/semilla.json)
-export const paginaLista = p => p.waitForFunction(() => /Guardado/.test(document.getElementById("status").textContent));
+export const paginaLista = p => p.waitForFunction(() => /Guardado|Sincroniz|Sin conexión|sesión/.test(document.getElementById("status").textContent));
 export async function abrirConDatos(nav, app, opciones = {}) {
   const semilla = JSON.parse(fs.readFileSync(path.join(RAIZ, "pruebas", "datos", "semilla.json"), "utf8"));
   const hoy = new Date(), f = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -123,3 +123,51 @@ export async function esperar(pagina, funcion, argumento, { limite = 8000, que =
     await new Promise(ok => setTimeout(ok, 100));
   }
 }
+
+// Sirve la app apuntando a un Supabase simulado (pruebas/simulador-supabase.mjs): cambia config.js y,
+// en la política de seguridad de la página, el dominio de Supabase por la dirección del simulador
+export function servirAppConCuenta(sim) {
+  const html = fs.readFileSync(path.join(RAIZ, "ascenso.html"), "utf8")
+    .replace(/connect-src [^;]*;/, `connect-src 'self' ${sim.url} ${sim.url.replace("http", "ws")};`);
+  return servirApp({ extra: {
+    "ascenso.html": html,
+    "assets/js/config.js": `window.ASCENSO_CONFIG = { supabaseUrl: ${JSON.stringify(sim.url)}, supabaseClave: "sb_publishable_prueba" };`,
+  } });
+}
+
+// ---- El panel de la cuenta, usado como lo haría una persona ----
+export const panel = p => p.locator("#cuentadlg");
+const panelAbierto = p => p.evaluate(() => { const d = document.getElementById("cuentadlg"); return !!(d && d.open); });
+export async function abrirPanel(p) { if (!(await panelAbierto(p))) await p.click("#status"); await p.locator("#cuentadlg[open]").waitFor(); }
+export async function crearCuenta(p, sim, email, clave, { confirmar = true } = {}) {
+  await abrirPanel(p);
+  await panel(p).getByRole("button", { name: "Crear una cuenta" }).click();
+  await panel(p).locator('input[name="email"]').fill(email);
+  await panel(p).locator('input[name="clave1"]').fill(clave);
+  await panel(p).locator('input[name="clave2"]').fill(clave);
+  await panel(p).locator('input[name="entendido"]').check();
+  await panel(p).getByRole("button", { name: "Crear la cuenta" }).click();
+  await panel(p).getByText("Confirma tu email").waitFor();
+  if (!confirmar) return;
+  await p.goto(sim.confirmar(email));                       // abrir el enlace del email
+  await panel(p).getByText("Email confirmado").waitFor();
+}
+export async function escribirAcceso(p, email, clave) {
+  await abrirPanel(p);
+  if (await panel(p).getByRole("button", { name: "Iniciar sesión" }).count()) await panel(p).getByRole("button", { name: "Iniciar sesión" }).click();
+  const campo = panel(p).locator('input[name="email"]');
+  if (!(await campo.getAttribute("readonly") !== null)) await campo.fill(email);
+  await panel(p).locator('input[name="clave"]').fill(clave);
+  await panel(p).getByRole("button", { name: "Entrar" }).click();
+}
+// Primera entrada en una cuenta nueva: devuelve la clave de recuperación que se muestra una sola vez
+export async function entrarPorPrimeraVez(p, email, clave) {
+  await escribirAcceso(p, email, clave);
+  const recuperacion = (await p.locator("#c-recuperacion").textContent()).trim();
+  await panel(p).locator('input[name="guardada"]').check();
+  await panel(p).getByRole("button", { name: "Continuar" }).click();
+  await panel(p).locator(".c-quien").waitFor();
+  return recuperacion;
+}
+export const cerrarPanel = async p => { if (await panelAbierto(p)) await panel(p).locator(".dlg-x").click(); };
+export const alDia = (p, limite = 15000) => esperar(p, () => { const i = window.AscensoSync.informe(); return i.estado === "sincronizado" && i.pendientes === 0; }, null, { limite, que: "la sincronización termina" });

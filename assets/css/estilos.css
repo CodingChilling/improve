@@ -4797,3 +4797,215 @@ body.img-dragging * {
   font-size: 1.1rem;
   line-height: 1;
 }
+
+/* ---------- Cuenta y sincronización ---------- */
+/* El texto de estado abre, discretamente, el panel de la cuenta */
+.abre-cuenta {
+  cursor: pointer;
+}
+.status.abre-cuenta:hover,
+.bv-sync.abre-cuenta:hover {
+  color: var(--ink);
+}
+.status[data-nivel="aviso"] {
+  color: var(--p-alta);
+}
+.status[data-nivel="error"] {
+  color: var(--p-urgente);
+}
+dialog.tdlg.cuenta {
+  max-width: 460px;
+}
+.cuenta .dlg-head {
+  align-items: center;
+}
+.cuenta .c-titulo {
+  flex: 1;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.cuenta .c-cuerpo {
+  padding: 10px 20px 22px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.cuenta .c-cuerpo p {
+  margin: 0 0 12px;
+}
+.cuenta h4 {
+  margin: 22px 0 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cuenta .c-campo {
+  display: block;
+  margin: 0 0 12px;
+}
+.cuenta .c-campo span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.cuenta .c-campo input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem; /* 16 px: así iOS no amplía la página al escribir */
+}
+.cuenta .c-campo input[readonly] {
+  color: var(--muted);
+}
+.cuenta .c-mono,
+.cuenta .c-recuperacion {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+.cuenta .c-recuperacion {
+  padding: 14px;
+  border: 1px dashed var(--gold);
+  border-radius: 10px;
+  background: var(--surface2);
+  font-size: 1.02rem;
+  line-height: 1.7;
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-user-select: all;
+  user-select: all;
+}
+.cuenta .c-aviso {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--gold);
+  border-radius: 4px 10px 10px 4px;
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+.cuenta .c-aviso p:last-of-type {
+  margin-bottom: 10px;
+}
+.cuenta .c-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cuenta .c-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold);
+}
+.cuenta .c-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.cuenta .c-botones .add {
+  margin-top: 0;
+}
+.cuenta .c-error {
+  color: var(--p-urgente);
+  font-weight: 600;
+}
+.cuenta .c-nota,
+.cuenta .c-disp small {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.cuenta .c-enlaces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 16px 0 0;
+}
+.cuenta .c-enlace {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cuenta .c-enlace:hover {
+  color: var(--ink);
+}
+.cuenta .c-quien {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cuenta .c-estado[data-nivel="aviso"] {
+  color: var(--p-alta);
+}
+.cuenta .c-estado[data-nivel="error"] {
+  color: var(--p-urgente);
+}
+.cuenta .c-opciones {
+  display: grid;
+  gap: 10px;
+}
+.cuenta .c-opcion {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cuenta .c-opcion:hover {
+  border-color: var(--gold);
+}
+.cuenta .c-opcion[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+.cuenta .c-opcion strong,
+.cuenta .c-opcion span {
+  display: block;
+}
+.cuenta .c-opcion span {
+  margin-top: 3px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.cuenta .c-opcion.peligro strong {
+  color: var(--p-urgente);
+}
+.cuenta .c-disp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cuenta .c-disp small {
+  display: block;
+}
+.cuenta .c-este {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+.cuenta .c-dispositivos .c-nota {
+  margin-top: 10px;
+}

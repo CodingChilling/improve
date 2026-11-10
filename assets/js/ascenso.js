@@ -3814,6 +3814,8 @@ function setStatus(t,nivel="ok"){
     b.dataset.nivel=nivel; b.title=t;
     b.textContent = nivel==="ok" ? "Guardado" : nivel==="aviso"&&!LOCAL ? "Solo en este navegador" : "Sin guardar";
   }
+  // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
+  document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
 const VERSION_NECESARIA=12;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
@@ -3952,6 +3954,8 @@ async function init(){
       if(remote.vacia){
         // Primera conexión: la base de datos empieza con lo que ya había en este navegador
         await api("POST","importar",snapshot());
+        // Instalación nueva: se anota que, de momento, solo hay los datos iniciales (nada escrito por la persona)
+        if(LOCAL&&!local) await AscensoLocal.marcarSemilla();
         remote=await api("GET","estado");
       }
       if((remote.version||0)<VERSION_NECESARIA){
@@ -3986,6 +3990,45 @@ async function init(){
   discoverImages();
 }
 init();
+
+// ---------- Cambios llegados de fuera: otro dispositivo de la cuenta u otra pestaña ----------
+// Se vuelve a leer todo de la base de datos del dispositivo y se repinta la vista actual. Si la persona está
+// escribiendo, arrastrando o tiene una ficha abierta, se espera a que termine: no se le quita nada de las manos.
+let refrescoPendiente=false, refrescando=false;
+function estaEditando(){
+  const a=document.activeElement;
+  // (Los cuadros de «nueva tarea», «nuevo evento», «nueva etiqueta» y el buscador no se repintan: ahí se puede seguir escribiendo)
+  if(a&&a!==document.body&&(a.isContentEditable||(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!/^(checkbox|radio|button|file|color)$/.test(a.type||"")))
+     &&!a.matches("#tnew,#evnew,#tagname,#bv-q")&&!a.closest("#cuentadlg")) return true;
+  if(document.querySelector("dialog[open]:not(#cuentadlg)")) return true;
+  return !!(drag||bdrag||!pad.hidden||(MG&&(MG.drag||MG.wire||MG.rect)));
+}
+const guardadoEnCurso=()=>syncing||!!syncTimer||!!saveSoonT;
+async function refrescarDatos(){
+  if(!LOCAL||!online) return;
+  refrescoPendiente=true;
+  if(refrescando||estaEditando()||guardadoEnCurso()) return;      // se reintenta enseguida (ver más abajo)
+  refrescando=true;
+  try{
+    refrescoPendiente=false;
+    let remote=await api("GET","estado");
+    if(estaEditando()||guardadoEnCurso()){ refrescoPendiente=true; return; }
+    if(remote.vacia){
+      // Se han borrado los datos de este dispositivo (al cerrar sesión o al sustituirlos por los de una cuenta vacía)
+      state=cleanState(SEED);
+      await api("POST","importar",snapshot()); await AscensoLocal.marcarSemilla();
+      remote=await api("GET","estado");
+    }
+    state=cleanState(remote);
+    attMeta=remote.att&&typeof remote.att==="object"?remote.att:{};
+    synced=snapshot();
+    renderAll(); renderBoards(); renderCal();
+  }catch(e){ refrescoPendiente=true; }
+  finally{ refrescando=false; }
+}
+document.addEventListener("ascenso:datos-externos",refrescarDatos);
+setInterval(()=>{ if(refrescoPendiente) refrescarDatos(); },1200);
+document.addEventListener("focusout",()=>{ if(refrescoPendiente) setTimeout(refrescarDatos,150); });
 // Versión clásica: aviso al servidor de que la ventana sigue abierta (y otro al volver a verla, tras minimizarla
 // o al despertar el equipo). Con los datos en el dispositivo no hay servidor al que avisar.
 if(API&&!LOCAL){ const latido=()=>fetch("api/ping").catch(()=>{}); latido(); setInterval(latido,20000);

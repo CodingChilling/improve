@@ -54,18 +54,26 @@ window.AscensoLocal=(()=>{
   let mem=null, lista=null;
   const escuchas=[];
   const canal=typeof BroadcastChannel==="function"?new BroadcastChannel("ascenso"):null;
-  let ultimoMs=0;
-  // Marca de tiempo de cada cambio (ISO, UTC); nunca retrocede dentro de este dispositivo
-  function ahora(){ ultimoMs=Math.max(Date.now(),ultimoMs+1); return new Date(ultimoMs).toISOString(); }
+  let ultimoMs=0, dispositivo="";
+  // Marca de tiempo de cada cambio (ISO, UTC): nunca retrocede en este dispositivo y siempre es posterior
+  // a la versión del registro que sustituye (así un cambio hecho aquí gana a lo que ya se había visto)
+  function ahora(previa){
+    ultimoMs=Math.max(Date.now(),ultimoMs+1,previa?Date.parse(previa)+1||0:0);
+    return new Date(ultimoMs).toISOString();
+  }
+  const idAleatorio=()=>{ const b=crypto.getRandomValues(new Uint8Array(12)); return "d"+[...b].map(x=>x.toString(16).padStart(2,"0")).join(""); };
 
   async function cargar(){
     const m={}; for(const t of TABLAS) m[t]=new Map();
     for(const r of await Almacen.todos("registros")){
       if(!m[r.tabla]) continue;
       m[r.tabla].set(r.id,r);
-      const ms=Date.parse(r.actualizado); if(ms>ultimoMs&&ms<Date.now()+60000) ultimoMs=ms;
     }
     mem=m;
+    if(!dispositivo){
+      dispositivo=await Almacen.meta("dispositivo");
+      if(!dispositivo){ dispositivo=idAleatorio(); await Almacen.ponerMeta("dispositivo",dispositivo); }
+    }
   }
   function preparar(){
     if(!lista){
@@ -81,7 +89,11 @@ window.AscensoLocal=(()=>{
   // Otra pestaña ha guardado algo: se vuelve a leer la base de datos
   if(canal) canal.onmessage=e=>{
     if(!e.data||e.data.tipo!=="cambio"||!mem) return;
-    encolar(cargar).then(()=>document.dispatchEvent(new CustomEvent("ascenso:datos-externos"))).catch(()=>{});
+    encolar(cargar).then(()=>{
+      for(const u of urls.values()) URL.revokeObjectURL(u); urls.clear();
+      document.dispatchEvent(new CustomEvent("ascenso:datos-externos"));
+      for(const f of escuchas){ try{ f([]); }catch(err){} }
+    }).catch(()=>{});
   };
 
   // ---- operación en curso: los cambios se acumulan y se guardan todos a la vez (o ninguno) ----
@@ -110,7 +122,7 @@ window.AscensoLocal=(()=>{
       const prev=mem[c.tabla].get(c.id);
       if(c.borrado){ if(!prev||prev.borrado) continue; }
       else if(prev&&!prev.borrado&&JSON.stringify(prev.valores)===JSON.stringify(c.valores)&&!op.blobs.has(c.id)) continue;
-      regs.push({tabla:c.tabla,id:c.id,actualizado:ahora(),borrado:c.borrado,valores:c.valores});
+      regs.push({tabla:c.tabla,id:c.id,actualizado:ahora(prev&&prev.actualizado),borrado:c.borrado,valores:c.valores,dispositivo});
     }
     if(!regs.length) return [];
     await Almacen.tx(["registros","pendientes","adjuntos"],"readwrite",s=>{
@@ -576,6 +588,77 @@ window.AscensoLocal=(()=>{
     return HUECO;
   }
 
+  // ---------------------------------------------------------------- sincronización con la cuenta
+  // ¿Gana la versión «a» a la «b»? El último cambio según «actualizado»; si empatan, el dispositivo mayor
+  const gana=(a,b)=>!b||a.actualizado>b.actualizado||(a.actualizado===b.actualizado&&(a.dispositivo||"")>(b.dispositivo||""));
+  const registroValido=r=>esDic(r)&&TABLAS.includes(r.tabla)&&typeof r.id==="string"&&r.id.length>0&&r.id.length<=40
+    &&typeof r.actualizado==="string"&&!Number.isNaN(Date.parse(r.actualizado))&&(r.borrado===true||esDic(r.valores));
+
+  // Aplica cambios llegados de otros dispositivos, sin volver a apuntarlos como pendientes.
+  // «meta» son ajustes que se guardan en la misma transacción (por ejemplo, el último cambio recibido).
+  function aplicarRemotos(remotos,meta){
+    return encolar(async()=>{
+      await preparar();
+      const pendientes=new Map((await Almacen.todos("pendientes")).map(p=>[p.tabla+"\u0000"+p.id,p]));
+      const ganan=new Map(), reafirmar=new Map();
+      for(const r of remotos){
+        if(!registroValido(r)) continue;
+        const k=r.tabla+"\u0000"+r.id, local=ganan.get(k)||mem[r.tabla].get(r.id);
+        const reg={tabla:r.tabla,id:r.id,actualizado:r.actualizado,borrado:r.borrado===true,valores:r.borrado===true?null:r.valores,dispositivo:String(r.dispositivo||"")};
+        if(gana(reg,local)){ ganan.set(k,reg); reafirmar.delete(k); }
+        // Lo de aquí es más reciente y ya se había enviado: se vuelve a enviar, para que lo último que tenga la cuenta sea lo que vale
+        else if(local&&(local.dispositivo||dispositivo)===dispositivo&&!pendientes.has(k)&&(local.actualizado!==reg.actualizado||local.dispositivo!==reg.dispositivo)) reafirmar.set(k,local);
+      }
+      await Almacen.tx(["registros","pendientes","adjuntos","meta"],"readwrite",s=>{
+        for(const [k,r] of ganan){
+          s.registros.put(r);
+          if(pendientes.has(k)) s.pendientes.delete([r.tabla,r.id]);          // el cambio local pendiente ha perdido
+          if(r.tabla==="adjuntos"&&r.borrado) s.adjuntos.delete(r.id);
+        }
+        for(const r of reafirmar.values()) s.pendientes.put({tabla:r.tabla,id:r.id,actualizado:r.actualizado,borrado:r.borrado,datos:r.valores});
+        for(const [clave,valor] of Object.entries(meta||{})) s.meta.put({clave,valor});
+      });
+      for(const r of ganan.values()){
+        mem[r.tabla].set(r.id,r);
+        const ms=Date.parse(r.actualizado); if(ms>ultimoMs&&ms<Date.now()+300000) ultimoMs=ms;
+        if(r.tabla==="adjuntos"&&r.borrado){ const u=urls.get(r.id); if(u){ URL.revokeObjectURL(u); urls.delete(r.id); } }
+      }
+      if(ganan.size){
+        if(canal) canal.postMessage({tipo:"cambio"});
+        document.dispatchEvent(new CustomEvent("ascenso:datos-externos"));
+      }
+      return {aplicados:ganan.size,reenviar:reafirmar.size};
+    });
+  }
+  // Apunta todo lo que hay en este dispositivo como pendiente de enviar (al unirlo a una cuenta)
+  const encolarTodo=()=>encolar(async()=>{
+    await preparar();
+    await Almacen.tx(["pendientes"],"readwrite",s=>{
+      for(const t of TABLAS) for(const r of mem[t].values()) s.pendientes.put({tabla:r.tabla,id:r.id,actualizado:r.actualizado,borrado:r.borrado,datos:r.valores});
+    });
+  });
+  // Borra los datos de este dispositivo (no la cuenta ni el identificador del dispositivo)
+  const vaciarDatos=()=>encolar(async()=>{
+    await preparar();
+    await Almacen.tx(["registros","pendientes","adjuntos","meta"],"readwrite",s=>{
+      s.registros.clear(); s.pendientes.clear(); s.adjuntos.clear(); s.meta.delete("huerfanos"); s.meta.delete("semilla");
+    });
+    for(const u of urls.values()) URL.revokeObjectURL(u); urls.clear();
+    for(const t of TABLAS) mem[t]=new Map();
+    if(canal) canal.postMessage({tipo:"cambio"});
+  });
+  // Datos iniciales de una instalación nueva: se anota cuándo se pusieron, para saber si después se ha escrito algo propio
+  const marcarSemilla=()=>encolar(async()=>{ await preparar(); await Almacen.ponerMeta("semilla",new Date(ultimoMs||Date.now()).toISOString()); });
+  const hayDatosPropios=()=>encolar(async()=>{
+    await preparar();
+    const semilla=await Almacen.meta("semilla");
+    // (El historial lo apunta la página sola cada día: no cuenta como algo escrito por la persona)
+    for(const t of TABLAS) if(t!=="historial") for(const r of mem[t].values()) if(!semilla||r.actualizado>semilla) return true;
+    return false;
+  });
+  // Guarda el contenido de una imagen descargada de la cuenta
+  const guardarBlob=(id,tipo,datos)=>Almacen.guardar("adjuntos",{id,tipo,datos});
+
   // ---------------------------------------------------------------- rutas
   async function atender(metodo,ruta,cuerpo){
     ruta=String(ruta).replace(/^\/?(api\/)?/,"");
@@ -609,9 +692,11 @@ window.AscensoLocal=(()=>{
 
   return {
     api, urlAdjunto, limpiarAdjuntos, preparar,
+    // Para la sincronización con la cuenta (sync.js)
     alCambiar:f=>{ escuchas.push(f); },
-    // Enganches para la sincronización con la cuenta (sync.js)
-    _interno:()=>({get mem(){ return mem; },Operacion,confirmar,encolar,cargar,ahora,urls,TABLAS,
-      ponerAlFaltar:f=>{ alFaltar=f; }, ponerLimpiezaPermitida:f=>{ limpiezaPermitida=f; }}),
+    dispositivo:()=>preparar().then(()=>dispositivo),
+    aplicarRemotos, encolarTodo, vaciarDatos, marcarSemilla, hayDatosPropios, guardarBlob,
+    alFaltarAdjunto:f=>{ alFaltar=f; },
+    permitirLimpieza:f=>{ limpiezaPermitida=f; },
   };
 })();

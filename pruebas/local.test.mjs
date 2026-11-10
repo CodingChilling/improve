@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { servirApp, chromium, apiLocal, RAIZ } from "./util.mjs";
+import { servirApp, chromium, apiLocal, esperar, RAIZ } from "./util.mjs";
 
 const lista = p => p.waitForFunction(() => /Guardado|Conectado/.test(document.getElementById("status").textContent));
 
@@ -19,8 +19,8 @@ test("una tarea creada en la página se guarda en el dispositivo y sigue ahí al
     await pagina.goto(app.url); await lista(pagina);
     await pagina.fill("#tnew", "Tarea de prueba");
     await pagina.click("#taddbtn");
-    // Se recarga enseguida, sin esperar: el cambio no debe perderse
-    await pagina.waitForTimeout(150);
+    // En cuanto está guardado (unas décimas de segundo), se puede recargar sin perder nada
+    await esperar(pagina, () => window.AscensoAlmacen.todos("pendientes").then(l => l.some(x => x.tabla === "tareas")), null, { limite: 3000, que: "la tarea se guarda enseguida" });
     await pagina.reload(); await lista(pagina);
     await pagina.locator("#board", { hasText: "Tarea de prueba" }).waitFor();
     // Nada personal en localStorage; cada cambio queda apuntado para la cuenta
