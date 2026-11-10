@@ -2,7 +2,8 @@
 """
 Prepara los archivos que la aplicación instalable (PWA) necesita y que dependen de lo que hay en la carpeta:
 
-    assets/images/lista.json   lista de las imágenes del día (el navegador no puede mirar la carpeta)
+    assets/images/lista.json   lista de las imágenes del día (el navegador no puede mirar la carpeta).
+                               Va en el repositorio: ejecútalo y sube el cambio al añadir o quitar imágenes.
     assets/precache.js         versión y lista de archivos que el service worker guarda en el dispositivo
     ascenso.html               la política de seguridad (CSP), con el proyecto de Supabase de assets/js/config.js
 
