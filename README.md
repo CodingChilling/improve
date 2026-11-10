@@ -233,8 +233,11 @@ y `.perfil-app/`.
 Copia las imágenes en `assets/images/`. Si el nombre de un archivo contiene el de un autor
 (`seneca`, `marco-aurelio`, `epicteto`, `zenon`, `montaigne`...), aparece los días en que la frase es suya.
 
-En la aplicación instalable, las imágenes son las que hay en el repositorio al publicar. Se van guardando en el
-dispositivo en segundo plano para verlas también sin conexión.
+En la aplicación instalable, las imágenes son las que hay en el repositorio al publicar, y las ve todo el que use
+la aplicación. Se van guardando en el dispositivo en segundo plano para verlas también sin conexión.
+
+La aplicación las encuentra por la lista `assets/images/lista.json`. Al añadir o quitar imágenes, actualízala con
+`python3 herramientas/generar.py` y sube el cambio (al publicar en GitHub Pages, el workflow lo hace solo).
 
 ## Base de datos
 

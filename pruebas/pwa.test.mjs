@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { servirApp, sitioPublicado, chromium, apiLocal, paginaLista, esperar } from "./util.mjs";
+import { servirApp, sitioPublicado, chromium, apiLocal, paginaLista, esperar, RAIZ } from "./util.mjs";
 
 test("solo se publica la aplicación, con rutas relativas", () => {
   const sitio = sitioPublicado();
@@ -26,6 +26,15 @@ test("solo se publica la aplicación, con rutas relativas", () => {
     assert.doesNotMatch(csp, /unsafe-eval|\*/);
     assert.match(csp, /script-src 'self';/);
   } finally { sitio.borrar(); }
+});
+
+test("la lista de imágenes del día que hay en el repositorio está al día", () => {
+  // assets/images/lista.json va en el repositorio para que las imágenes salgan en cualquier alojamiento, aunque no se
+  // ejecute el generador. Si esta prueba falla: python3 herramientas/generar.py y subir el cambio.
+  const EXT = /\.(jpe?g|png|webp|gif|avif)$/i, carpeta = path.join(RAIZ, "assets", "images");
+  const enCarpeta = fs.readdirSync(carpeta).filter(f => EXT.test(f)).sort();
+  const enLista = JSON.parse(fs.readFileSync(path.join(carpeta, "lista.json"), "utf8")).map(i => i.nombre).sort();
+  assert.deepEqual(enLista, enCarpeta);
 });
 
 test("se instala, abre sin conexión y avisa de una versión nueva", async () => {

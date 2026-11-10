@@ -24,7 +24,6 @@ desktop.ini
 .vscode/
 .idea/
 # ---- Generado al publicar (herramientas/generar.py) ----
-assets/images/lista.json
 assets/precache.js
 _sitio/
 
