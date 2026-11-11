@@ -5318,3 +5318,42 @@ label,
     align-self: center;
   }
 }
+
+/* El navegador sabe que hay modo oscuro: pinta a juego sus propias piezas (la barra de botones de Android,
+   los selectores de fecha, las barras de desplazamiento) */
+:root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+/* Móvil: los cuatro tipos de entreno caben en una sola fila. Un nombre de dos palabras ocupa dos renglones;
+   las palabras no se parten y, si aun así no cupieran (nombres propios muy largos), la fila se desliza */
+@media (max-width: 699px) {
+  .plan {
+    flex-wrap: nowrap;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .plan::-webkit-scrollbar {
+    display: none;
+  }
+  .plan button {
+    flex: 1 1 auto;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 8px 5px 6px;
+    font-size: 0.78rem;
+    line-height: 1.15;
+    text-align: left;
+  }
+  .plan button b {
+    flex: none;
+    width: 8px;
+    height: 8px;
+  }
+}
