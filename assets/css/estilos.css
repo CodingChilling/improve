@@ -6244,3 +6244,46 @@ body.leyendo .barra {
     margin: -8px 0;
   }
 }
+
+/* Confirmación para cambiar la imagen del día: aparece sobre el propio marco */
+.frame {
+  position: relative;
+}
+.frame-ask {
+  position: absolute;
+  inset: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 2px;
+  background: rgba(15, 20, 22, 0.72);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  animation: rise 0.15s both;
+}
+.frame-ask div {
+  display: flex;
+  gap: 8px;
+}
+.frame-ask button {
+  min-width: 46px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.frame-ask button[data-si] {
+  background: #fff;
+  border-color: #fff;
+  color: #1f2a2e;
+}

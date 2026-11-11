@@ -508,8 +508,31 @@ function nextFrame(){
   if(IMAGES.length<2) return;
   const [k,author]=frameArgs; imageFor(k,author,true); renderFrame(k,author);
 }
-document.getElementById("frame").addEventListener("click",nextFrame);
-document.getElementById("frame").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); nextFrame(); } });
+// Cambiar la imagen pide confirmación (es fácil tocar el marco sin querer): la primera pulsación pregunta,
+// sobre el propio marco, y solo «Sí» la cambia. La pregunta se va sola a los pocos segundos, con Esc o pulsando fuera.
+const frameEl=document.getElementById("frame");
+let frameAsk=null, frameAskT=null;
+function closeFrameAsk(){ clearTimeout(frameAskT); if(frameAsk){ frameAsk.remove(); frameAsk=null; } }
+function askFrame(teclado){
+  if(IMAGES.length<2) return;
+  if(frameAsk){ closeFrameAsk(); return; }
+  frameAsk=document.createElement("div"); frameAsk.className="frame-ask"; frameAsk.setAttribute("role","group"); frameAsk.setAttribute("aria-label","¿Cambiar la imagen?");
+  frameAsk.innerHTML='<span>¿Otra imagen?</span><div><button type="button" data-si>Sí</button><button type="button" data-no>No</button></div>';
+  frameEl.appendChild(frameAsk);
+  if(teclado) frameAsk.querySelector("[data-si]").focus();
+  frameAskT=setTimeout(closeFrameAsk,6000);
+}
+frameEl.addEventListener("click",e=>{
+  if(e.target.closest("[data-si]")){ closeFrameAsk(); nextFrame(); }
+  else if(e.target.closest(".frame-ask")) closeFrameAsk();
+  else askFrame(false);
+});
+frameEl.addEventListener("keydown",e=>{
+  if(e.target!==frameEl) return;                               // los botones de la pregunta se manejan solos
+  if(e.key==="Enter"||e.key===" "){ e.preventDefault(); askFrame(true); }
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&frameAsk){ const dentro=frameAsk.contains(document.activeElement); closeFrameAsk(); if(dentro) frameEl.focus(); } });
+document.addEventListener("pointerdown",e=>{ if(frameAsk&&!frameEl.contains(e.target)) closeFrameAsk(); });
 // ---------- Historial: frase e imagen de cada día, sin repetir hasta agotar todas ----------
 const pickRandom=arr=>arr[Math.floor(Math.random()*arr.length)];
 // Recorre el historial por fechas y devuelve lo ya usado en la ronda actual de un conjunto

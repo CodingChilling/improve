@@ -104,6 +104,17 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     await ir("hoy");
     await esperar(pagina, () => scrollY === 0, null, { que: "la pantalla vuelve arriba" });
 
+    // ---- La imagen del día no cambia con un toque suelto: pregunta primero
+    await esperar(pagina, () => { const i = document.querySelector("#frame img.on"); return !!i && i.naturalWidth > 0; }, null, { que: "la imagen del día se carga" });
+    const imagen = () => pagina.evaluate(() => document.querySelector("#frame img.on").getAttribute("src"));
+    const primera = await imagen();
+    await pagina.tap("#frame"); await pagina.locator(".frame-ask").waitFor();
+    assert.equal(await imagen(), primera, "un toque solo pregunta");
+    await pagina.tap(".frame-ask [data-no]");
+    assert.equal(await pagina.locator(".frame-ask").count(), 0); assert.equal(await imagen(), primera, "«No» la deja como estaba");
+    await pagina.tap("#frame"); await pagina.tap(".frame-ask [data-si]");
+    await esperar(pagina, a => document.querySelector("#frame img.on").getAttribute("src") !== a, primera, { que: "«Sí» cambia la imagen" });
+
     // ---- Al escribir, la barra se aparta
     await pagina.tap("#tnew");
     assert.ok(await pagina.evaluate(() => document.body.classList.contains("con-teclado")), "con el teclado, la barra se esconde");

@@ -72,7 +72,9 @@ mientras escribes, sin botones. Los días en que hay algo escrito, las comillas 
 
 ### Imagen del día (el marco)
 
-Al pulsar el marco se elige otra imagen para ese día, que queda guardada en el historial.
+Al pulsar el marco, Ascenso pregunta sobre la propia imagen si quieres otra («Sí» o «No»), para que un toque sin
+querer no la cambie. Con «Sí» se elige otra imagen para ese día, que queda guardada en el historial. La pregunta se
+va sola a los pocos segundos, con <kbd>Esc</kbd> o pulsando fuera.
 
 ### Librería (el nombre del autor de la frase)
 
