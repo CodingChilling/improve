@@ -90,7 +90,7 @@ también en la barra de abajo. No existe en la versión clásica.
   se le escribe una nota o se quita. El botón del lápiz reúne todos los del libro y lleva a cada uno. En un PDF
   escaneado (sin texto) no hay nada que seleccionar.
 - **Con cuenta**, la ficha, la lectura y los subrayados se sincronizan cifrados, como todo lo demás. El archivo del
-  libro también, si pesa menos de 50 MB (el máximo por archivo del plan gratuito de Supabase): en los demás
+  libro también, si pesa menos de 16 MB (el tope por archivo del almacén de la cuenta): en los demás
   dispositivos se descarga la primera vez que lo abres. Un libro más grande se queda en el dispositivo donde lo
   añadiste; en los otros aparece en la estantería y se puede elegir ahí el archivo.
 - Los libros **no entran en la copia de seguridad** (pesarían demasiado) y quitar un libro lo quita de todos tus
@@ -156,9 +156,6 @@ Solo hace falta si quieres sincronizar. Paso a paso:
 2. **Ejecuta la migración**: *SQL Editor → New query*, pega el contenido de
    `supabase/migraciones/001_inicial.sql` y pulsa *Run*. Crea las tablas, las reglas de acceso (RLS), el
    almacén privado de imágenes y libros y activa los avisos en tiempo real. Se puede ejecutar más de una vez.
-   Si tu proyecto ya existía antes de la librería, ejecuta además `supabase/migraciones/002_libreria.sql`: sube de
-   16 a 50 MB el tamaño máximo por archivo, para que quepan los libros. Sin ese paso, los libros de más de 16 MB
-   no se suben (se quedan en el dispositivo y Ascenso lo vuelve a intentar cada vez que se abre).
 3. **Comprueba Realtime**: en *Database → Publications*, la publicación `supabase_realtime` debe incluir la tabla
    `cambios` (la migración ya la añade).
 4. **Email de confirmación**: en *Authentication → Sign In / Providers → Email*, deja activado «Confirm email».
