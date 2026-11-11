@@ -104,11 +104,11 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------- Storage: imágenes de las libretas y libros (cifrados)
--- Cada archivo va en <user_id>/<etiqueta opaca>. El bucket es privado y con un tope de 50 MB por archivo
--- (el máximo del plan gratuito; los libros más grandes se quedan en el dispositivo donde se añadieron).
+-- Cada archivo va en <user_id>/<etiqueta opaca>. El bucket es privado y con un tope de 16 MB por archivo
+-- (los libros más grandes se quedan en el dispositivo donde se añadieron).
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('adjuntos', 'adjuntos', false, 52428800)
-on conflict (id) do update set public = false, file_size_limit = 52428800;
+values ('adjuntos', 'adjuntos', false, 16777216)
+on conflict (id) do update set public = false, file_size_limit = 16777216;
 
 drop policy if exists adjuntos_ver on storage.objects;
 drop policy if exists adjuntos_subir on storage.objects;

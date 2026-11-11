@@ -17,9 +17,9 @@ window.AscensoSync=(()=>{
   const URL_BASE=String(config.supabaseUrl||"").replace(/\/+$/,""), CLAVE_PUBLICA=String(config.supabaseClave||"");
   const disponible=!config.clasico&&!!URL_BASE&&!!CLAVE_PUBLICA&&!!Local&&!!Cifrado&&typeof crypto==="object"&&!!crypto.subtle;
   const ESPERA_SUBIDA=800, LOTE_FILAS=40, LOTE_BYTES=3000000, PAGINA=100;
-  // Un libro de la librería solo se sube a la cuenta si cabe en el tope por archivo del almacenamiento (50 MB, con margen
+  // Un libro de la librería solo se sube a la cuenta si cabe en el tope por archivo del almacenamiento (16 MB, con margen
   // para el cifrado); los más grandes se quedan en el dispositivo donde se añadieron
-  const LIMITE_ARCHIVO=50*1024*1024-4096;
+  const LIMITE_ARCHIVO=16*1024*1024-4096;
   // Versión de lo que este código sabe leer. Al subir, se vuelve a descargar todo una vez: una versión anterior de
   // Ascenso pudo saltarse registros de tablas que no conocía (la librería)
   const ESQUEMA=2;
