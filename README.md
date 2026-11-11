@@ -201,6 +201,7 @@ assets/
   js/cifrado.js           Derivación de claves y cifrado (WebCrypto)
   js/sync.js              Sincronización con la cuenta (Supabase)
   js/cuenta.js            Panel de la cuenta
+  js/movil.js             Barra de navegación del móvil y botón «atrás» del teléfono
   js/pwa.js               Registro del service worker y aviso de versión nueva
   icono/                  Iconos de la aplicación
   images/                 Imágenes del marco

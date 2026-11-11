@@ -5009,3 +5009,312 @@ dialog.tdlg.cuenta {
 .cuenta .c-dispositivos .c-nota {
   margin-top: 10px;
 }
+
+/* ======================================================================
+   Móvil y pantallas táctiles
+   ====================================================================== */
+/* Barra de navegación de abajo: solo en pantallas estrechas (la maneja assets/js/movil.js) */
+.barra {
+  display: none;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+button,
+summary,
+label,
+[role="button"],
+[role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;          /* sin la espera del doble toque */
+}
+/* Los campos de la configuración ya no se salen de su recuadro */
+.hcfg input[type="text"],
+.typecfg input[type="text"] {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+@media (max-width: 699px) {
+  :root {
+    --barra: 58px;
+  }
+  .barra {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    display: flex;
+    justify-content: space-around;
+    box-sizing: border-box;
+    height: calc(var(--barra) + env(safe-area-inset-bottom, 0px));
+    padding: 0 max(6px, env(safe-area-inset-left, 0px)) env(safe-area-inset-bottom, 0px) max(6px, env(safe-area-inset-right, 0px));
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
+    border-top: 1px solid var(--line);
+    transition: transform 0.2s ease;
+  }
+  .barra button {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .barra button[hidden] {
+    display: none;
+  }
+  .barra svg {
+    box-sizing: content-box;
+    width: 22px;
+    height: 22px;
+    padding: 3px 16px;
+    border-radius: 999px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: background-color 0.2s ease;
+  }
+  .barra button[aria-current="page"] {
+    color: var(--ink);
+  }
+  .barra button[aria-current="page"] svg {
+    background: var(--soft);
+    color: var(--gold);
+  }
+  .barra button:active svg {
+    background: var(--line);
+  }
+  .barra button:focus-visible {
+    outline-offset: -4px;
+  }
+  .b-punto {
+    position: absolute;
+    top: 9px;
+    left: calc(50% + 9px);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    background: var(--active);
+  }
+  .b-punto[hidden] {
+    display: none;
+  }
+  .b-punto[data-estado="sincronizando"] {
+    background: var(--strength);
+    animation: latido 1.1s ease-in-out infinite;
+  }
+  .b-punto[data-estado="sin-conexion"] {
+    background: var(--climb);
+  }
+  .b-punto[data-estado="error"] {
+    background: var(--p-urgente);
+  }
+  /* Con el teclado en pantalla la barra se esconde para no tapar lo que se escribe */
+  body.con-teclado .barra {
+    transform: translateY(110%);
+  }
+  /* Sitio para la barra al final de cada vista */
+  main {
+    padding: 22px 16px calc(40px + var(--barra));
+  }
+  .boards {
+    padding-bottom: calc(24px + var(--barra));
+  }
+  .aviso-version {
+    bottom: calc(12px + var(--barra) + env(safe-area-inset-bottom, 0px));
+  }
+  /* Al saltar a una sección desde la barra, el título no queda pegado arriba */
+  main section {
+    scroll-margin-top: 10px;
+  }
+  /* El estado de guardado ya no hace de botón escondido: la cuenta está en la barra */
+  .bv-sync {
+    font-size: 0.8rem;
+  }
+
+  /* Tableros: las listas se deslizan de una en una */
+  .bd-lists {
+    scroll-snap-type: x proximity;
+    scroll-padding-left: 14px;
+    overscroll-behavior-x: contain;
+  }
+  .bl,
+  .bl-add {
+    scroll-snap-align: start;
+  }
+
+  /* Fichas (tarea, tarjeta, cuenta): suben desde abajo y ocupan el ancho entero */
+  dialog.tdlg {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - 28px - env(safe-area-inset-top, 0px));
+    margin: auto 0 0;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overscroll-behavior: contain;
+    animation: subir 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* Calendario: ocupa el ancho de la pantalla, sin salirse */
+  .calpop {
+    max-height: calc(100dvh - 120px - var(--barra));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Configurar hábitos: los días ocupan toda la fila y las acciones van debajo */
+  .dchips {
+    flex: 1 1 100%;
+    gap: 5px;
+  }
+  .dchips button {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+  .cfgbody {
+    padding: 0 14px 18px;
+  }
+}
+@keyframes subir {
+  from {
+    transform: translateY(28px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes latido {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Con el dedo: todo lo que se pulsa mide al menos unos 44 px, y los campos usan letra de 16 px
+   (con menos, iPhone amplía la página al tocarlos) */
+@media (pointer: coarse), (max-width: 699px) {
+  .tadd select,
+  .thr select,
+  .hcfg input.desc,
+  .bv-search input,
+  .bl-newcard,
+  .d-list,
+  .d-date,
+  .c-list,
+  .c-due,
+  .c-newlabel,
+  .ck-t,
+  .ck-new,
+  #mn-pg {
+    font-size: 16px !important;        /* por encima de la regla propia de cada campo */
+  }
+  .nav button,
+  .cal-nav,
+  .cal-hoy {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .plan button,
+  .tadd select,
+  .thr select,
+  .trow .add,
+  .add,
+  .ttabs button,
+  .pk-item,
+  .bmenu button,
+  .bv-current,
+  .bv-search input,
+  .bl-newcard,
+  .ck-new,
+  .d-list,
+  .c-list,
+  .d-date,
+  .c-due {
+    min-height: 44px;
+  }
+  .d-prio button,
+  .acts button,
+  .dchips button,
+  .tg-del,
+  .c-newlabel,
+  .ck-t,
+  .mv-tools button {
+    min-height: 40px;
+  }
+  .acts button,
+  .mv-tools button {
+    min-width: 44px;
+  }
+  .tp,
+  .dev,
+  .mv-crumb {
+    min-height: 36px;
+  }
+  .dlg-x,
+  .bd-more,
+  .bl-more,
+  .bfav,
+  .ck-del,
+  .mv-help-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .row label {
+    min-height: 40px;
+  }
+  .row input[type="checkbox"],
+  .ck-box {
+    width: 22px;
+    height: 22px;
+  }
+  .swatches {
+    gap: 10px;
+  }
+  .sw,
+  .mv-head .sw {
+    width: 30px;
+    height: 30px;
+  }
+  .linklike {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .brand,
+  .bv-brand {
+    min-height: 44px;
+  }
+  /* Respuesta inmediata al tocar */
+  .task:active,
+  .bc:active,
+  .bcard:active,
+  .checks li:active {
+    transition: transform 0.08s ease;
+    transform: scale(0.985);
+  }
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .tagnew .add,
+  .tg-del {
+    align-self: center;
+  }
+}
