@@ -34,6 +34,7 @@ elementos que ya están en la página y que, a primera vista, parecen solo decor
 | Las **comillas** de la frase del día | La reflexión y las notas del día |
 | El **marco** de la imagen del día | Otra imagen para ese día |
 | El **texto de estado** («Guardado…», al pie de la página y en la cabecera de los tableros) | La cuenta y la sincronización |
+| El **nombre del autor** de la frase del día | La librería (solo en la aplicación instalable) |
 
 Todas se cierran con <kbd>Esc</kbd>, pulsando fuera o volviendo a pulsar el mismo elemento
 (en los tableros, pulsando de nuevo «Ascenso» para volver al día).
@@ -72,6 +73,28 @@ mientras escribes, sin botones. Los días en que hay algo escrito, las comillas 
 ### Imagen del día (el marco)
 
 Al pulsar el marco se elige otra imagen para ese día, que queda guardada en el historial.
+
+### Librería (el nombre del autor de la frase)
+
+En la aplicación instalable, el nombre del autor de la frase abre una estantería de libros. En el móvil está
+también en la barra de abajo. No existe en la versión clásica.
+
+- **Añadir libros** en **EPUB** o **PDF** (sin protección anticopia), con el botón o arrastrándolos a la ventana.
+  El título, el autor y la portada salen del propio archivo; se pueden corregir en la ficha del libro (⋯).
+- **Leer** dentro de Ascenso, también sin conexión. El EPUB se muestra con la letra y el tema del lector (no con los
+  estilos del libro); el PDF, página a página. Hay índice, y las flechas del teclado pasan de capítulo o de página.
+- **Se recuerda por dónde ibas** en cada libro, y la estantería muestra el porcentaje leído.
+- **Ajustes de lectura** (botón «Aa»): tamaño y tipo de letra en EPUB, tamaño de página en PDF y tema automático,
+  claro, sepia u oscuro. Son de cada dispositivo.
+- **Subrayados y notas**: selecciona un pasaje y elige un color o «Nota». Pulsando un subrayado se cambia su color,
+  se le escribe una nota o se quita. El botón del lápiz reúne todos los del libro y lleva a cada uno. En un PDF
+  escaneado (sin texto) no hay nada que seleccionar.
+- **Con cuenta**, la ficha, la lectura y los subrayados se sincronizan cifrados, como todo lo demás. El archivo del
+  libro también, si pesa menos de 50 MB (el máximo por archivo del plan gratuito de Supabase): en los demás
+  dispositivos se descarga la primera vez que lo abres. Un libro más grande se queda en el dispositivo donde lo
+  añadiste; en los otros aparece en la estantería y se puede elegir ahí el archivo.
+- Los libros **no entran en la copia de seguridad** (pesarían demasiado) y quitar un libro lo quita de todos tus
+  dispositivos, con sus subrayados.
 
 ### Cuenta y sincronización (el texto de estado)
 
@@ -132,7 +155,10 @@ Solo hace falta si quieres sincronizar. Paso a paso:
 1. Crea un proyecto en [supabase.com](https://supabase.com) (el plan gratuito basta).
 2. **Ejecuta la migración**: *SQL Editor → New query*, pega el contenido de
    `supabase/migraciones/001_inicial.sql` y pulsa *Run*. Crea las tablas, las reglas de acceso (RLS), el
-   almacén privado de imágenes y activa los avisos en tiempo real. Se puede ejecutar más de una vez.
+   almacén privado de imágenes y libros y activa los avisos en tiempo real. Se puede ejecutar más de una vez.
+   Si tu proyecto ya existía antes de la librería, ejecuta además `supabase/migraciones/002_libreria.sql`: sube de
+   16 a 50 MB el tamaño máximo por archivo, para que quepan los libros. Sin ese paso, los libros de más de 16 MB
+   no se suben (se quedan en el dispositivo y Ascenso lo vuelve a intentar cada vez que se abre).
 3. **Comprueba Realtime**: en *Database → Publications*, la publicación `supabase_realtime` debe incluir la tabla
    `cambios` (la migración ya la añade).
 4. **Email de confirmación**: en *Authentication → Sign In / Providers → Email*, deja activado «Confirm email».
@@ -202,11 +228,14 @@ assets/
   js/sync.js              Sincronización con la cuenta (Supabase)
   js/cuenta.js            Panel de la cuenta
   js/movil.js             Barra de navegación del móvil y botón «atrás» del teléfono
+  js/libreria.js          La librería: estantería y lector de EPUB y PDF, subrayados y notas
+  js/epub.js              Abre un EPUB y deja cada capítulo limpio para mostrarlo
   js/pwa.js               Registro del service worker y aviso de versión nueva
   icono/                  Iconos de la aplicación
   images/                 Imágenes del marco
   manifest.webmanifest    Datos de la aplicación para el navegador
-  vendor/                 KaTeX y Mermaid (fórmulas y diagramas de las libretas), con sus licencias
+  vendor/                 KaTeX y Mermaid (fórmulas y diagramas de las libretas) y pdf.js (para leer los PDF de
+                          la librería), con sus licencias
 supabase/migraciones/     SQL del proyecto de Supabase
 herramientas/generar.py   Prepara lo que se publica (lista de imágenes, precaché, política de seguridad)
 pruebas/                  Pruebas automáticas (ver pruebas/LEEME.md)
@@ -271,6 +300,12 @@ contraseña:
   exportarla, junto con la sesión, en IndexedDB. La contraseña no se guarda nunca. Nada de esto va a
   `localStorage` ni a la consola.
 
+**Los libros no son de fiar.** Un EPUB es, por dentro, una web: su contenido nunca se inserta tal cual. De cada
+capítulo se copian solo las etiquetas de texto conocidas, sin scripts, sin estilos y sin atributos que no estén en
+una lista corta; las imágenes salen del propio archivo y los enlaces de fuera se abren en otra pestaña. Los PDF los
+dibuja pdf.js (incluido en el repositorio, sin servicios externos) en un lienzo, sin `eval` ni WebAssembly, de modo
+que la política de seguridad de la página no se relaja.
+
 **Qué ve Supabase (el servidor):**
 
 - tu email y la clave de acceso (que no sirve para descifrar);
@@ -322,4 +357,5 @@ SQL de Supabase. Cómo lanzarlas: [`pruebas/LEEME.md`](pruebas/LEEME.md).
 ## Créditos
 
 - Frases: autores clásicos de dominio público; traducciones propias.
+- pdf.js (Mozilla), bajo licencia Apache 2.0 (ver `assets/vendor/pdfjs/LICENSE`).
 - Tipografías: Cormorant Garamond y Figtree, bajo SIL Open Font License 1.1 (ver `assets/css/LICENCIA-FUENTES.txt`).

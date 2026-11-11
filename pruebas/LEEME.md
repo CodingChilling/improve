@@ -31,7 +31,8 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 |---|---|
 | `paridad.test.mjs` | `servidor-local.js` responde igual que `servidor.py` a más de cien operaciones (válidas y no válidas), y la copia que exporta la versión de Python se importa tal cual. |
 | `local.test.mjs` | La página guarda en IndexedDB y no en `localStorage`; migración de datos antiguos; imágenes de las libretas y limpieza de huérfanas; la versión clásica sigue funcionando. |
-| `movil.test.mjs` | iPhone y Android emulados: nada desborda la pantalla; arrastrar tareas, tarjetas y nodos con el dedo; zoom con dos dedos. |
+| `movil.test.mjs` | iPhone y Android emulados: nada desborda la pantalla; arrastrar tareas, tarjetas y nodos con el dedo; zoom con dos dedos; la barra de abajo, el botón «atrás» y los tamaños para el dedo. |
+| `libreria.test.mjs` | La librería: añadir un EPUB y un PDF (generados en `libros.mjs`), que el contenido hostil de un libro no llegue a la página, leer, índice, subrayados y notas, posición recordada, ajustes, móvil, y sincronización cifrada entre dos dispositivos. |
 | `pwa.test.mjs` | Lo que se publica en GitHub Pages: solo la aplicación, rutas relativas, política de seguridad, funcionamiento sin conexión y aviso de versión nueva. |
 | `cifrado.test.mjs` | Derivación de claves, cifrado de ida y vuelta, claves equivocadas y contenido manipulado. |
 | `sync.test.mjs` | Dos dispositivos con la misma cuenta: altas, cambios, borrados (también en cascada), edición sin conexión, conflictos, imágenes, dos pestañas, sesión recordada. Y que el servidor no recibe nada sin cifrar. |

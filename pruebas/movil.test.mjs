@@ -101,9 +101,6 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     await ir("tareas");
     await esperar(pagina, () => Math.abs(document.querySelector("section.tasks").getBoundingClientRect().top) < 40, null, { que: "la pantalla baja hasta las tareas" });
     assert.equal(await actual(), "tareas");
-    await ir("progreso");
-    await esperar(pagina, () => document.getElementById("h-prog").getBoundingClientRect().top < 200, null, { que: "la pantalla baja hasta el progreso" });
-    assert.equal(await actual(), "progreso");
     await ir("hoy");
     await esperar(pagina, () => scrollY === 0, null, { que: "la pantalla vuelve arriba" });
 

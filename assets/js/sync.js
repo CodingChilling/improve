@@ -17,6 +17,12 @@ window.AscensoSync=(()=>{
   const URL_BASE=String(config.supabaseUrl||"").replace(/\/+$/,""), CLAVE_PUBLICA=String(config.supabaseClave||"");
   const disponible=!config.clasico&&!!URL_BASE&&!!CLAVE_PUBLICA&&!!Local&&!!Cifrado&&typeof crypto==="object"&&!!crypto.subtle;
   const ESPERA_SUBIDA=800, LOTE_FILAS=40, LOTE_BYTES=3000000, PAGINA=100;
+  // Un libro de la librería solo se sube a la cuenta si cabe en el tope por archivo del almacenamiento (50 MB, con margen
+  // para el cifrado); los más grandes se quedan en el dispositivo donde se añadieron
+  const LIMITE_ARCHIVO=50*1024*1024-4096;
+  // Versión de lo que este código sabe leer. Al subir, se vuelve a descargar todo una vez: una versión anterior de
+  // Ascenso pudo saltarse registros de tablas que no conocía (la librería)
+  const ESQUEMA=2;
 
   // ---------------------------------------------------------------- peticiones
   class ErrorRed extends Error{ constructor(){ super("sin conexión"); } }
@@ -120,8 +126,24 @@ window.AscensoSync=(()=>{
     try{ await conSesion(t=>pedir(ruta,{metodo:"POST",cuerpo:cifrado,token:t})); }
     catch(e){ if(!(e instanceof ErrorServidor)||!(e.estado===409||/duplicate|exists/i.test(e.codigo+" "+e.message))) throw e; }   // ya estaba subida
   }
+  // Libros cuyo archivo no se pudo subir: se vuelve a intentar una vez cada vez que se abre Ascenso
+  async function anotarSinSubir(id,falta){
+    const l=new Set((await Almacen.meta("archivos_sin_subir"))||[]);
+    if(l.has(id)===falta) return;
+    if(falta) l.add(id); else l.delete(id);
+    await Almacen.ponerMeta("archivos_sin_subir",[...l]);
+  }
+  let reintentado=false;
+  async function reintentarArchivos(c){
+    if(reintentado) return; reintentado=true;
+    for(const id of (await Almacen.meta("archivos_sin_subir"))||[]){
+      try{ await subirAdjunto(c,id); await anotarSinSubir(id,false); }
+      catch(e){ if(!(e instanceof ErrorServidor)||e.estado===401||e.estado>=500) throw e; }
+    }
+  }
   async function subir(){
     const c=cuenta;
+    await reintentarArchivos(c);
     for(;;){
       const todos=(await Almacen.todos("pendientes")).sort((a,b)=>a.actualizado<b.actualizado?-1:1);
       pendientes=todos.length;
@@ -129,7 +151,14 @@ window.AscensoSync=(()=>{
       poner("sincronizando");
       const lote=[], filas=[]; let bytes=0;
       for(const p of todos){
-        if(p.tabla==="adjuntos"){
+        if(p.tabla==="archivos"&&!p.borrado){
+          // El archivo de un libro: si la cuenta no lo admite (demasiado grande para el almacenamiento), se anota y se sigue
+          if(p.datos&&p.datos.bytes<=LIMITE_ARCHIVO){
+            try{ await subirAdjunto(c,p.id); await anotarSinSubir(p.id,false); }
+            catch(e){ if(!(e instanceof ErrorServidor)||e.estado===401||e.estado>=500) throw e; await anotarSinSubir(p.id,true); }
+          }
+        }
+        else if(p.tabla==="adjuntos"||p.tabla==="archivos"){
           if(!p.borrado) await subirAdjunto(c,p.id);
           else { try{ await conSesion(async t=>pedir(await rutaAdjunto(c,p.id),{metodo:"DELETE",token:t})); }catch(e){ if(e instanceof ErrorRed||e instanceof ErrorSesion) throw e; } }
         }
@@ -364,7 +393,7 @@ window.AscensoSync=(()=>{
       try{ await pedir("/auth/v1/logout?scope=local",{metodo:"POST",token:c.sesion.acceso}); }catch(e){}
     }
     cuenta=null;
-    await Almacen.tx(["meta"],"readwrite",s=>{ for(const k of ["cuenta","ultimo_seq","descarga_completa","dispositivo_visto"]) s.meta.delete(k); });
+    await Almacen.tx(["meta"],"readwrite",s=>{ for(const k of ["cuenta","ultimo_seq","descarga_completa","dispositivo_visto","archivos_sin_subir"]) s.meta.delete(k); });
     if(borrarDatos) await Local.vaciarDatos();
     if(canal) canal.postMessage({tipo:"cuenta"});
     pendientes=0; poner("sin-cuenta");
@@ -430,6 +459,12 @@ window.AscensoSync=(()=>{
     if(!disponible) return;
     dispositivo=await Local.dispositivo();
     await cargarCuenta();
+    if((await Almacen.meta("esquema"))!==ESQUEMA){
+      await Almacen.tx(["meta"],"readwrite",m=>{
+        if(cuenta){ m.meta.put({clave:"ultimo_seq",valor:0}); m.meta.delete("descarga_completa"); }
+        m.meta.put({clave:"esquema",valor:ESQUEMA});
+      });
+    }
     Local.alFaltarAdjunto(descargarAdjunto);
     // Con cuenta, las imágenes huérfanas solo se borran cuando este dispositivo está al día
     Local.permitirLimpieza(()=>!cuenta||estado==="sincronizado");
@@ -456,6 +491,6 @@ window.AscensoSync=(()=>{
     else serLider();
   }
 
-  return {disponible, iniciar, informe, crearCuenta, entrar, activar, cancelarEntrada, salir, cambiarContrasena, pedirEnlace, recuperar,
+  return {disponible, LIMITE_ARCHIVO, iniciar, informe, crearCuenta, entrar, activar, cancelarEntrada, salir, cambiarContrasena, pedirEnlace, recuperar,
           dispositivos, renombrarDispositivo, quitarDispositivo, sincronizarAhora:()=>{ fallos=0; pedirCiclo(0); }, sesionDe};
 })();
