@@ -241,7 +241,7 @@ window.AscensoCuenta=(()=>{
     const h=location.hash.slice(1);
     if(!/(^|&)(access_token|error|error_description)=/.test(h)) return;
     const p=new URLSearchParams(h);
-    try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){ location.hash=""; }
+    try{ history.replaceState(history.state,"",location.pathname+location.search); }catch(e){ location.hash=""; }
     if(p.get("error")||p.get("error_description")){
       abrir("entrar"); datos.error=/expired|otp/i.test((p.get("error_code")||"")+(p.get("error_description")||""))?"El enlace ha caducado o ya se ha usado. Pide uno nuevo.":"El enlace no es válido."; pintar(); return;
     }
