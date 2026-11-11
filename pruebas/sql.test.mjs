@@ -80,7 +80,7 @@ test("migración SQL: se ejecuta, se puede repetir y las reglas de acceso se cum
     bien(como(A, "delete from dispositivos where dispositivo = 'd1';"));
 
     // ---- Storage: cada persona, solo su carpeta del bucket privado
-    assert.equal(bien("select public::text || ' ' || file_size_limit from storage.buckets where id = 'adjuntos';"), "false 16777216");
+    assert.equal(bien("select public::text || ' ' || file_size_limit from storage.buckets where id = 'adjuntos';"), "false 52428800");
     bien(como(A, `insert into storage.objects (bucket_id, name) values ('adjuntos', '${A}/etiqueta');`));
     falla(como(A, `insert into storage.objects (bucket_id, name) values ('adjuntos', '${B}/etiqueta');`), /row-level security/);
     assert.equal(bien(como(B, "select count(*) from storage.objects;")).split("\n").pop(), "0");

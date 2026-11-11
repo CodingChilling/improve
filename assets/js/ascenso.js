@@ -566,7 +566,8 @@ function renderQuote(){
   if(lastQuote!==null && lastQuote!==q){ bq.style.animation="none"; void bq.offsetWidth; bq.style.animation="quoteIn .7s cubic-bezier(.2,.7,.2,1)"; }
   lastQuote=q;
   bq.querySelector("p").textContent=q;
-  bq.querySelector("footer").innerHTML=esc(a)+"<cite>"+esc(src)+"</cite>";
+  // (En la aplicación nueva, el nombre del autor es también la puerta de la librería: ver libreria.js)
+  bq.querySelector("footer").innerHTML=(LOCAL?'<button type="button" class="q-autor">'+esc(a)+'</button>':esc(a))+"<cite>"+esc(src)+"</cite>";
   renderFrame(k,a);
   if(!pad.hidden && padDay!==k) closePad();
   updateQmark();

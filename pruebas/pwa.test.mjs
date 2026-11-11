@@ -11,7 +11,10 @@ test("solo se publica la aplicación, con rutas relativas", () => {
   try {
     const todo = fs.readdirSync(sitio.dir, { recursive: true }).map(String);
     assert.ok(todo.includes("ascenso.html") && todo.includes("service-worker.js") && todo.includes(path.join("assets", "precache.js")));
-    assert.deepEqual(todo.filter(f => /\.(py|bat|command|db|mjs|icns|ico)$/.test(f) || /^(pruebas|herramientas|supabase|\.github)/.test(f)), []);
+    // (Los únicos .mjs que se publican son los de pdf.js, la biblioteca con la que la librería abre los PDF)
+    const vendor = path.join("assets", "vendor") + path.sep;
+    assert.deepEqual(todo.filter(f => !f.startsWith(vendor) && /\.(py|bat|command|db|mjs|icns|ico)$/.test(f) || /^(pruebas|herramientas|supabase|\.github)/.test(f)), []);
+    assert.ok(todo.includes(path.join("assets", "vendor", "pdfjs", "pdf.min.mjs")) && todo.includes(path.join("assets", "vendor", "pdfjs", "pdf.worker.min.mjs")));
     const manifest = JSON.parse(fs.readFileSync(path.join(sitio.dir, "assets", "manifest.webmanifest"), "utf8"));
     // El manifest está en assets/: su inicio y su ámbito son la carpeta de la aplicación, esté donde esté publicada
     const en = u => new URL(u, "https://ejemplo.github.io/improve/assets/manifest.webmanifest").href;

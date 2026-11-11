@@ -6,19 +6,21 @@
   if (!barra || !tableros) return;
   const $ = id => document.getElementById(id);
   const boton = k => barra.querySelector('[data-ir="' + k + '"]');
-  const seccion = { hoy: () => $("head"), tareas: () => document.querySelector("section.tasks"), progreso: () => $("h-prog").closest("section") };
+  const seccion = { hoy: () => $("head"), tareas: () => document.querySelector("section.tasks") };
+  const Libreria = window.AscensoLibreria && window.AscensoLibreria.disponible ? window.AscensoLibreria : null;
   const suave = () => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
   // ---------------------------------------------------------------- barra de abajo
   let fijada = null, fijadaHasta = 0;            // tras pulsar, se marca el destino aunque el desplazamiento aún no haya llegado
   function marcar() {
     let activa = "tableros";
-    if (tableros.hidden) {
+    if (Libreria && Libreria.abierta()) activa = "libreria";
+    else if (tableros.hidden) {
       activa = "hoy";
       if (fijada && Date.now() < fijadaHasta) activa = fijada;
       else {
         const limite = innerHeight * 0.4;
-        for (const k of ["tareas", "progreso"]) if (seccion[k]().getBoundingClientRect().top < limite) activa = k;
+        for (const k of ["tareas"]) if (seccion[k]().getBoundingClientRect().top < limite) activa = k;
       }
     }
     for (const b of barra.querySelectorAll("button")) {
@@ -28,6 +30,8 @@
   }
   function ir(k) {
     if (k === "cuenta") { if (window.AscensoCuenta && window.AscensoCuenta.abrir) window.AscensoCuenta.abrir(); return; }
+    if (k === "libreria") { if (Libreria) Libreria.abrir(); return; }
+    if (Libreria && Libreria.abierta()) Libreria.cerrar();
     if (k === "tableros") {
       // Ya en los tableros, el botón vuelve a la portada con todos
       if (tableros.hidden) $("brand").click(); else if (typeof setBoard === "function") setBoard("home");
@@ -49,6 +53,9 @@
   document.addEventListener("focusin", teclado);
   document.addEventListener("focusout", () => setTimeout(teclado, 0));
 
+  // La librería: igual, solo en la aplicación nueva
+  if (Libreria) boton("libreria").hidden = false;
+
   // La cuenta: solo donde existe (no en la versión clásica), con un punto que dice cómo va la sincronización
   if (window.AscensoCuenta && window.AscensoCuenta.disponible) {
     const b = boton("cuenta"), punto = b.querySelector(".b-punto");
@@ -67,7 +74,7 @@
   const ventanitas = [["calpop", () => closeCal()], ["notepad", () => closePad()], ["evpop", () => closeEvPop()]];
   const abiertas = () => document.querySelector("dialog[open]") || ventanitas.some(([id]) => $(id) && !$(id).hidden);
   const enTablero = () => { try { return curBoard !== "home"; } catch (e) { return false; } };
-  const nivel = () => (tableros.hidden ? 0 : enTablero() ? 2 : 1) + (abiertas() ? 1 : 0);
+  const nivel = () => (tableros.hidden ? 0 : enTablero() ? 2 : 1) + (Libreria ? Libreria.nivel() : 0) + (abiertas() ? 1 : 0);
   let enHistoria = 0, ignorar = 0;
   // Los pasos propios llevan marca; así se distinguen de una navegación de verdad (el enlace de un email, que llega en «#…»)
   const marcarBase = () => { try { if (!history.state || history.state.ascenso == null) history.replaceState({ ascenso: 0 }, ""); } catch (e) {} };
@@ -83,6 +90,7 @@
     const d = [...document.querySelectorAll("dialog[open]")].pop();
     if (d) { if (d.dispatchEvent(new Event("cancel", { cancelable: true }))) d.close(); return; }   // un diálogo puede negarse (la clave de recuperación)
     for (const [id, cerrar] of ventanitas) if ($(id) && !$(id).hidden) { cerrar(); return; }
+    if (Libreria && Libreria.atras()) return;
     if (!tableros.hidden) { if (enTablero()) setBoard("home"); else $("bv-back").click(); }
   }
   addEventListener("popstate", e => {

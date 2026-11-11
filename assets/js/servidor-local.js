@@ -23,7 +23,14 @@ window.AscensoLocal=(()=>{
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
   const VERSION_APP=12;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
-                "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","adjuntos"];
+                "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","adjuntos",
+                "libros","lecturas","subrayados","archivos"];
+  // La librería: no entra en la copia de seguridad (los archivos pesan demasiado), así que importar una copia no la toca
+  const TABLAS_LIBRERIA=new Set(["libros","lecturas","subrayados","archivos"]);
+  const MAX_LIBRO=300*1024*1024;         // bytes por libro en este dispositivo
+  const MAX_PORTADA=120000;              // caracteres de la portada en miniatura (data:image/jpeg;base64,…)
+  const FORMATOS_LIBRO={epub:"application/epub+zip",pdf:"application/pdf"};
+  const COLORES_SUBRAYADO=new Set(["amarillo","verde","azul","rosa"]);
 
   class ErrorDatos extends Error{}
   const mal=m=>{ throw new ErrorDatos(m); };
@@ -129,7 +136,7 @@ window.AscensoLocal=(()=>{
       for(const r of regs){
         s.registros.put(r);
         s.pendientes.put({tabla:r.tabla,id:r.id,actualizado:r.actualizado,borrado:r.borrado,datos:r.valores});
-        if(r.tabla==="adjuntos"){
+        if(r.tabla==="adjuntos"||r.tabla==="archivos"){
           if(r.borrado) s.adjuntos.delete(r.id);
           else if(op.blobs.has(r.id)) s.adjuntos.put({id:r.id,tipo:r.valores.t,datos:op.blobs.get(r.id)});
         }
@@ -523,6 +530,90 @@ window.AscensoLocal=(()=>{
   }
   const borrarSimple=(tabla,que)=>(op,id)=>op.borrar(tabla,comprobarId(id,que));
 
+  // ---- librería: libros, por dónde va la lectura y subrayados ----
+  const fechaISO=(v,defecto)=>{ const t=texto(v); return t&&!Number.isNaN(Date.parse(t))?new Date(Date.parse(t)).toISOString():defecto; };
+  const fraccion=v=>{ const n=Number(v); return Number.isFinite(n)?Math.min(1,Math.max(0,n)):0; };
+  function guardarLibro(op,id,d){
+    id=comprobarId(id,"libro");
+    if(!esDic(d)) mal("libro no válido");
+    const formato=texto(d.formato);
+    if(!FORMATOS_LIBRO[formato]) mal("formato de libro no admitido");
+    const titulo=cortar(texto(d.titulo).trim(),200);
+    if(!titulo) mal("el libro necesita un título");
+    const portada=texto(d.portada);
+    if(portada&&!(portada.length<=MAX_PORTADA&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(portada))) mal("portada no válida");
+    const bytes=entero(d.bytes,"tamaño");
+    if(!(bytes>0&&bytes<=MAX_LIBRO)) mal("tamaño de libro no válido");
+    const prev=op.leer("libros",id);
+    op.poner("libros",id,{titulo,autor:cortar(texto(d.autor).trim(),200),formato,bytes,archivo:comprobarId(d.archivo,"archivo"),
+      portada,creado:prev?prev.creado:fechaISO(d.creado,new Date().toISOString())});
+  }
+  function borrarLibro(op,id){
+    id=comprobarId(id,"libro");
+    const libro=op.leer("libros",id);
+    op.borrar("libros",id); op.borrar("lecturas",id);
+    for(const [sid,sub] of op.todos("subrayados")) if(sub.libro===id) op.borrar("subrayados",sid);
+    if(libro&&op.leer("archivos",libro.archivo)) op.borrar("archivos",libro.archivo);
+  }
+  function guardarLectura(op,id,d){
+    id=comprobarId(id,"libro");
+    if(!esDic(d)) mal("lectura no válida");
+    if(!op.leer("libros",id)) mal("el libro no existe");
+    const lugar=entero(d.lugar,"lugar");
+    if(!(lugar>=0&&lugar<100000)) mal("lugar no válido");
+    op.poner("lecturas",id,{lugar,frac:fraccion(d.frac),pct:fraccion(d.pct),leido:fechaISO(d.leido,new Date().toISOString())});
+  }
+  function guardarSubrayado(op,id,d){
+    id=comprobarId(id,"subrayado");
+    if(!esDic(d)) mal("subrayado no válido");
+    const libro=comprobarId(d.libro,"libro");
+    if(!op.leer("libros",libro)) mal("el libro no existe");
+    const lugar=entero(d.lugar,"lugar"), ini=entero(d.ini,"inicio"), fin=entero(d.fin,"fin");
+    if(!(lugar>=0&&lugar<100000&&ini>=0&&fin>ini&&fin-ini<=20000)) mal("subrayado no válido");
+    const color=texto(d.color)||"amarillo";
+    if(!COLORES_SUBRAYADO.has(color)) mal("color no válido");
+    const prev=op.leer("subrayados",id);
+    op.poner("subrayados",id,{libro,lugar,ini,fin,texto:cortar(texto(d.texto),1000),nota:cortar(texto(d.nota),5000),color,
+      creado:prev?prev.creado:fechaISO(d.creado,new Date().toISOString())});
+  }
+  // Lo que cuelga de un libro que ya no existe no se muestra
+  async function leerLibreria(){
+    const vivos=t=>{ const o=new Map(); for(const [id,r] of mem[t]) if(!r.borrado) o.set(id,r.valores); return o; };
+    const aqui=new Set(await Almacen.tx(["adjuntos"],"readonly",s=>Almacen.pedir(s.adjuntos.getAllKeys())));
+    const librosT=vivos("libros"), archivosT=vivos("archivos"), out={libros:{},lecturas:{},subrayados:{},archivos:{}};
+    for(const [id,v] of librosT){
+      out.libros[id]={...v};
+      // «aqui»: el archivo está en este dispositivo; «cuenta»: consta como archivo del libro (y puede estar en la cuenta)
+      out.archivos[v.archivo]={bytes:archivosT.has(v.archivo)?archivosT.get(v.archivo).bytes:v.bytes,aqui:aqui.has(v.archivo),cuenta:archivosT.has(v.archivo)};
+    }
+    for(const [id,v] of vivos("lecturas")) if(librosT.has(id)) out.lecturas[id]={...v};
+    for(const [id,v] of vivos("subrayados")) if(librosT.has(v.libro)) out.subrayados[id]={...v};
+    return out;
+  }
+  // El contenido de un libro no viaja como texto: se guarda tal cual (ArrayBuffer), tras comprobar que es lo que dice ser
+  function guardarArchivo(id,formato,datos){
+    return encolar(async()=>{
+      await preparar();
+      id=comprobarId(id,"archivo");
+      if(!FORMATOS_LIBRO[formato]) mal("formato de libro no admitido");
+      if(!(datos instanceof ArrayBuffer)||!(datos.byteLength>0&&datos.byteLength<=MAX_LIBRO)) mal("libro demasiado grande");
+      const u=new Uint8Array(datos,0,Math.min(1024,datos.byteLength));
+      const cabecera=String.fromCharCode.apply(null,u);
+      if(formato==="pdf"?!cabecera.includes("%PDF-"):!(u[0]===0x50&&u[1]===0x4B&&u[2]===0x03&&u[3]===0x04)) mal("el archivo no es un "+formato.toUpperCase()+" válido");
+      const op=new Operacion(), prev=op.leer("archivos",id);
+      op.poner("archivos",id,{t:FORMATOS_LIBRO[formato],bytes:datos.byteLength,creado:prev?prev.creado:new Date().toISOString()});
+      op.blobs.set(id,datos);
+      await confirmar(op);
+    });
+  }
+  // Devuelve el contenido de un libro (ArrayBuffer) o null. Con cuenta, si no está en este dispositivo se descarga
+  async function leerArchivo(id){
+    await preparar();
+    let a=await Almacen.leer("adjuntos",id);
+    if((!a||!a.datos)&&alFaltar&&mem.archivos.has(id)&&!mem.archivos.get(id).borrado) a=await alFaltar(id);
+    return a&&a.datos?a.datos:null;
+  }
+
   const RUTAS={
     "etiquetas/":[guardarEtiqueta,borrarSimple("etiquetas","etiqueta")],
     "tareas/":[guardarTarea,borrarSimple("tareas","tarea")],
@@ -534,13 +625,16 @@ window.AscensoLocal=(()=>{
     "mapas/":[guardarMapa,borrarMapa],
     "nodos/":[guardarNodo,borrarNodo],
     "conexiones/":[guardarConexion,borrarSimple("conexiones","conexión")],
+    "libros/":[guardarLibro,borrarLibro],
+    "lecturas/":[guardarLectura,borrarSimple("lecturas","libro")],
+    "subrayados/":[guardarSubrayado,borrarSimple("subrayados","subrayado")],
   };
 
   // ---- importar una copia (la que exporta Ascenso, también la versión clásica de Python) ----
   function importar(op,estado){
     if(!esDic(estado)||!esDic(estado.days)) mal("copia no válida");
     // Se sustituye todo menos las imágenes, igual que en el servidor
-    for(const t of TABLAS) if(t!=="adjuntos") for(const id of op.todos(t).keys()) op.borrar(t,id);
+    for(const t of TABLAS) if(t!=="adjuntos"&&!TABLAS_LIBRERIA.has(t)) for(const id of op.todos(t).keys()) op.borrar(t,id);
     const config={}; for(const k of ["plan","thr","tipos"]) if(estado[k]!==null&&estado[k]!==undefined) config[k]=estado[k];
     guardarConfig(op,config);
     guardarHabitos(op,estado.habits||[]);
@@ -613,7 +707,7 @@ window.AscensoLocal=(()=>{
         for(const [k,r] of ganan){
           s.registros.put(r);
           if(pendientes.has(k)) s.pendientes.delete([r.tabla,r.id]);          // el cambio local pendiente ha perdido
-          if(r.tabla==="adjuntos"&&r.borrado) s.adjuntos.delete(r.id);
+          if((r.tabla==="adjuntos"||r.tabla==="archivos")&&r.borrado) s.adjuntos.delete(r.id);
         }
         for(const r of reafirmar.values()) s.pendientes.put({tabla:r.tabla,id:r.id,actualizado:r.actualizado,borrado:r.borrado,datos:r.valores});
         for(const [clave,valor] of Object.entries(meta||{})) s.meta.put({clave,valor});
@@ -668,6 +762,7 @@ window.AscensoLocal=(()=>{
     await preparar();
     if(metodo==="GET"&&ruta==="estado") return leerEstado();
     if(metodo==="GET"&&ruta==="adjuntos-copia") return copiaAdjuntos();
+    if(metodo==="GET"&&ruta==="libreria") return leerLibreria();
     const op=new Operacion(), nada=v=>v===undefined?null:v;
     cuerpo=nada(cuerpo);
     if(metodo==="PUT"&&ruta.startsWith("adjuntos/")) guardarAdjunto(op,ruta.slice(9),cuerpo);
@@ -697,6 +792,8 @@ window.AscensoLocal=(()=>{
     dispositivo:()=>preparar().then(()=>dispositivo),
     aplicarRemotos, encolarTodo, vaciarDatos, marcarSemilla, hayDatosPropios, guardarBlob,
     alFaltarAdjunto:f=>{ alFaltar=f; },
+    // Para la librería (libreria.js)
+    guardarArchivo, leerArchivo,
     permitirLimpieza:f=>{ limpiezaPermitida=f; },
   };
 })();
