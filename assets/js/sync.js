@@ -50,33 +50,54 @@ window.AscensoSync=(()=>{
 
   // ---------------------------------------------------------------- cuenta y sesión
   // {email, userId, sesion:{acceso, renovacion, caduca}, claves:{cifrado, etiquetas}}
-  let cuenta=null, dispositivo="", lider=false;
+  let cuenta=null, dispositivo="", lider=false, tRelevo=null;
   const canal=typeof BroadcastChannel==="function"?new BroadcastChannel("ascenso-sync"):null;
 
   const sesionDe=j=>({acceso:j.access_token,renovacion:j.refresh_token,caduca:Date.now()+(Number(j.expires_in)||3600)*1000});
   async function guardarCuenta(){ await Almacen.ponerMeta("cuenta",cuenta); if(canal) canal.postMessage({tipo:"cuenta"}); }
 
+  // La sesión se renueva con un testigo de un solo uso: si dos ventanas de Ascenso (la aplicación instalada y una
+  // pestaña del navegador, por ejemplo) usaran el mismo, el servidor anularía la sesión entera. Por eso la renovación
+  // va de una en una entre todas las ventanas (candado «ascenso-sesion») y parte siempre de la sesión guardada en el
+  // dispositivo, que es la última: si otra ventana ya la renovó, se usa la suya en vez de pedir otra.
+  const conCandado=(nombre,f)=>navigator.locks&&navigator.locks.request?navigator.locks.request(nombre,f):f();
+  // Respuestas que de verdad significan que la sesión ya no vale (cualquier otro fallo se reintenta más tarde)
+  const SESION_PERDIDA=/refresh_token_not_found|refresh_token_already_used|session_not_found|session_expired|invalid_grant|user_not_found|user_banned|invalid refresh token/i;
+  // Pone al día la sesión en memoria con la guardada. Devuelve false si en el dispositivo ya no hay sesión de esta cuenta
+  async function sesionGuardada(c){
+    const g=await Almacen.meta("cuenta");
+    if(!g||!g.sesion||g.userId!==c.userId) return false;
+    if(g.sesion.renovacion!==c.sesion.renovacion){ c.sesion=g.sesion; tiempoReal.nuevoToken(); }
+    return true;
+  }
   let renovando=null;
-  function renovar(){
-    if(!renovando) renovando=(async()=>{
+  function renovar(rechazado){
+    if(!renovando) renovando=conCandado("ascenso-sesion",async()=>{
       const c=cuenta; if(!c) throw new ErrorSesion();
+      if(!await sesionGuardada(c)) throw new ErrorSesion();             // se cerró la sesión en otra ventana
+      // Otra ventana acaba de renovarla: sirve la suya
+      if(c.sesion.acceso!==rechazado&&c.sesion.caduca-Date.now()>60000) return;
       let j;
       try{ j=await pedir("/auth/v1/token?grant_type=refresh_token",{metodo:"POST",cuerpo:{refresh_token:c.sesion.renovacion}}); }
-      catch(e){ if(e instanceof ErrorServidor&&e.estado>=400&&e.estado<500) throw new ErrorSesion(); throw e; }
+      catch(e){
+        if(e instanceof ErrorServidor&&(e.estado===400||e.estado===401||e.estado===403)&&SESION_PERDIDA.test(e.codigo+" "+e.message)) throw new ErrorSesion();
+        throw e;
+      }
       if(cuenta!==c) throw new ErrorSesion();
       c.sesion=sesionDe(j); await guardarCuenta();
       tiempoReal.nuevoToken();
-    })().finally(()=>{ renovando=null; });
+    }).finally(()=>{ renovando=null; });
     return renovando;
   }
   // Ejecuta una petición con el token de la sesión; si ha caducado, lo renueva y repite una vez
   async function conSesion(f){
     if(!cuenta) throw new ErrorSesion();
     if(cuenta.sesion.caduca-Date.now()<60000) await renovar();
-    try{ return await f(cuenta.sesion.acceso); }
+    const usado=cuenta.sesion.acceso;
+    try{ return await f(usado); }
     catch(e){
       if(!(e instanceof ErrorServidor)||e.estado!==401) throw e;
-      await renovar(); return f(cuenta.sesion.acceso);
+      await renovar(usado); return f(cuenta.sesion.acceso);
     }
   }
 
@@ -476,18 +497,40 @@ window.AscensoSync=(()=>{
     if(canal) canal.onmessage=async e=>{
       const d=e.data; if(!d) return;
       if(d.tipo==="cuenta"){                                      // otra pestaña ha entrado, salido o renovado la sesión
-        const antes=cuenta&&cuenta.userId;
-        await cargarCuenta();
-        if((cuenta&&cuenta.userId)!==antes){ detener(); arrancar(); }
+        // Misma cuenta: solo cambia la sesión, y se actualiza sin interrumpir lo que esta pestaña tenga a medias
+        if(cuenta&&await sesionGuardada(cuenta)) return;
+        await cargarCuenta(); detener(); arrancar();
       }
       if(d.tipo==="pregunta"&&lider) canal.postMessage({tipo:"estado",info:informe()});      // una pestaña recién abierta pregunta cómo va
+      if(d.tipo==="estado") clearTimeout(tRelevo);              // la pestaña que sincroniza está viva
       if(d.tipo==="estado"&&!lider&&d.info){ estado=d.info.estado; detalle=d.info.detalle; pendientes=d.info.pendientes; document.dispatchEvent(new CustomEvent("ascenso:sync",{detail:informe()})); }
     };
     poner(cuenta?"sincronizando":"sin-cuenta");
-    if(canal) canal.postMessage({tipo:"pregunta"});
     // Con varias pestañas abiertas, solo una sincroniza; las demás ven sus cambios al momento
-    const serLider=()=>{ lider=true; arrancar(); };
-    if(navigator.locks&&navigator.locks.request) navigator.locks.request("ascenso-sync",()=>{ serLider(); return new Promise(()=>{}); }).catch(serLider);
+    const serLider=async()=>{
+      lider=true; clearTimeout(tRelevo);
+      try{ if(cuenta&&!await sesionGuardada(cuenta)) await cargarCuenta(); }catch(e){}       // por si esta pestaña se perdió un aviso
+      arrancar();
+    };
+    const pedirTurno=robar=>navigator.locks.request("ascenso-sync",robar?{steal:true}:{},()=>{ serLider(); return new Promise(()=>{}); })
+      .catch(e=>{
+        // Otra pestaña ha tomado el relevo (esta estaba dormida): deja de sincronizar y vuelve a la cola
+        if(e&&e.name==="AbortError"){ lider=false; detener(); pedirTurno(false); }
+        else serLider();
+      });
+    // La pestaña que sincroniza puede estar dormida (el teléfono congela las que no se ven) y no soltar el turno:
+    // si esta está a la vista y la otra no contesta en unos segundos, toma el relevo
+    const comprobarRelevo=()=>{
+      clearTimeout(tRelevo);
+      if(lider||!canal||document.hidden) return;
+      canal.postMessage({tipo:"pregunta"});
+      tRelevo=setTimeout(()=>{ if(!lider&&cuenta&&!document.hidden) pedirTurno(true); },3000);
+    };
+    if(navigator.locks&&navigator.locks.request){
+      pedirTurno(false);
+      setTimeout(comprobarRelevo,300);
+      document.addEventListener("visibilitychange",()=>{ if(!document.hidden) comprobarRelevo(); });
+    }
     else serLider();
   }
 
