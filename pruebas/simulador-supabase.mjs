@@ -12,10 +12,13 @@ export function simuladorSupabase({ confirmarEmail = true, caducidad = 3600 } = 
   const enchufes = new Set();           // conexiones de Realtime: {socket, userId, tema}
   let cortado = false;                  // simula una caída del servidor
 
-  const sesion = u => {
+  // Como en Supabase, el testigo de renovación es de un solo uso: quien presenta uno ya gastado pierde la sesión
+  // entera (todos los testigos de esa «familia»). bd.usados recuerda los gastados y a qué familia pertenecían.
+  bd.usados = new Map(); bd.familias = new Map();
+  const sesion = (u, familia = azar()) => {
     const access_token = "acc." + azar(), refresh_token = "ren." + azar();
-    bd.tokens.set(access_token, { userId: u.id, caduca: Date.now() + caducidad * 1000 });
-    bd.renovaciones.set(refresh_token, u.id);
+    bd.tokens.set(access_token, { userId: u.id, caduca: Date.now() + caducidad * 1000, familia });
+    bd.renovaciones.set(refresh_token, u.id); bd.familias.set(refresh_token, familia);
     return { access_token, refresh_token, token_type: "bearer", expires_in: caducidad, user: { id: u.id, email: u.email } };
   };
   const quien = req => {
@@ -57,10 +60,17 @@ export function simuladorSupabase({ confirmarEmail = true, caducidad = 3600 } = 
         if (!x.confirmado) return responder(400, { error_code: "email_not_confirmed", msg: "Email not confirmed" });
         return responder(200, sesion(x));
       }
-      const id = bd.renovaciones.get(cuerpo.refresh_token);
+      const id = bd.renovaciones.get(cuerpo.refresh_token), familia = bd.familias.get(cuerpo.refresh_token);
+      if (!id && bd.usados.has(cuerpo.refresh_token)) {
+        const f = bd.usados.get(cuerpo.refresh_token);
+        for (const [t, x] of bd.familias) if (x === f) { bd.renovaciones.delete(t); bd.familias.delete(t); }
+        for (const [t, x] of bd.tokens) if (x.familia === f) bd.tokens.delete(t);
+        return responder(400, { error_code: "refresh_token_already_used", msg: "Invalid Refresh Token: Already Used" });
+      }
       if (!id) return responder(400, { error_code: "refresh_token_not_found", msg: "Invalid Refresh Token" });
-      bd.renovaciones.delete(cuerpo.refresh_token);
-      return responder(200, sesion(bd.usuarios.get(id)));
+      bd.renovaciones.delete(cuerpo.refresh_token); bd.familias.delete(cuerpo.refresh_token); bd.usados.set(cuerpo.refresh_token, familia);
+      if (bd.fallarRenovacion) { const estado = bd.fallarRenovacion; bd.fallarRenovacion = 0; bd.renovaciones.set(cuerpo.refresh_token, id); bd.familias.set(cuerpo.refresh_token, familia); bd.usados.delete(cuerpo.refresh_token); return responder(estado, { code: estado, msg: "inténtalo más tarde" }); }
+      return responder(200, sesion(bd.usuarios.get(id), familia));
     }
     if (ruta === "/auth/v1/recover" && req.method === "POST") {
       bd.emails.push({ para: String(cuerpo.email || "").toLowerCase(), tipo: "recovery", vuelta: q.get("redirect_to") });

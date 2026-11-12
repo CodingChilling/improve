@@ -96,6 +96,9 @@ function cleanTasks(x){
       list:["pendiente","proceso","hecha"].includes(t.list)?t.list:"pendiente",
       tags:Array.isArray(t.tags)?t.tags.filter(v=>typeof v==="string"&&ID_OK.test(v)):[],
       created:String(t.created||t.date).slice(0,40),
+      // checklist, como la de las tarjetas de los tableros: [{id, t, d}]
+      check:Array.isArray(t.check)?t.check.filter(k=>k&&ID_OK.test(k.id||"")&&String(k.t||"").trim()).slice(0,100)
+        .map(k=>({id:k.id, t:String(k.t).trim().slice(0,300), d:!!k.d})):[],
       archived:t.archived?String(t.archived).slice(0,40):null};   // archivada: fuera de las listas, aún sin borrar
   }
   return o;
@@ -3348,16 +3351,17 @@ function cardToTask(cid,date){
     if(!id){ id=newId("e"); state.tags[id]={name:L.name, color:L.color}; }
     return id;
   });
-  const lista=c.check.map(k=>(k.d?"☑ ":"☐ ")+k.t).join("\n");
-  state.tasks[newId("t")]={date, title:c.title.slice(0,120), notes:[c.desc,lista].filter(Boolean).join("\n\n").slice(0,2000),
-    prio:c.prio==="ninguna"?"media":c.prio, list:"pendiente", tags, created:new Date().toISOString()};
+  // La checklist pasa tal cual (las tareas también tienen la suya)
+  state.tasks[newId("t")]={date, title:c.title.slice(0,120), notes:c.desc.slice(0,2000),
+    prio:c.prio==="ninguna"?"media":c.prio, list:"pendiente", tags, created:new Date().toISOString(),
+    check:c.check.map(k=>({...k, id:newId("i")})), archived:null};
   delete state.cards[cid]; renumber(listCards(lid),state.cards);
   cdlg.close(); save(); renderBoards();
 }
 function taskToCard(tid,lid){
   const t=state.tasks[tid], bid=state.blists[lid].board;
   const labels=t.tags.map(g=>state.tags[g]).filter(Boolean).map(G=>labelInBoard(bid,G.name,G.color));
-  state.cards[newId("c")]={list:lid, title:t.title, desc:t.notes, prio:t.prio, due:"", labels, check:[],
+  state.cards[newId("c")]={list:lid, title:t.title, desc:t.notes, prio:t.prio, due:"", labels, check:(t.check||[]).map(k=>({...k, id:newId("i")})),
     order:listCards(lid).length, created:new Date().toISOString()};
   delete state.tasks[tid];
   closeTask(); save(); renderTasks(); renderTagMgr();
@@ -3508,7 +3512,7 @@ function taskCardHTML(id,t){
   return `<li class="task p-${t.prio}${t.list==="hecha"?" done":""}" data-id="${id}" tabindex="0" aria-label="${esc(t.title)}. Abrir ficha">
     <span class="prio">${prioName(t.prio)}</span>
     <span class="ttitle">${esc(t.title)}</span>
-    ${t.tags.length||t.notes?`<span class="tfoot">${t.tags.map(tagChip).join("")}${t.notes?`<span class="tnote-ico" title="Tiene descripción" aria-label="Tiene descripción">≡</span>`:""}</span>`:""}
+    ${t.tags.length||t.notes||t.check.length?`<span class="tfoot">${t.tags.map(tagChip).join("")}${t.check.length?`<span class="ckb${t.check.every(k=>k.d)?" full":""}" title="Checklist">${ICON_CHECK}${t.check.filter(k=>k.d).length}/${t.check.length}</span>`:""}${t.notes?`<span class="tnote-ico" title="Tiene descripción" aria-label="Tiene descripción">≡</span>`:""}</span>`:""}
   </li>`;
 }
 function renderTasks(){
@@ -3595,7 +3599,7 @@ function addTask(){
   if(!title){ inp.focus(); return; }
   const list=document.getElementById("tlist").value;
   state.tasks[newId("t")]={date:key(sel), title, notes:"", prio:document.getElementById("tprio").value, list,
-    tags:[...newTaskTags].filter(id=>state.tags[id]), created:new Date().toISOString()};
+    tags:[...newTaskTags].filter(id=>state.tags[id]), created:new Date().toISOString(), check:[], archived:null};
   inp.value=""; newTaskTags.clear(); taskTab=list;
   save(); renderTasks(); renderTagMgr(); inp.focus();
 }
@@ -3701,7 +3705,7 @@ function fmtCreated(s){
 function renderTaskDlg(){
   const t=state.tasks[openTaskId]; if(!t){ closeTask(); return; }
   dlg.className="tdlg p-"+t.prio;
-  const created=fmtCreated(t.created);
+  const created=fmtCreated(t.created), done=t.check.filter(k=>k.d).length, tot=t.check.length;
   dlg.innerHTML=`
     <div class="dlg-head">
       <textarea class="dlg-title" rows="1" maxlength="120" aria-label="Título de la tarea" spellcheck="false">${esc(t.title)}</textarea>
@@ -3723,6 +3727,11 @@ function renderTaskDlg(){
           ? `<textarea class="d-desc-edit" rows="5" maxlength="2000" placeholder="Añade una descripción más detallada…">${esc(t.notes)}</textarea>
              <div class="eacts"><button type="button" class="add d-desc-save">Guardar</button><button type="button" class="add alt d-desc-cancel">Cancelar</button></div>`
           : `<div class="d-desc${t.notes?"":" empty"}" role="button" tabindex="0">${t.notes?esc(t.notes):"Añade una descripción más detallada…"}</div>`}
+        <h4>Checklist ${tot?`<span class="ck-count">${done}/${tot}</span>`:""}</h4>
+        ${tot?`<div class="ck-bar"><i style="width:${Math.round(done/tot*100)}%"></i></div>`:""}
+        <ul class="ck">${t.check.map(k=>`<li data-ck="${k.id}"><input type="checkbox" class="ck-box" ${k.d?"checked":""} aria-label="Hecho">
+          <input type="text" class="ck-t${k.d?" done":""}" value="${esc(k.t)}" maxlength="300" aria-label="Elemento"><button type="button" class="ck-del" aria-label="Quitar elemento">×</button></li>`).join("")}</ul>
+        <input type="text" class="ck-new" id="tk-new" maxlength="300" placeholder="+ Añadir elemento" aria-label="Nuevo elemento de la checklist">
       </div>
       <aside class="dlg-side">
         <h4>Acciones</h4>
@@ -3760,6 +3769,8 @@ function commitTitle(el){
 dlg.addEventListener("click",e=>{
   const t=state.tasks[openTaskId]; if(!t) return;
   if(e.target.closest(".dlg-x")){ closeTask(); return; }
+  const ckd=e.target.closest(".ck-del");
+  if(ckd){ const id=ckd.closest("[data-ck]").dataset.ck; t.check=t.check.filter(k=>k.id!==id); taskChanged(); return; }
   const pb=e.target.closest("[data-prio]");
   if(pb){ t.prio=pb.dataset.prio; taskChanged(); return; }
   const tp=e.target.closest(".tp");
@@ -3783,11 +3794,19 @@ dlg.addEventListener("change",e=>{
   if(e.target.matches(".tb-board")){ toBoardSel=e.target.value; renderTaskDlg(); return; }
   const t=state.tasks[openTaskId]; if(!t) return;
   if(e.target.matches(".d-list")){ t.list=e.target.value; taskChanged(); }
+  else if(e.target.matches(".ck-box")){ const k=t.check.find(k=>k.id===e.target.closest("[data-ck]").dataset.ck); if(k){ k.d=e.target.checked; taskChanged(); } }
+  else if(e.target.matches(".ck-t")){ const id=e.target.closest("[data-ck]").dataset.ck, v=e.target.value.trim();
+    t.check = v ? t.check.map(k=>k.id===id?{...k, t:v.slice(0,300)}:k) : t.check.filter(k=>k.id!==id); taskChanged(); }
   else if(e.target.matches(".d-date") && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)){ t.date=e.target.value; taskChanged(); }
 });
 dlg.addEventListener("input",e=>{ if(e.target.matches(".dlg-title")) autoGrow(e.target); });
 dlg.addEventListener("keydown",e=>{
   if(e.target.matches(".dlg-title") && e.key==="Enter"){ e.preventDefault(); e.target.blur(); }
+  else if(e.target.matches(".ck-t") && e.key==="Enter"){ e.preventDefault(); e.target.blur(); }
+  else if(e.target.id==="tk-new" && e.key==="Enter"){
+    e.preventDefault(); const t=state.tasks[openTaskId], v=e.target.value.trim(); if(!t || !v || t.check.length>=100) return;
+    t.check=[...t.check,{id:newId("i"), t:v.slice(0,300), d:false}]; taskChanged(); document.getElementById("tk-new").focus();
+  }
   else if(e.target.matches(".d-desc-edit") && e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); dlg.querySelector(".d-desc-save").click(); }
   else if(e.target.matches(".d-desc") && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); e.target.click(); }
 });
@@ -3841,7 +3860,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=12;
+const VERSION_NECESARIA=13;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){

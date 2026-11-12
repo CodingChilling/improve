@@ -21,7 +21,7 @@ window.AscensoLocal=(()=>{
   const MAX_IMAGEN=15*1024*1024;         // bytes por imagen
   const DIAS_HUERFANAS=30;               // días que se conserva una imagen que ya no está en ninguna libreta
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
-  const VERSION_APP=12;
+  const VERSION_APP=13;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
                 "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","adjuntos",
                 "libros","lecturas","subrayados","archivos"];
@@ -178,7 +178,7 @@ window.AscensoLocal=(()=>{
     for(const [id,v] of etiquetasT) etiquetas[id]={name:v.name,color:v.color};
     const tareas={};
     for(const [id,v] of vivos("tareas")) tareas[id]={date:v.date,title:v.title,notes:v.notes,prio:v.prio,list:v.list,created:v.created,
-      tags:(v.tags||[]).filter(e=>etiquetasT.has(e)),archived:v.archived||null};
+      tags:(v.tags||[]).filter(e=>etiquetasT.has(e)),check:(v.check||[]).map(p=>({id:p.id,t:p.t,d:!!p.d})),archived:v.archived||null};
     const notas={}; for(const [f,v] of vivos("notas")) notas[f]={r:v.r,n:v.n};
     const eventos={};
     for(const [id,v] of vivos("eventos")) eventos[id]={start:v.start,end:v.end,time:v.time||"",title:v.title,color:v.color,created:v.created};
@@ -309,14 +309,21 @@ window.AscensoLocal=(()=>{
     if(!titulo) mal("la tarea necesita un título");
     if(!PRIORIDADES.has(d.prio)) mal("prioridad no válida");
     if(!LISTAS.has(d.list)) mal("lista no válida");
-    const etiquetas=d.tags||[];
+    const etiquetas=d.tags||[], checklist=d.check||[];
     if(!Array.isArray(etiquetas)) mal("etiquetas no válidas");
+    if(!Array.isArray(checklist)||checklist.length>100) mal("tarea no válida");
+    const check=[];
+    for(const punto of checklist){
+      if(!esDic(punto)) mal("elemento de la checklist no válido");
+      const t=cortar(texto(punto.t).trim(),300);
+      if(t) check.push({id:comprobarId(punto.id,"elemento"),t,d:!!punto.d});
+    }
     const prev=op.leer("tareas",tid);
     const tags=[];
     // Solo se asocian etiquetas que existen
     for(const e of etiquetas){ const s=String(e); if(ID_RE.test(s)&&op.leer("etiquetas",s)&&!tags.includes(s)) tags.push(s); }
     op.poner("tareas",tid,{date:fecha,title:titulo,notes:cortar(texto(d.notes),2000),prio:d.prio,list:d.list,
-      created:prev?prev.created:(cortar(texto(d.created),40)||fecha),tags,archived:d.archived?cortar(String(d.archived),40):null});
+      created:prev?prev.created:(cortar(texto(d.created),40)||fecha),tags,check,archived:d.archived?cortar(String(d.archived),40):null});
   }
   function guardarNotas(op,fecha,d){
     if(!FECHA_RE.test(fecha)) mal("fecha no válida");

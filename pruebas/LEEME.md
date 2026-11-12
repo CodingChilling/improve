@@ -36,6 +36,7 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 | `pwa.test.mjs` | Lo que se publica en GitHub Pages: solo la aplicación, rutas relativas, política de seguridad, funcionamiento sin conexión y aviso de versión nueva. |
 | `cifrado.test.mjs` | Derivación de claves, cifrado de ida y vuelta, claves equivocadas y contenido manipulado. |
 | `sync.test.mjs` | Dos dispositivos con la misma cuenta: altas, cambios, borrados (también en cascada), edición sin conexión, conflictos, imágenes, dos pestañas, sesión recordada. Y que el servidor no recibe nada sin cifrar. |
+| `sesion.test.mjs` | La sesión guardada: sigue ahí al reabrir, y no se pierde con Ascenso abierto en varias ventanas, con una pestaña dormida o por un fallo pasajero del servidor. |
 | `cuenta.test.mjs` | El panel: crear cuenta, fusionar o reemplazar, cambiar la contraseña, recuperarla con la clave de recuperación, sesión caducada, servidor caído y cerrar sesión. |
 | `sql.test.mjs` | La migración de Supabase en un PostgreSQL real: se puede repetir y las reglas de acceso (RLS) se cumplen. |
 | `sync-real.test.mjs` | Sincronización contra un proyecto de Supabase de verdad. Se salta si no se configura (ver abajo). |

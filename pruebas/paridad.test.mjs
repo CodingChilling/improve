@@ -43,6 +43,13 @@ const OPERACIONES = [
   ["PUT", "tareas/t3", { date: "ayer", title: "x", prio: "alta", list: "hecha" }],
   ["PUT", "tareas/t3", { date: "2026-01-05", title: "  ", prio: "alta", list: "hecha" }],
   ["PUT", "tareas/t3", { date: "2026-01-05", title: "x", prio: "alta", list: "hecha", tags: "e1" }],
+  // Checklist de una tarea (como la de las tarjetas)
+  ["PUT", "tareas/t4", { date: "2026-01-05", title: "Con lista", prio: "media", list: "pendiente", check: [{ id: "p1", t: " uno ", d: true }, { id: "p2", t: "  " }, { id: "p3", t: "tres" }] }],
+  ["PUT", "tareas/t4", { date: "2026-01-05", title: "Con lista", prio: "media", list: "proceso", check: [{ id: "p3", t: "tres", d: 1 }, { id: "p4", t: "x".repeat(400) }] }],
+  ["PUT", "tareas/t5", { date: "2026-01-05", title: "x", prio: "baja", list: "hecha", check: [{ id: "mal id", t: "x" }] }],
+  ["PUT", "tareas/t5", { date: "2026-01-05", title: "x", prio: "baja", list: "hecha", check: ["x"] }],
+  ["PUT", "tareas/t5", { date: "2026-01-05", title: "x", prio: "baja", list: "hecha", check: "x" }],
+  ["PUT", "tareas/t5", { date: "2026-01-05", title: "x", prio: "baja", list: "hecha", check: Array.from({ length: 101 }, (_, i) => ({ id: "q" + i, t: "x" })) }],
   ["DELETE", "etiquetas/e2"],
   ["PUT", "tareas/t4", { date: "2026-01-05", title: "Para borrar", prio: "alta", list: "hecha" }],
   ["DELETE", "tareas/t4"],

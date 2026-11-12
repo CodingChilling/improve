@@ -16,7 +16,7 @@ En los dos casos, sin dependencias: ni frameworks, ni paquetes que instalar para
 
 - **Hábitos** diarios configurables (en qué días aplican, si cuentan para la racha o el porcentaje semanal), racha y progreso semanal, registro de peso.
 - **Plan semanal** de entrenamiento (escalada, fuerza, descanso activo, descanso).
-- **Tareas** por día al estilo de Trello: tres listas (Pendientes, En proceso, Hechas), arrastrar y soltar, prioridades (urgente, alta, media, baja) y etiquetas con color.
+- **Tareas** por día al estilo de Trello: tres listas (Pendientes, En proceso, Hechas), arrastrar y soltar, prioridades (urgente, alta, media, baja), etiquetas con color y una checklist en la ficha de cada tarea.
 - **Frase del día** y **imagen del día**, sin repetirse hasta agotar todas, con historial guardado.
 - **Copia de seguridad**: exportar e importar todos los datos en JSON.
 
@@ -57,7 +57,7 @@ hoy que dentro de un mes.
   descripción y checklist. También se pueden duplicar.
 - **Buscador**: busca en todos los tableros, por título, descripción o checklist.
 - **Pasar entre tareas y tableros**: desde la ficha de una tarjeta, «Pasar a tareas del día»; desde la
-  ficha de una tarea, «Pasar a un tablero».
+  ficha de una tarea, «Pasar a un tablero». La checklist viaja con ella en los dos sentidos.
 
 ### Calendario (la fecha)
 
@@ -279,6 +279,7 @@ En la versión clásica, tablas de `ascenso.db`:
 - Día a día: `config`, `habitos`, `dias`, `marcas`, `historial`, `etiquetas`, `tareas`, `tarea_etiquetas` y `notas`.
 - Calendario: `eventos`.
 - Tableros: `tableros`, `listas`, `tarjetas`, `etiquetas_tablero`, `tarjeta_etiquetas_tablero` y `checklist`.
+- La checklist de cada tarea diaria: `checklist_tarea`.
 
 Al arrancar, el servidor crea o actualiza las tablas sin tocar los datos existentes.
 

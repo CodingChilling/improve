@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { servirApp, chromium, devices, abrirConDatos, apiLocal, dedos, centro, esperar, RAIZ } from "./util.mjs";
+import { servirApp, chromium, devices, abrirConDatos, apiLocal, dedos, centro, esperar, paginaLista, RAIZ } from "./util.mjs";
 
 const CAPTURAS = path.join(RAIZ, "pruebas", "resultados");
 fs.mkdirSync(CAPTURAS, { recursive: true });
@@ -114,6 +114,18 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     assert.equal(await pagina.locator(".frame-ask").count(), 0); assert.equal(await imagen(), primera, "«No» la deja como estaba");
     await pagina.tap("#frame"); await pagina.tap(".frame-ask [data-si]");
     await esperar(pagina, a => document.querySelector("#frame img.on").getAttribute("src") !== a, primera, { que: "«Sí» cambia la imagen" });
+
+    // ---- Las tareas diarias tienen checklist, como las tarjetas de los tableros
+    await pagina.locator("#board .task", { hasText: "Llamar al fontanero" }).tap(); await pagina.locator("#taskdlg[open]").waitFor();
+    for (const paso of ["Buscar el teléfono", "Pedir presupuesto"]) { await pagina.fill("#tk-new", paso); await pagina.press("#tk-new", "Enter"); }
+    await pagina.locator("#taskdlg .ck li").nth(1).waitFor();
+    await pagina.locator("#taskdlg .ck-box").first().check();
+    assert.match(await pagina.locator("#taskdlg .ck-count").innerText(), /1\/2/);
+    await pagina.keyboard.press("Escape");
+    assert.match(await pagina.locator("#board .task", { hasText: "Llamar al fontanero" }).locator(".ckb").innerText(), /1\/2/, "la tarea muestra cuánto lleva");
+    await esperar(pagina, () => window.AscensoLocal.api("GET", "estado").then(e => Object.values(e.tasks).some(t => t.check.length === 2 && t.check[0].d && t.check[0].t === "Buscar el teléfono" && !t.check[1].d)), null, { que: "la checklist se guarda" });
+    await pagina.reload(); await paginaLista(pagina);
+    assert.match(await pagina.locator("#board .task", { hasText: "Llamar al fontanero" }).locator(".ckb").innerText(), /1\/2/, "y sigue ahí al recargar");
 
     // ---- Al escribir, la barra se aparta
     await pagina.tap("#tnew");
