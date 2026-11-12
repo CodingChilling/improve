@@ -216,6 +216,14 @@ CREATE TABLE IF NOT EXISTS checklist (
   hecho      INTEGER NOT NULL DEFAULT 0,
   orden      INTEGER NOT NULL DEFAULT 0
 );
+-- Checklist de una tarea diaria (igual que la de las tarjetas)
+CREATE TABLE IF NOT EXISTS checklist_tarea (
+  id       TEXT PRIMARY KEY,
+  tarea_id TEXT NOT NULL REFERENCES tareas(id) ON DELETE CASCADE,
+  texto    TEXT NOT NULL,
+  hecho    INTEGER NOT NULL DEFAULT 0,
+  orden    INTEGER NOT NULL DEFAULT 0
+);
 
 -- Mapas de nodos: cada nodo puede tener dentro su propio nivel (nodos hijos)
 CREATE TABLE IF NOT EXISTS mapas (
@@ -260,9 +268,9 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   huerfano_desde TEXT
 );
 """
-VERSION_BD = 10
+VERSION_BD = 11
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 12
+VERSION_APP = 13
 
 
 class ErrorDatos(Exception):
@@ -336,12 +344,15 @@ def leer_estado(con):
     for r in con.execute("SELECT * FROM tareas"):
         tareas[r["id"]] = {
             "date": r["fecha"], "title": r["titulo"], "notes": r["notas"],
-            "prio": r["prioridad"], "list": r["lista"], "created": r["creada"], "tags": [],
+            "prio": r["prioridad"], "list": r["lista"], "created": r["creada"], "tags": [], "check": [],
             "archived": r["archivada"],
         }
     for r in con.execute("SELECT tarea_id, etiqueta_id FROM tarea_etiquetas ORDER BY rowid"):
         if r["tarea_id"] in tareas:
             tareas[r["tarea_id"]]["tags"].append(r["etiqueta_id"])
+    for r in con.execute("SELECT * FROM checklist_tarea ORDER BY orden, rowid"):
+        if r["tarea_id"] in tareas:
+            tareas[r["tarea_id"]]["check"].append({"id": r["id"], "t": r["texto"], "d": bool(r["hecho"])})
     notas = {
         r["fecha"]: {"r": r["reflexion"], "n": r["notas"]}
         for r in con.execute("SELECT fecha, reflexion, notas FROM notas")
@@ -598,6 +609,16 @@ def guardar_tarea(con, tid, datos):
     etiquetas = datos.get("tags") or []
     if not isinstance(etiquetas, list):
         raise ErrorDatos("etiquetas no válidas")
+    checklist = datos.get("check") or []
+    if not isinstance(checklist, list) or len(checklist) > 100:
+        raise ErrorDatos("tarea no válida")
+    puntos = []
+    for punto in checklist:
+        if not isinstance(punto, dict):
+            raise ErrorDatos("elemento de la checklist no válido")
+        texto = str(punto.get("t") or "").strip()[:300]
+        if texto:
+            puntos.append((comprobar_id(punto.get("id"), "elemento"), texto, int(bool(punto.get("d")))))
     con.execute(
         """INSERT INTO tareas (id, fecha, titulo, notas, prioridad, lista, creada, archivada) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET fecha=excluded.fecha, titulo=excluded.titulo, notas=excluded.notas,
@@ -613,6 +634,12 @@ def guardar_tarea(con, tid, datos):
                 "INSERT OR IGNORE INTO tarea_etiquetas (tarea_id, etiqueta_id) SELECT ?, id FROM etiquetas WHERE id = ?",
                 (tid, str(eid)),
             )
+    con.execute("DELETE FROM checklist_tarea WHERE tarea_id = ?", (tid,))
+    for orden, (pid, texto, hecho) in enumerate(puntos):
+        con.execute(
+            "INSERT OR REPLACE INTO checklist_tarea (id, tarea_id, texto, hecho, orden) VALUES (?, ?, ?, ?, ?)",
+            (pid, tid, texto, hecho, orden),
+        )
 
 
 def borrar_tarea(con, tid):
