@@ -986,7 +986,7 @@ function boardHTML(bid,b){
     </div>
     <div class="bd-lists" id="bd-lists">${lists.map(([lid,l])=>listHTML(lid,l)).join("")}
       <div class="bl-add">${addingList
-        ? `<input type="text" id="bl-new" maxlength="60" placeholder="Título de la lista" aria-label="Título de la nueva lista">`
+        ? `<div class="con-intro"><input type="text" id="bl-new" maxlength="60" enterkeyhint="done" placeholder="Título de la lista" aria-label="Título de la nueva lista"><button type="button" class="add intro-btn" data-intro>Añadir</button></div>`
         : `<button type="button" class="bl-addbtn" data-addlist>+ Añadir lista</button>`}</div>
     </div>
   </div>`;
@@ -1058,7 +1058,7 @@ function listHTML(lid,l){
       </div>
     </div>
     <ul class="bl-cards">${cards.map(([cid,c])=>cardHTML(cid,c)).join("")}</ul>
-    <div class="bl-new"><input type="text" class="bl-newcard" data-newcard="${lid}" maxlength="200" placeholder="+ Añadir tarjeta" aria-label="Nueva tarjeta en ${esc(l.title)}"></div>
+    <div class="bl-new con-intro"><input type="text" class="bl-newcard" data-newcard="${lid}" maxlength="200" enterkeyhint="done" placeholder="+ Añadir tarjeta" aria-label="Nueva tarjeta en ${esc(l.title)}"><button type="button" class="add intro-btn" data-intro>Añadir</button></div>
   </section>`;
 }
 function listMenuHTML(lid,l,n){
@@ -3319,7 +3319,7 @@ function renderCardDlg(){
         ${tot?`<div class="ck-bar"><i style="width:${Math.round(done/tot*100)}%"></i></div>`:""}
         <ul class="ck">${c.check.map(k=>`<li data-ck="${k.id}"><input type="checkbox" class="ck-box" ${k.d?"checked":""} aria-label="Hecho">
           <input type="text" class="ck-t${k.d?" done":""}" value="${esc(k.t)}" maxlength="300" aria-label="Elemento"><button type="button" class="ck-del" aria-label="Quitar elemento">×</button></li>`).join("")}</ul>
-        <input type="text" class="ck-new" id="ck-new" maxlength="300" placeholder="+ Añadir elemento" aria-label="Nuevo elemento de la checklist">
+        <div class="con-intro"><input type="text" class="ck-new" id="ck-new" maxlength="300" enterkeyhint="done" placeholder="+ Añadir elemento" aria-label="Nuevo elemento de la checklist"><button type="button" class="add intro-btn" data-intro>Añadir</button></div>
       </div>
       <aside class="dlg-side">
         <h4>Acciones</h4>
@@ -3604,6 +3604,28 @@ function addTask(){
   save(); renderTasks(); renderTagMgr(); inp.focus();
 }
 document.getElementById("taddbtn").addEventListener("click",addTask);
+// ---- Campos que se confirman con Intro, en el teléfono ----
+// Con varios campos seguidos, el teclado de Android enseña «Siguiente» en lugar de Intro, y entonces no había forma
+// de confirmar. Tres remedios: los campos piden la tecla «Hecho» (enterkeyhint), llevan al lado un botón «Añadir»
+// (data-intro) que hace lo mismo que Intro, y si el teclado manda el salto de línea sin la tecla, también cuenta.
+const pulsarIntro=campo=>campo.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true,cancelable:true}));
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-intro]"); if(!b) return;
+  const campo=b.parentElement.querySelector("input"); if(!campo) return;
+  e.preventDefault(); campo.focus();
+  if(campo.value.trim()) pulsarIntro(campo);
+});
+let ultimoIntro=0;
+document.addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.isTrusted) ultimoIntro=Date.now(); },true);
+document.addEventListener("beforeinput",e=>{
+  const t=e.target;
+  if(e.inputType!=="insertLineBreak"||!t||t.tagName!=="INPUT"||t.form||Date.now()-ultimoIntro<300) return;
+  e.preventDefault(); pulsarIntro(t);
+});
+document.addEventListener("focusin",e=>{
+  const t=e.target;
+  if(t&&t.tagName==="INPUT"&&/^(text|search|number)$/.test(t.type)&&!t.hasAttribute("enterkeyhint")) t.setAttribute("enterkeyhint","done");
+});
 document.getElementById("tnew").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addTask(); } });
 document.getElementById("tnewtags").addEventListener("click",e=>{
   const b=e.target.closest(".tp"); if(!b) return;
@@ -3731,7 +3753,7 @@ function renderTaskDlg(){
         ${tot?`<div class="ck-bar"><i style="width:${Math.round(done/tot*100)}%"></i></div>`:""}
         <ul class="ck">${t.check.map(k=>`<li data-ck="${k.id}"><input type="checkbox" class="ck-box" ${k.d?"checked":""} aria-label="Hecho">
           <input type="text" class="ck-t${k.d?" done":""}" value="${esc(k.t)}" maxlength="300" aria-label="Elemento"><button type="button" class="ck-del" aria-label="Quitar elemento">×</button></li>`).join("")}</ul>
-        <input type="text" class="ck-new" id="tk-new" maxlength="300" placeholder="+ Añadir elemento" aria-label="Nuevo elemento de la checklist">
+        <div class="con-intro"><input type="text" class="ck-new" id="tk-new" maxlength="300" enterkeyhint="done" placeholder="+ Añadir elemento" aria-label="Nuevo elemento de la checklist"><button type="button" class="add intro-btn" data-intro>Añadir</button></div>
       </div>
       <aside class="dlg-side">
         <h4>Acciones</h4>

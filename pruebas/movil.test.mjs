@@ -158,7 +158,32 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     await ir("tableros"); await atras();
     assert.ok(await visible("main"), "un solo «atrás» basta tras haber abierto y cerrado el calendario");
 
-    // ---- La cuenta se abre desde la barra
+    // ---- Añadir tarjetas en un tablero sin tecla Intro (el teclado del teléfono a veces trae «Siguiente» en su lugar)
+    await ir("tableros"); await pagina.tap('.bcard[data-board="b1"]'); await pagina.waitForTimeout(200);
+    const nueva = pagina.locator('.bl-newcard[data-newcard="l1"]'), tarjetas = () => pagina.locator('.bl[data-list="l1"] .bc-title').allInnerTexts();
+    assert.equal(await nueva.getAttribute("enterkeyhint"), "done", "el campo pide la tecla «Hecho»");
+    assert.ok(!(await pagina.locator('.bl[data-list="l1"] .intro-btn').isVisible()), "el botón no estorba hasta que se escribe");
+    await nueva.tap(); await pagina.keyboard.type("Con el botón");
+    await pagina.locator('.bl[data-list="l1"] .intro-btn').tap();
+    await esperar(pagina, () => [...document.querySelectorAll('.bl[data-list="l1"] .bc-title')].some(e => e.textContent === "Con el botón"), null, { que: "el botón «Añadir» crea la tarjeta" });
+    assert.equal(await pagina.evaluate(() => document.activeElement.className), "bl-newcard", "y deja el campo listo para la siguiente");
+    // Teclados que mandan el salto de línea sin avisar de la tecla
+    await pagina.keyboard.type("Con salto de línea");
+    await pagina.evaluate(() => document.activeElement.dispatchEvent(new InputEvent("beforeinput", { inputType: "insertLineBreak", bubbles: true, cancelable: true })));
+    await esperar(pagina, () => [...document.querySelectorAll('.bl[data-list="l1"] .bc-title')].some(e => e.textContent === "Con salto de línea"), null, { que: "el salto de línea también la crea" });
+    // Y la tecla Intro de siempre, una sola vez
+    await pagina.keyboard.type("Con Intro"); await pagina.keyboard.press("Enter"); await pagina.waitForTimeout(400);
+    assert.deepEqual((await tarjetas()).slice(-3), ["Con el botón", "Con salto de línea", "Con Intro"]);
+    await esperar(pagina, () => window.AscensoLocal.api("GET", "estado").then(e => ["Con el botón", "Con salto de línea", "Con Intro"].every(t => Object.values(e.cards).filter(c => c.title === t).length === 1)), null, { que: "las tres se guardan, sin repetir" });
+    // Lo mismo en la checklist de una tarjeta
+    await pagina.locator('.bc', { hasText: "Con Intro" }).tap(); await pagina.locator("#carddlg[open]").waitFor();
+    await pagina.tap("#ck-new"); await pagina.keyboard.type("Primer paso"); await pagina.locator("#carddlg .intro-btn").tap();
+    await pagina.locator("#carddlg .ck li").first().waitFor();
+    await pagina.keyboard.press("Escape"); await pagina.evaluate(() => document.activeElement.blur());
+    await atras(); await atras();
+    assert.ok(await visible("main"), "de vuelta en el día");
+
+        // ---- La cuenta se abre desde la barra
     await ir("cuenta"); await pagina.locator("#cuentadlg[open]").waitFor();
     await atras();
     assert.ok(!(await visible("#cuentadlg")), "atrás cierra el panel de la cuenta");

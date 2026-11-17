@@ -6287,3 +6287,36 @@ body.leyendo .barra {
   border-color: #fff;
   color: #1f2a2e;
 }
+
+/* Botón «Añadir» junto a los campos que se confirman con Intro: aparece al escribir con el dedo (en el teléfono
+   el teclado no siempre trae esa tecla) */
+.con-intro {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.con-intro input {
+  flex: 1;
+  min-width: 0;
+}
+.intro-btn {
+  display: none;
+  flex: none;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .con-intro:focus-within .intro-btn,
+  .con-intro:has(input:not(:placeholder-shown)) .intro-btn {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+/* La fecha (abre el calendario) también tiene altura para el dedo cuando cabe en una sola línea */
+@media (pointer: coarse), (max-width: 699px) {
+  .titleblock .date {
+    padding: 8px 12px 8px 0;
+    margin: -6px 0 -8px;
+  }
+}
