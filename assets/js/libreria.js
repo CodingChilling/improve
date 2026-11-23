@@ -84,6 +84,7 @@ window.AscensoLibreria=(()=>{
   // ---- entrar y salir
   let abriendo=false;
   async function abrir(){
+    if(window.AscensoPerfil&&window.AscensoPerfil.abierta&&window.AscensoPerfil.abierta()&&!window.AscensoPerfil.cerrar()) return;
     if(!vista.hidden||abriendo) return;
     abriendo=true;
     try{ await cargar(); }catch(e){ /* se muestra vacía */ }

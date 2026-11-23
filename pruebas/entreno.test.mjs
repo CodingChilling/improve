@@ -38,10 +38,11 @@ test("tipos de entreno: más tipos, cambios hacia delante y semanas pasadas inta
     assert.deepEqual(await tipos(-3, -2, -1, 0, 1, 2), ["climb", "climb", "active", "rest", "strength", "strength"]);
 
     // ---- Más tipos: añadir «Yoga» con su color
-    await p.evaluate(() => { document.getElementById("typecfgbox").open = true; });
+    await p.evaluate(() => { window.AscensoPerfil.abrir("ajustes"); document.getElementById("typecfgbox").open = true; });
     await p.click("#typeadd");
     await p.locator("#typecfg [data-tipo]").last().fill("Yoga");
     await p.locator("#typecfg [data-tc-color]").last().evaluate(i => { i.value = "#16a085"; i.dispatchEvent(new Event("input", { bubbles: true })); });
+    await p.click("#pf-volver");
     assert.equal(await p.locator("#plan button").count(), 5, "el día ofrece cinco tipos");
     await elegir(2, "Yoga");
     const yoga = await tipo(2);
@@ -58,19 +59,21 @@ test("tipos de entreno: más tipos, cambios hacia delante y semanas pasadas inta
     assert.deepEqual(await tipos(-3, -2, -1, 0, 1, 2, 3), ["climb", yoga, "active", "rest", "strength", yoga, yoga]);
 
     // ---- Quitar Yoga: desde esta semana pasa al sustituto; la semana pasada lo conserva (queda archivado)
-    await p.evaluate(() => { document.getElementById("typecfgbox").open = true; });
+    await p.evaluate(() => { window.AscensoPerfil.abrir("ajustes"); document.getElementById("typecfgbox").open = true; });
     const fila = p.locator(".tc-tipo", { has: p.locator('[data-tipo="' + yoga + '"]') });
     await fila.locator("[data-tc-del]").click();
     await fila.locator("[data-sustituto]").selectOption("rest");
     await fila.locator("[data-tc-si]").click();
     assert.deepEqual(await tipos(-3, -2, -1, 0, 1, 2, 3), ["climb", yoga, "active", "rest", "strength", "rest", "rest"]);
     assert.equal(await p.locator("#typecfg [data-tipo]").count(), 4, "ya no se puede configurar");
+    await p.click("#pf-volver");
     await lunes(0);
     assert.equal(await p.locator("#plan button").count(), 4, "ni elegir");
     await lunes(-2);
     assert.equal(await p.locator('#plan button[aria-pressed="true"]').innerText(), "Yoga", "pero el día pasado lo sigue mostrando");
     assert.match(await p.locator("#legend").innerText(), /Yoga/);
     // Un tipo que nadie usa se quita del todo
+    await p.evaluate(() => window.AscensoPerfil.abrir("ajustes"));
     await p.click("#typeadd");
     const nuevo = await p.locator("#typecfg [data-tipo]").last().getAttribute("data-tipo");
     await p.locator('[data-tc-del="' + nuevo + '"]').click();

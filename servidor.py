@@ -289,7 +289,7 @@ CREATE TABLE IF NOT EXISTS adjuntos (
 """
 VERSION_BD = 12
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 15
+VERSION_APP = 16
 
 
 class ErrorDatos(Exception):
@@ -433,6 +433,7 @@ def leer_estado(con):
         "planes": config.get("planes"),
         "thr": config.get("thr"),
         "tipos": config.get("tipos"),
+        "perfil": config.get("perfil"),
         "habits": habitos,
         "days": dias,
         "hist": historial,
@@ -557,6 +558,37 @@ def validar_dia(d):
     return peso, tipo, ids
 
 
+ZONAS_CUERPO = ["cabeza", "pecho", "brazos", "manos", "abdomen", "piernas"]
+REF_RE = re.compile(r"^[hte]:[A-Za-z0-9_-]{1,40}$")
+
+
+def validar_perfil(p):
+    """Perfil: figura (hombre o mujer), nombre, «mi porqué» y qué reúne cada zona del cuerpo (None: sin elegir)."""
+    if not isinstance(p, dict):
+        raise ErrorDatos("perfil no válido")
+    figura = str(p.get("figura") or "") or "hombre"
+    if figura not in ("hombre", "mujer"):
+        raise ErrorDatos("perfil no válido")
+    zonas = None
+    if p.get("zonas") is not None:
+        if not isinstance(p["zonas"], dict):
+            raise ErrorDatos("perfil no válido")
+        zonas = {}
+        for z in ZONAS_CUERPO:
+            lista = p["zonas"].get(z, [])
+            if not isinstance(lista, list) or len(lista) > 60:
+                raise ErrorDatos("perfil no válido")
+            salida = []
+            for r in lista:
+                if not isinstance(r, str) or not REF_RE.match(r):
+                    raise ErrorDatos("perfil no válido")
+                if r not in salida:
+                    salida.append(r)
+            zonas[z] = salida
+    return {"figura": figura, "nombre": str(p.get("nombre") or "").strip()[:40],
+            "porque": str(p.get("porque") or "").strip()[:300], "zonas": zonas}
+
+
 def guardar_config(con, datos):
     if "plan" in datos:
         con.execute("INSERT OR REPLACE INTO config VALUES ('plan', ?)", (json.dumps(validar_plan(datos["plan"])),))
@@ -566,6 +598,8 @@ def guardar_config(con, datos):
         con.execute("INSERT OR REPLACE INTO config VALUES ('tipos', ?)", (json.dumps(validar_tipos(datos["tipos"])),))
     if "planes" in datos:
         con.execute("INSERT OR REPLACE INTO config VALUES ('planes', ?)", (json.dumps(validar_planes(datos["planes"])),))
+    if "perfil" in datos:
+        con.execute("INSERT OR REPLACE INTO config VALUES ('perfil', ?)", (json.dumps(validar_perfil(datos["perfil"])),))
 
 
 def guardar_habitos(con, lista):
@@ -1125,7 +1159,7 @@ def importar(con, estado):
     con.execute("DELETE FROM dias")
     con.execute("DELETE FROM habitos")
     con.execute("DELETE FROM config")
-    guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos") if estado.get(k) is not None})
+    guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos", "perfil") if estado.get(k) is not None})
     guardar_habitos(con, estado.get("habits") or [])
     for fecha, d in estado["days"].items():
         guardar_dia(con, str(fecha), d)

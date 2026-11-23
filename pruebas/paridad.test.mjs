@@ -28,6 +28,13 @@ const OPERACIONES = [
   ["PUT", "config", { planes: [{ desde: "2026-02-02", plan: ["climb"] }] }],
   ["PUT", "config", { planes: [{ desde: "2026-02-02", plan: ["climb", "climb", "climb", "climb", "climb", "climb", "climb"] }, { desde: "2026-02-02", plan: ["rest", "rest", "rest", "rest", "rest", "rest", "rest"] }] }],
   ["PUT", "config", { planes: "x" }],
+  // Perfil
+  ["PUT", "config", { perfil: { figura: "mujer", nombre: "  Ana  ", porque: "x".repeat(400), zonas: { cabeza: ["h:h1", "h:h1", "t:climb"], abdomen: ["e:e1"], otra: ["h:h2"] } } }],
+  ["PUT", "config", { perfil: { figura: "robot" } }],
+  ["PUT", "config", { perfil: { zonas: { cabeza: ["x:h1"] } } }],
+  ["PUT", "config", { perfil: { zonas: { cabeza: "h:h1" } } }],
+  ["PUT", "config", { perfil: "nada" }],
+  ["PUT", "config", { perfil: { nombre: "Leo", zonas: null } }],
   ["PUT", "dias/2026-01-09", { type: "kyoga" }],
   ["PUT", "dias/2026-01-10", { type: "no vale" }],
   ["PUT", "habitos", [{ id: "h1", t: " Leer ", s: "20 min", days: [true, false, true, true, true, true, false] }, { id: "h2", streak: false, week: false }, { id: "h3", t: largo(80) }]],

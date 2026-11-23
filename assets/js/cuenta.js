@@ -1,5 +1,5 @@
-// Panel de la cuenta y de la sincronización. No tiene botón propio: se abre pulsando el texto de estado
-// («Guardado…», «Sincronizado…») del pie de la página o de la cabecera de los tableros.
+// Panel de la cuenta y de la sincronización. Vive en el perfil, en Ajustes › Cuenta (ver perfil.js). También se llega
+// pulsando el texto de estado («Guardado…», «Sincronizado…») del pie de la página o de la cabecera de los tableros.
 "use strict";
 window.AscensoCuenta=(()=>{
   const Sync=window.AscensoSync;
@@ -28,7 +28,7 @@ window.AscensoCuenta=(()=>{
     const st=document.getElementById("status"), bv=document.getElementById("bv-sync"), t=base.nivel==="error"?null:textos();
     if(st){ st.textContent=t?t[0]:base.t; st.dataset.nivel=t?t[2]:base.nivel; }
     if(bv&&t){ bv.textContent=t[1]; bv.dataset.nivel=t[2]; bv.title=t[0]; }
-    if(dlg&&dlg.open&&vista==="cuenta"){
+    if(abierta()&&vista==="cuenta"){
       pintar();
       // Tras la primera sincronización, este dispositivo ya está en la lista
       if(info.estado==="sincronizado"&&(!Array.isArray(lista)||!lista.length)) cargarDispositivos();
@@ -39,31 +39,42 @@ window.AscensoCuenta=(()=>{
   document.addEventListener("ascenso:sync",e=>{ info=e.detail; pintarEstado(); });
   for(const id of ["status","bv-sync"]){
     const el=document.getElementById(id); if(!el) continue;
-    el.classList.add("abre-cuenta"); el.setAttribute("role","button"); el.tabIndex=0; el.setAttribute("aria-haspopup","dialog");
+    el.classList.add("abre-cuenta"); el.setAttribute("role","button"); el.tabIndex=0;
     if(id==="status") el.title="Cuenta y sincronización";
     el.addEventListener("click",()=>abrir());
     el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } });
   }
 
-  // ---------------------------------------------------------------- diálogo
-  function crearDialogo(){
-    dlg=document.createElement("dialog"); dlg.className="tdlg cuenta"; dlg.id="cuentadlg"; dlg.setAttribute("aria-label","Cuenta y sincronización");
-    document.body.appendChild(dlg);
-    dlg.addEventListener("mousedown",e=>{ dlg._fondo=e.target===dlg; });
-    dlg.addEventListener("click",e=>{ if(e.target===dlg&&dlg._fondo&&!datos.ocupado&&vista!=="clave") dlg.close(); });
-    dlg.addEventListener("cancel",e=>{ if(datos.ocupado||vista==="clave") e.preventDefault(); });   // la clave de recuperación no se cierra con Esc
-    dlg.addEventListener("close",()=>{ Sync.cancelarEntrada(); datos={}; dlg.innerHTML=""; });
+  // ---------------------------------------------------------------- panel (dentro de Perfil › Ajustes)
+  function crearPanel(){
+    dlg=document.createElement("section"); dlg.className="cuenta cuenta-panel"; dlg.id="cuentadlg"; dlg.setAttribute("aria-label","Cuenta y sincronización");
     dlg.addEventListener("click",alPulsar);
     dlg.addEventListener("submit",e=>{ e.preventDefault(); alEnviar(e.target); });
   }
+  const vistaInicial=()=>info.email?(info.estado==="error"&&info.detalle==="sesion"?"entrar":"cuenta"):"inicio";
+  const abierta=()=>!!(dlg&&dlg.isConnected&&dlg.offsetParent!==null);
+  // El perfil la coloca en su sitio; la primera vez (o tras cerrarla) empieza por la vista que toque
+  function montarEn(cont){
+    if(!dlg) crearPanel();
+    if(dlg.parentNode!==cont) cont.appendChild(dlg);
+    if(!dlg.innerHTML) ir(vistaInicial());
+  }
+  // Al salir de Ajustes o cerrar el perfil se descarta lo que estuviera a medias (como al cerrar el antiguo diálogo)
+  function desmontar(){ if(!dlg) return; Sync.cancelarEntrada(); datos={}; vista="inicio"; dlg.innerHTML=""; }
+  // Mientras se espera una respuesta o se enseña la clave de recuperación (una sola vez), no se puede salir
+  const retiene=()=>!!(dlg&&dlg.innerHTML&&(datos.ocupado||vista==="clave"));
   function abrir(v){
-    if(!dlg) crearDialogo();
-    ir(v||(info.email?(info.estado==="error"&&info.detalle==="sesion"?"entrar":"cuenta"):"inicio"));
-    if(!dlg.open) dlg.showModal();
+    const P=window.AscensoPerfil;
+    if(!P||!P.disponible) return;
+    P.abrir("ajustes","cuenta");
+    if(!dlg) crearPanel();
+    if(v||!dlg.innerHTML) ir(v||vistaInicial());
+    dlg.scrollIntoView({block:"start"});
   }
   function ir(v,d){ vista=v; datos=d||{}; pintar(); const f=dlg.querySelector("input:not([type=checkbox]),button.c-pral"); if(f) f.focus(); if(v==="cuenta") cargarDispositivos(); }
 
-  const cabecera=t=>`<div class="dlg-head"><h3 class="c-titulo">${esc(t)}</h3><button type="button" class="dlg-x" data-accion="cerrar" aria-label="Cerrar">×</button></div>`;
+  // (El apartado ya se titula «Cuenta»: las demás vistas llevan su propio título)
+  const cabecera=t=>t==="Cuenta"?"":`<div class="dlg-head"><h3 class="c-titulo">${esc(t)}</h3></div>`;
   const aviso=()=>`<p class="c-error" role="alert"${datos.error?"":" hidden"}>${esc(datos.error||"")}</p>`;
   const campo=(nombre,etiqueta,tipo,auto,extra="")=>`<label class="c-campo"><span>${esc(etiqueta)}</span><input name="${nombre}" type="${tipo}" autocomplete="${auto}" required ${extra}></label>`;
   const boton=(texto,ocupado)=>`<button type="submit" class="add c-pral"${datos.ocupado?" disabled":""}>${esc(datos.ocupado?ocupado:texto)}</button>`;
@@ -126,7 +137,7 @@ window.AscensoCuenta=(()=>{
         ${campo("email","Email","email","username")}${aviso()}<div class="c-botones">${boton("Enviar el enlace","Enviando…")}</div></form>`,
 
       enviado:()=>cabecera("Revisa tu email")+`<div class="c-cuerpo"><p>Si hay una cuenta con <strong>${esc(datos.email)}</strong>, recibirás un enlace para poner una contraseña nueva. Ábrelo en este dispositivo.</p>
-        <div class="c-botones"><button type="button" class="add alt" data-accion="cerrar">Cerrar</button></div></div>`,
+        <div class="c-botones"><button type="button" class="add alt" data-accion="cerrar">Aceptar</button></div></div>`,
 
       recuperar:()=>cabecera("Nueva contraseña")+`<form class="c-cuerpo" data-form="recuperar">
         <p>Escribe tu clave de recuperación y elige una contraseña nueva.</p>
@@ -225,7 +236,7 @@ window.AscensoCuenta=(()=>{
     const b=e.target.closest("[data-accion]"); if(!b||datos.ocupado) return;
     const a=b.dataset.accion;
     try{
-      if(a==="cerrar") dlg.close();
+      if(a==="cerrar") ir(vistaInicial());
       else if(a==="ir") ir(b.dataset.vista);
       else if(a==="copiar"){ await navigator.clipboard.writeText(datos.claveRecuperacion); b.textContent="Copiada"; }
       else if(a==="sincronizar") Sync.sincronizarAhora();
@@ -234,7 +245,7 @@ window.AscensoCuenta=(()=>{
         ocupar(true); const borrar=b.dataset.borrar==="1";
         await Sync.salir(borrar);
         if(borrar){ location.reload(); return; }                 // la página vuelve a empezar, como recién instalada
-        dlg.close();
+        ir("inicio");
       }
       else if(a==="renombrar"){
         const actual=(lista||[]).find(d=>d.este), nombre=prompt("Nombre de este dispositivo",actual?actual.nombre:"");
@@ -264,5 +275,5 @@ window.AscensoCuenta=(()=>{
 
   Sync.iniciar().then(leerEnlace).catch(()=>{});
   window.addEventListener("hashchange",leerEnlace);              // el enlace se abre con la aplicación ya abierta
-  return {disponible:true, abrir};
+  return {disponible:true, abrir, montarEn, desmontar, retiene, abierta};
 })();

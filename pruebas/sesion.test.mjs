@@ -24,7 +24,7 @@ test("la sesión se recuerda y sobrevive a varias ventanas, a pestañas dormidas
       await A.reload(); await paginaLista(A); await alDia(A);
       assert.equal((await informe(A)).email, EMAIL, "vuelta " + (i + 1) + ": la sesión sigue ahí");
     }
-    assert.equal(await A.locator("#cuentadlg[open]").count(), 0, "no se pide iniciar sesión");
+    assert.equal(await A.locator("#cuentadlg").isVisible(), false, "no se pide iniciar sesión");
 
     // ---- Otra ventana renovó la sesión y esta no se enteró (estaba dormida): usa la sesión guardada, no su testigo gastado
     await A.evaluate(async url => {

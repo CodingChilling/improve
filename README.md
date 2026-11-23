@@ -37,7 +37,8 @@ elementos que ya están en la página y que, a primera vista, parecen solo decor
 | La **fecha** bajo el título | El calendario con los eventos |
 | Las **comillas** de la frase del día | La reflexión y las notas del día (y, desde ahí, «Todas tus notas») |
 | El **marco** de la imagen del día | Otra imagen para ese día |
-| El **texto de estado** («Guardado…», al pie de la página y en la cabecera de los tableros) | La cuenta y la sincronización |
+| El **texto de estado** («Guardado…», al pie de la página y en la cabecera de los tableros) | Perfil › Ajustes › Cuenta |
+| El recuadro de la **racha** | Tu perfil |
 | El **nombre del autor** de la frase del día | La librería (solo en la aplicación instalable) |
 
 Todas se cierran con <kbd>Esc</kbd>, pulsando fuera o volviendo a pulsar el mismo elemento
@@ -125,9 +126,28 @@ también en la barra de abajo. No existe en la versión clásica.
 - Los libros **no entran en la copia de seguridad** (pesarían demasiado) y quitar un libro lo quita de todos tus
   dispositivos, con sus subrayados.
 
-### Cuenta y sincronización (el texto de estado)
+### Accesos rápidos
 
-En la aplicación instalable, el texto que dice «Guardado en este dispositivo» abre el panel de la cuenta. Sin cuenta,
+Una barra con **Hoy, Tareas, Tableros, Librería y Perfil**: abajo en el móvil y, en el ordenador, como columna fija
+a la izquierda.
+
+### Perfil (la racha o el botón Perfil)
+
+Presidido por un **Hombre o una Mujer de Vitruvio** (a elegir), dibujado como un boceto a lo Leonardo.
+- **Nivel**: la experiencia se calcula con todo lo que haces (hábitos cumplidos, rachas, semanas completas, tareas y
+  tarjetas hechas, checklists, reflexiones y notas, lectura). Desmarcar un hábito o borrar una tarea hecha la resta;
+  archivar no. Hay **120 niveles con nombre**, en 12 etapas de 10 (del Valle al Cielo); a partir del 120 se sigue
+  sumando. El círculo de la figura marca lo que falta para el siguiente nivel.
+- **La lámina se completa con los años**: cada etapa añade una capa de detalle al dibujo (rostro, marcas de
+  proporción, músculos, sombreados, notas en escritura especular…), que se va trazando a medida que avanzas en ella.
+- **Ajustes**: tu figura, tu nombre (para saludarte) y «mi porqué»; el tema (automático, claro u oscuro, de cada
+  dispositivo); la **Cuenta**; y la configuración que antes estaba al final de la página del día: hábitos, tipos de
+  entreno, imágenes y copia de seguridad.
+
+### Cuenta y sincronización (Perfil › Ajustes › Cuenta)
+
+En la aplicación instalable, la cuenta está en Perfil › Ajustes; el texto que dice «Guardado en este dispositivo»
+lleva directamente hasta ella. Sin cuenta,
 Ascenso funciona igual, solo en ese dispositivo. Con cuenta:
 
 - **Crear una cuenta**: email y contraseña. Llega un email para confirmarla. La primera vez que inicias sesión se
@@ -258,7 +278,11 @@ assets/
   js/cifrado.js           Derivación de claves y cifrado (WebCrypto)
   js/sync.js              Sincronización con la cuenta (Supabase)
   js/cuenta.js            Panel de la cuenta
-  js/movil.js             Barra de navegación del móvil y botón «atrás» del teléfono
+  js/movil.js             Barra de accesos (abajo en el móvil, a la izquierda en el ordenador) y botón «atrás»
+  js/perfil.js            El perfil: resumen con la figura y el nivel, y Ajustes
+  js/niveles.js           Experiencia, rachas y los 120 niveles con nombre
+  js/figura.js            El Hombre y la Mujer de Vitruvio (SVG propio) y sus capas de detalle
+  js/tema.js              Tema claro, oscuro o automático
   js/libreria.js          La librería: estantería y lector de EPUB y PDF, subrayados y notas
   js/epub.js              Abre un EPUB y deja cada capítulo limpio para mostrarlo
   js/pwa.js               Registro del service worker y aviso de versión nueva

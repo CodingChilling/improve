@@ -6719,3 +6719,440 @@ dialog.tdlg.diario {
     height: 30px;
   }
 }
+
+/* ======================================================================
+   Barra de accesos en el ordenador: columna fija a la izquierda
+   ====================================================================== */
+.barra button[hidden] {
+  display: none;
+}
+@media (min-width: 700px) {
+  :root {
+    --rail: 78px;
+  }
+  body {
+    padding-left: var(--rail);
+  }
+  .barra {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    box-sizing: border-box;
+    width: var(--rail);
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 6px 18px;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-right: 1px solid var(--line);
+  }
+  .barra button {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 0 7px;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .barra button:hover {
+    color: var(--ink);
+    background: var(--soft);
+  }
+  .barra svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .barra button[aria-current="page"] {
+    color: var(--gold);
+    background: var(--soft);
+  }
+  .barra button[data-ir="perfil"] {
+    margin-top: auto;               /* el perfil, abajo del todo, como en las apps de escritorio */
+  }
+  .barra .b-punto {
+    position: absolute;
+    top: 7px;
+    left: calc(50% + 8px);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    background: var(--active);
+  }
+  .barra .b-punto[hidden] {
+    display: none;
+  }
+  .barra .b-punto[data-estado="sincronizando"] {
+    background: var(--strength);
+  }
+  .barra .b-punto[data-estado="sin-conexion"] {
+    background: var(--climb);
+  }
+  .barra .b-punto[data-estado="error"] {
+    background: var(--p-urgente);
+  }
+  body.leyendo {
+    padding-left: 0;
+  }
+}
+
+/* ======================================================================
+   Perfil (assets/js/perfil.js) y figura de Vitruvio (assets/js/figura.js)
+   ====================================================================== */
+.pf-top {
+  flex-wrap: wrap;
+}
+.pf-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.pf-tabs button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.pf-tabs button[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.pf-cuerpo {
+  max-width: 1000px;
+}
+.pf-cuerpo section[hidden] {
+  display: none;
+}
+.pf-portada {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+@media (min-width: 860px) {
+  .pf-portada {
+    grid-template-columns: minmax(300px, 440px) minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+.pf-figura .vitruvio {
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.18));
+}
+.pf-saludo {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.pf-porque {
+  margin: 0 0 16px;
+  padding-left: 12px;
+  border-left: 3px solid var(--soft);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.pf-nivel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 0 12px;
+}
+.pf-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.pf-nivel strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+.pf-nivel small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.pf-barra {
+  height: 8px;
+  border-radius: 8px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pf-barra i {
+  display: block;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--gold);
+}
+.pf-xp,
+.pf-etapa,
+.pf-nota {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.pf-cifras {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+.pf-cifras div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.pf-cifras b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+.pf-cifras span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.pf-caja {
+  margin: 0 0 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.pf-caja h3 {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-size: 1.3rem;
+}
+.pf-fuentes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-fuentes li {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4.5rem;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 0.9rem;
+}
+.pf-fuentes i {
+  height: 6px;
+  border-radius: 6px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pf-fuentes b {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+.pf-fuentes em {
+  font-style: normal;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pf-figuras {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pf-figuras button {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.pf-figuras button[aria-checked="true"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--soft);
+}
+.pf-mini .vitruvio {
+  display: block;
+  width: 110px;
+}
+.pf-campo {
+  display: block;
+  margin: 0 0 10px;
+}
+.pf-campo span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pf-campo input,
+.pf-campo textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.pf-seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.pf-seg button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.pf-seg button[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.pf-ajustes details.cfg {
+  margin: 0 0 16px;
+}
+/* La cuenta, dentro de Ajustes (antes era una ventana) */
+.cuenta-panel .dlg-head {
+  padding: 0;
+}
+.cuenta-panel .c-cuerpo {
+  padding: 8px 0 0;
+}
+.cuenta-panel .c-titulo {
+  font-size: 1.1rem;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .pf-campo input,
+  .pf-campo textarea {
+    font-size: 16px;
+  }
+  .pf-tabs button,
+  .pf-seg button {
+    min-height: 40px;
+  }
+  .pf-fuentes li {
+    grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr) 4rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* La figura: boceto en sepia sobre papel; en oscuro, trazo claro sobre papel oscuro */
+.vitruvio {
+  --vf-linea: #6b4a2b;
+  --vf-papel: #f3ead7;
+  --vf-oro: #b8862f;
+  --vf-zona: 196, 104, 52;
+}
+:root[data-theme="dark"] .vitruvio {
+  --vf-linea: #e3d3b5;
+  --vf-papel: #25221d;
+  --vf-oro: #d9ad62;
+  --vf-zona: 232, 150, 84;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .vitruvio {
+    --vf-linea: #e3d3b5;
+    --vf-papel: #25221d;
+    --vf-oro: #d9ad62;
+    --vf-zona: 232, 150, 84;
+  }
+}
+.vf-papel {
+  fill: var(--vf-papel);
+}
+.vf-trazo {
+  fill: none;
+  stroke: var(--vf-linea);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.vf-circulo,
+.vf-cuadrado {
+  fill: none;
+  stroke: var(--vf-linea);
+  stroke-width: 0.9;
+  opacity: 0.75;
+}
+.vf-anillo {
+  fill: none;
+  stroke: var(--vf-oro);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+}
+.vf-zona {
+  fill: rgba(var(--vf-zona), calc(var(--b) * 0.6));
+}
+.vf-nota text,
+.vf-firma {
+  fill: var(--vf-linea);
+  stroke: none;
+  font-family: var(--serif);
+  font-style: italic;
+}
+.vf-guia {
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+}

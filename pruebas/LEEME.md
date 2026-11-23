@@ -36,6 +36,7 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 | `pwa.test.mjs` | Lo que se publica en GitHub Pages: solo la aplicación, rutas relativas, política de seguridad, funcionamiento sin conexión y aviso de versión nueva. |
 | `cifrado.test.mjs` | Derivación de claves, cifrado de ida y vuelta, claves equivocadas y contenido manipulado. |
 | `sync.test.mjs` | Dos dispositivos con la misma cuenta: altas, cambios, borrados (también en cascada), edición sin conexión, conflictos, imágenes, dos pestañas, sesión recordada. Y que el servidor no recibe nada sin cifrar. |
+| `perfil.test.mjs` | El perfil: niveles (120 nombres, curva, experiencia que sube y baja con los datos), acceso por la racha y la barra, Ajustes (figura, nombre, «mi porqué», tema, configuración movida, cuenta). |
 | `zonas.test.mjs` | Áreas de color de los mapas, con ratón y con el dedo: crear, mover con los nodos de dentro o sola, tamaño, forma, color, bloquear, título, buscar, borrar y deshacer. |
 | `notas.test.mjs` | Las frases (ids únicos y completos) y el diario de reflexiones y notas: lista con la frase de cada día, filtros, búsqueda e ir al día. |
 | `entreno.test.mjs` | Tipos de entreno propios (añadir, color, quitar con sustituto o archivar) y cambios de entreno de un día: hacia las semanas siguientes, nunca hacia las pasadas. |

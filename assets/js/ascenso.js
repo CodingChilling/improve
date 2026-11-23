@@ -37,6 +37,14 @@ function cleanTipos(t){
 }
 // Plan semanal por fechas: «plan» es el de siempre y cada versión de «planes» manda desde su fecha en adelante.
 // Así, cambiar el entreno de esta semana o de las siguientes no toca las semanas que ya pasaron.
+// Perfil (figura, nombre, «mi porqué» y reparto de las zonas del cuerpo; zonas null = aún sin elegir)
+const ZONAS_CUERPO=["cabeza","pecho","brazos","manos","abdomen","piernas"];
+function cleanPerfil(p){
+  p=p&&typeof p==="object"?p:{};
+  let zonas=null;
+  if(p.zonas&&typeof p.zonas==="object"){ zonas={}; for(const z of ZONAS_CUERPO) zonas[z]=Array.isArray(p.zonas[z])?[...new Set(p.zonas[z].filter(r=>typeof r==="string"&&/^[hte]:[A-Za-z0-9_-]{1,40}$/.test(r)))].slice(0,60):[]; }
+  return {figura:p.figura==="mujer"?"mujer":"hombre", nombre:String(p.nombre||"").trim().slice(0,40), porque:String(p.porque||"").trim().slice(0,300), zonas};
+}
 function cleanPlanes(p){
   const F=/^\d{4}-\d{2}-\d{2}$/, out=[];
   if(Array.isArray(p)) for(const v of p){
@@ -65,6 +73,7 @@ const cleanState = (x,fallbackDays) => ({
   habits:cleanHabits(x.habits),
   thr:[0.5,0.66,0.75,1].includes(+x.thr)?+x.thr:0.66,
   tipos:cleanTipos(x.tipos),
+  perfil:cleanPerfil(x.perfil),
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
@@ -4419,7 +4428,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=14;
+const VERSION_NECESARIA=16;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){
@@ -4431,7 +4440,7 @@ function saveLocal(){
     localStorage.setItem(STORE,j); return true;
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,perfil:state.perfil,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
   boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks,mzones:state.mzones})); }
 async function api(method,path,body){
   if(LOCAL) return AscensoLocal.api(method,path,body);
@@ -4481,8 +4490,8 @@ async function sync(){
   const enviar=async(metodo,ruta,datos)=>{ try{ await api(metodo,ruta,datos); return true; }catch(e){ errores.push(e); return false; } };
   try{
     const now=snapshot();
-    if(JSON.stringify([now.plan,now.planes,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.planes,synced.thr,synced.tipos])){
-      if(await enviar("PUT","config",{plan:now.plan,planes:now.planes,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.planes=now.planes; synced.thr=now.thr; synced.tipos=now.tipos; }
+    if(JSON.stringify([now.plan,now.planes,now.thr,now.tipos,now.perfil])!==JSON.stringify([synced.plan,synced.planes,synced.thr,synced.tipos,synced.perfil])){
+      if(await enviar("PUT","config",{plan:now.plan,planes:now.planes,thr:now.thr,tipos:now.tipos,perfil:now.perfil})){ synced.plan=now.plan; synced.planes=now.planes; synced.thr=now.thr; synced.tipos=now.tipos; synced.perfil=now.perfil; }
     }
     if(JSON.stringify(now.habits)!==JSON.stringify(synced.habits)){
       if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;

@@ -23,7 +23,7 @@ window.AscensoLocal=(()=>{
   const MAX_IMAGEN=15*1024*1024;         // bytes por imagen
   const DIAS_HUERFANAS=30;               // días que se conserva una imagen que ya no está en ninguna libreta
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
-  const VERSION_APP=15;
+  const VERSION_APP=16;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
                 "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","zonas","adjuntos",
                 "libros","lecturas","subrayados","archivos"];
@@ -216,7 +216,7 @@ window.AscensoLocal=(()=>{
     const hay=o=>Object.keys(o).length>0;
     const vacia=!hay(config)&&!habitos.length&&!hay(dias)&&!hay(historial)&&!hay(etiquetas)&&!hay(tareas)&&!hay(notas)&&!hay(eventos)&&!hay(tableros)&&!hay(mapas);
     const nada=v=>v===undefined?null:v;
-    return {plan:nada(config.plan),planes:nada(config.planes),thr:nada(config.thr),tipos:nada(config.tipos),habits:habitos,days:dias,hist:historial,tags:etiquetas,tasks:tareas,
+    return {plan:nada(config.plan),planes:nada(config.planes),thr:nada(config.thr),tipos:nada(config.tipos),perfil:nada(config.perfil),habits:habitos,days:dias,hist:historial,tags:etiquetas,tasks:tareas,
       notes:notas,events:eventos,boards:tableros,blabels:etiquetasTab,blists:listas,cards:tarjetas,maps:mapas,mnodes:nodos,mlinks:conexiones,mzones:zonas,
       att:adjuntos,vacia,version:VERSION_APP};
   }
@@ -261,12 +261,34 @@ window.AscensoLocal=(()=>{
     if(!UMBRALES.has(n)) mal("umbral de racha no válido");
     return n;
   }
+  // Perfil: figura (hombre o mujer), nombre, «mi porqué» y qué hábitos, tipos de entreno o etiquetas
+  // reúne cada zona del cuerpo (null: aún sin elegir; se propone un reparto automático)
+  const ZONAS_CUERPO=["cabeza","pecho","brazos","manos","abdomen","piernas"], REF_RE=/^[hte]:[A-Za-z0-9_-]{1,40}$/;
+  function validarPerfil(p){
+    if(!esDic(p)) mal("perfil no válido");
+    const figura=texto(p.figura)||"hombre";
+    if(figura!=="hombre"&&figura!=="mujer") mal("perfil no válido");
+    let zonas=null;
+    if(p.zonas!==null&&p.zonas!==undefined){
+      if(!esDic(p.zonas)) mal("perfil no válido");
+      zonas={};
+      for(const z of ZONAS_CUERPO){
+        const l=p.zonas[z]===undefined?[]:p.zonas[z];
+        if(!Array.isArray(l)||l.length>60) mal("perfil no válido");
+        const out=[];
+        for(const r of l){ if(typeof r!=="string"||!REF_RE.test(r)) mal("perfil no válido"); if(!out.includes(r)) out.push(r); }
+        zonas[z]=out;
+      }
+    }
+    return {figura,nombre:cortar(texto(p.nombre).trim(),40),porque:cortar(texto(p.porque).trim(),300),zonas};
+  }
   function guardarConfig(op,d){
     if(!esDic(d)) d={};
     if("plan" in d) op.poner("config","plan",{v:validarPlan(d.plan)});
     if("thr" in d) op.poner("config","thr",{v:validarUmbral(d.thr)});
     if("tipos" in d) op.poner("config","tipos",{v:validarTipos(d.tipos)});
     if("planes" in d) op.poner("config","planes",{v:validarPlanes(d.planes)});
+    if("perfil" in d) op.poner("config","perfil",{v:validarPerfil(d.perfil)});
   }
   function guardarHabitos(op,listaH){
     if(!Array.isArray(listaH)||listaH.length>100) mal("lista de hábitos no válida");
@@ -702,7 +724,7 @@ window.AscensoLocal=(()=>{
     if(!esDic(estado)||!esDic(estado.days)) mal("copia no válida");
     // Se sustituye todo menos las imágenes, igual que en el servidor
     for(const t of TABLAS) if(t!=="adjuntos"&&!TABLAS_LIBRERIA.has(t)) for(const id of op.todos(t).keys()) op.borrar(t,id);
-    const config={}; for(const k of ["plan","planes","thr","tipos"]) if(estado[k]!==null&&estado[k]!==undefined) config[k]=estado[k];
+    const config={}; for(const k of ["plan","planes","thr","tipos","perfil"]) if(estado[k]!==null&&estado[k]!==undefined) config[k]=estado[k];
     guardarConfig(op,config);
     guardarHabitos(op,estado.habits||[]);
     for(const [fecha,d] of Object.entries(estado.days)) guardarDia(op,fecha,d);

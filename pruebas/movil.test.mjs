@@ -184,14 +184,18 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     assert.ok(await visible("main"), "de vuelta en el día");
 
         // ---- La cuenta se abre desde la barra
-    await ir("cuenta"); await pagina.locator("#cuentadlg[open]").waitFor();
+    await ir("perfil"); await pagina.locator("#perfil:not([hidden])").waitFor();
+    assert.equal(await actual(), "perfil");
+    await pagina.tap('[data-pf="ajustes"]'); await pagina.locator("#cuentadlg").waitFor({ state: "visible" });
     await atras();
-    assert.ok(!(await visible("#cuentadlg")), "atrás cierra el panel de la cuenta");
+    assert.ok(!(await visible("#perfil")) && await visible("main"), "atrás cierra el perfil");
     assert.deepEqual(errores, []);
 
     // ---- En pantallas anchas no hay barra
     const ancha = await (await nav.newContext({ viewport: { width: 1200, height: 800 } })).newPage();
     await ancha.goto(app.url); await ancha.waitForSelector("#brand");
-    assert.ok(!(await ancha.locator("#barra").isVisible()), "en el ordenador no hay barra");
+    const rail = await ancha.locator("#barra").boundingBox();
+    assert.ok(rail.x === 0 && rail.width < 100 && rail.height >= 790, "en el ordenador, la barra es una columna a la izquierda");
+    assert.equal(await ancha.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
   } finally { await nav.close(); await app.cerrar(); }
 });

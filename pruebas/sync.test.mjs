@@ -97,8 +97,8 @@ test("dos dispositivos con la misma cuenta se sincronizan (cifrado de extremo a 
     assert.equal(await A.p.inputValue("#tnew"), "a medias");
     assert.equal(await A.p.evaluate(() => document.activeElement.id), "tnew");
     await A.p.fill("#tnew", "");
-    // Editando algo de la propia lista (el nombre de un hábito): la página no se repinta hasta que se termina
-    await A.p.evaluate(() => { document.getElementById("cfg").open = true; });
+    // Editando algo de la propia lista (el nombre de un hábito, en Perfil › Ajustes): la página no se repinta hasta que se termina
+    await A.p.evaluate(() => { window.AscensoPerfil.abrir("ajustes"); document.getElementById("cfg").open = true; });
     const nombre = A.p.locator("#hlist .name").first();
     await nombre.focus(); await nombre.pressSequentially(" (editando)");
     await apiLocal(B.p, "PUT", "tareas/llega2", tarea("Llega mientras A edita un hábito"));
@@ -107,7 +107,7 @@ test("dos dispositivos con la misma cuenta se sincronizan (cifrado de extremo a 
     assert.ok(!(await A.p.locator("#board").textContent()).includes("Llega mientras A edita un hábito"), "no se repinta mientras se edita");
     assert.match(await nombre.inputValue(), /\(editando\)/);
     assert.ok(await nombre.evaluate(e => e === document.activeElement && e.isConnected), "el campo sigue siendo el mismo y con el cursor");
-    await A.p.locator("#h-tasks").click();                                               // al terminar, aparece lo que llegó…
+    await A.p.click("#pf-volver");                                                       // al terminar, aparece lo que llegó…
     await A.p.locator("#board .task", { hasText: "Llega mientras A edita un hábito" }).waitFor({ timeout: 8000 });
     await esperar(B.p, () => window.AscensoLocal.api("GET", "estado").then(e => e.habits.some(h => /\(editando\)/.test(h.t))), null, { limite: 12000, que: "…y lo editado en A llega a B" });
 

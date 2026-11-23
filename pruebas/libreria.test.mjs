@@ -29,7 +29,8 @@ test("librería: añadir, leer, subrayar y recordar por dónde se iba (EPUB y PD
 
     // ---- La puerta es el nombre del autor de la frase; nada más la delata
     assert.equal(await p.locator("#quote .q-autor").evaluate(e => getComputedStyle(e).cursor), "default");
-    assert.ok(!(await p.locator("#barra").isVisible()), "en el ordenador no hay barra");
+    const rail = await p.locator("#barra").boundingBox();
+    assert.ok(rail.x === 0 && rail.width < 100 && rail.height > 600, "en el ordenador, la barra es una columna a la izquierda");
     await abrirLibreria(p);
     assert.ok(!(await p.locator("main").isVisible()), "la librería sustituye a la página del día");
 
@@ -171,14 +172,14 @@ test("librería: añadir, leer, subrayar y recordar por dónde se iba (EPUB y PD
   } finally { await nav.close(); await app.cerrar(); }
 });
 
-test("librería en el móvil: está en la barra, en lugar de Progreso, y «atrás» cierra paso a paso", async () => {
+test("librería en el móvil: está en la barra, en lugar de Progreso (y Perfil al final), y «atrás» cierra paso a paso", async () => {
   const app = await servirApp(), nav = await chromium.launch();
   try {
     const { defaultBrowserType, ...perfil } = devices["Pixel 7"];
     const { pagina: p } = await abrirConDatos(nav, app, perfil);
     const errores = []; p.on("pageerror", e => errores.push(String(e)));
     const atras = async () => { await p.goBack(); await p.waitForTimeout(250); };
-    assert.deepEqual(await p.locator("#barra button:visible").evaluateAll(bs => bs.map(b => b.dataset.ir)), ["hoy", "tareas", "tableros", "libreria", "cuenta"]);
+    assert.deepEqual(await p.locator("#barra button:visible").evaluateAll(bs => bs.map(b => b.dataset.ir)), ["hoy", "tareas", "tableros", "libreria", "perfil"]);
     await p.tap('#barra [data-ir="libreria"]'); await p.locator("#libreria:not([hidden])").waitFor();
     assert.equal(await p.locator("#barra [aria-current=page]").getAttribute("data-ir"), "libreria");
     await anadir(p, [EPUB], 1);
