@@ -55,7 +55,7 @@ window.AscensoFigura=(()=>{
       brazoAbajo:[[80.6,165.1],[82.6,165.9],[86.4,166.5],[90.4,167],[95.4,167.6],[100,168],[104,167.8],[107.6,167.2],[112.4,168.2],[118.6,169.4],[125,169.6],[130.4,168.8],[136,169.4],[143,170.2],[150,170.6],[156.6,171],[162.4,171.8],[167.6,173.4],[172.6,175.8]],
       tronco:[[174.8,180.2],[174.6,186],[175.4,194],[176.8,202],[178.2,210],[178.6,216],[178.2,222],[177.2,229],[176.2,236],[175.8,243]],
       piernaFuera:[[176,251],[176.6,261],[177.6,272],[179,283],[180.6,292],[181.4,298],[180.8,304],[179.6,311],[179.2,318],[180,327],[182,336],[184,343],[184.8,348]],
-      pie:[[183.8,352],[183,355.6],[184,358.8],[187.4,360.5],[191.6,360.9],[195.4,360.4],[197.4,358.4]],
+      pie:[[183.4,351.6],[180.8,354.4],[178.6,357],[178.6,359.2],[181,360.2],[185,360.5],[189.4,360.5],[193.4,360.2],[196.8,358.8]],
       piernaDentro:[[197.6,354.6],[197,350],[197.2,344],[198,334],[198.6,322],[198.2,311],[198.8,302],[198.2,293],[198.6,282],[199.2,270],[199.7,259],[200,252]],
       cabeza:[[200,150.6],[196,149.9],[192.4,147.5],[189.8,143.8],[188.3,139.6],[187.4,134],[187.6,128.6],[189.6,123.6],[193.6,120.4],[200,119.4]],
       hombro:[178,164], cadera:[187.5,246],
@@ -68,7 +68,7 @@ window.AscensoFigura=(()=>{
       brazoAbajo:[[81.6,165.4],[83.6,166.1],[87.4,166.5],[91,166.8],[95.6,167.3],[100.2,167.6],[104.4,167.4],[108.4,166.8],[113.4,167.6],[119.6,168.6],[126,168.6],[131,168],[137,168.6],[144,169.2],[151,169.6],[157.6,170],[163,170.8],[167.8,172.8],[172.6,175.6]],
       tronco:[[175,179.6],[175.2,185],[175.6,191.4],[177.2,198],[179.6,205],[181,212],[180.4,219],[178,226],[175,233],[173.4,240],[173,247]],
       piernaFuera:[[173.4,255],[174.4,265],[176,276],[178.4,287],[180.4,295],[181,300],[180.6,306],[179.8,313],[179.6,320],[180.4,329],[182.2,337],[184,344],[184.8,348.6]],
-      pie:[[184,352.4],[183.4,355.6],[184.4,358.6],[187.6,359.9],[191.6,360.2],[195,359.8],[197,358]],
+      pie:[[183.6,352],[181.4,354.6],[179.4,357.2],[179.4,359.2],[181.8,360.1],[185.6,360.4],[189.6,360.4],[193.4,360],[196.6,358.6]],
       piernaDentro:[[197.2,354.6],[196.8,350],[197,344],[197.8,334],[198.4,322],[198,311],[198.8,302],[198.2,293],[198.8,282],[199.4,270],[199.8,260],[200,253.5]],
       cabeza:[[200,150.2],[196.4,149.6],[193,147.4],[190.4,143.8],[188.8,139.4],[187.9,134],[188.1,128.6],[190,123.8],[194,120.6],[200,119.6]],
       hombro:[180,164], cadera:[186.5,247],
@@ -86,7 +86,7 @@ window.AscensoFigura=(()=>{
   CUERPOS.hombre.peloFuera=mechones(200,133.4,15.4,18,102,5,0.75).slice(1);
   CUERPOS.hombre.oreja="M188.2 134.8 C186.4 134.2 185.7 136.6 186 138.6 C186.3 140.6 187.3 141.6 188.5 141.3";
   CUERPOS.mujer.peloDentro=[[200,125],[196,124.7],[191.4,126.1],[188.8,129.4],[188,134.4],[188.2,141],[189.2,146.6],[189.8,152],[189.4,158],[188,164]];
-  CUERPOS.mujer.peloPunta=[[186.4,168.6],[184.4,166.2],[182.6,169.8],[180.6,167]];
+  CUERPOS.mujer.peloPunta=[[186.8,167.4],[184.4,169.6],[181.6,168.6]];
   CUERPOS.mujer.peloFuera=[[180.4,161.6],[181.6,156.4],[180.6,150.6],[181.8,144.4],[181.6,137.4],[183.2,128.6],[186.6,121.4],[192.2,116.7],[200,115.2]];
   CUERPOS.mujer.oreja="";
   // Contorno del cuerpo (sin la cabeza): de un lado del cuello al otro dando la vuelta a la figura
@@ -117,27 +117,28 @@ window.AscensoFigura=(()=>{
   // Rayado a mano: líneas paralelas (ángulo en grados) partidas en trazos cortos, con pequeñas variaciones de
   // separación, inclinación y largo, como hechas a plumilla. Cubren un rectángulo; la máscara decide dónde se ven.
   function trama(x0,y0,x1,y1,paso,angulo,semilla){
-    const r=azar(semilla), a=angulo*Math.PI/180, cx=(x0+x1)/2, cy=(y0+y1)/2, R=Math.hypot(x1-x0,y1-y0)/2, out=[];
+    const r=azar(semilla), a=angulo*Math.PI/180, cx=(x0+x1)/2, cy=(y0+y1)/2, R=Math.hypot(x1-x0,y1-y0)/2, out=[[],[],[]];
     for(let t=-R;t<=R;t+=paso*(0.8+r()*0.4)){
       let u=-R*(0.85+r()*0.15);
       const fin=R*(0.85+r()*0.15);
       while(u<fin){
         const largo=6+r()*10, b=a+(r()-0.5)*0.07, dx=Math.cos(b), dy=Math.sin(b), nx=-Math.sin(a), ny=Math.cos(a), o=(r()-0.5)*0.5;
         const x=cx+nx*(t+o)+Math.cos(a)*u, y=cy+ny*(t+o)+Math.sin(a)*u;
-        out.push(`M${f1(x)} ${f1(y)}l${f1(dx*largo)} ${f1(dy*largo)}`);
+        out[Math.floor(r()*3)].push(`M${f1(x)} ${f1(y)}l${f1(dx*largo)} ${f1(dy*largo)}`);
         u+=largo+0.4+r()*1.4;
       }
     }
-    return out.join("");
+    return out.map(l=>l.join(""));
   }
   // El rayado solo se genera dentro de la caja de cada zona de sombra (más un margen para el difuminado)
   const hechos=new Map();
   function rayado(d,paso,angulo,semilla){
     const k=semilla+"|"+angulo; if(hechos.has(k)) return hechos.get(k);
-    const t=d.split(/(?=M)/).filter(x=>x.trim()).map((sub,i)=>{
+    const t=["","",""];
+    d.split(/(?=M)/).filter(x=>x.trim()).forEach((sub,i)=>{
       const n=sub.match(/-?\d+(\.\d+)?/g).map(Number), xs=n.filter((_,k)=>k%2===0), ys=n.filter((_,k)=>k%2===1);
-      return trama(Math.min(...xs)-5,Math.min(...ys)-5,Math.max(...xs)+5,Math.max(...ys)+5,paso,angulo,semilla+i*101);
-    }).join("");
+      trama(Math.min(...xs)-5,Math.min(...ys)-5,Math.max(...xs)+5,Math.max(...ys)+5,paso,angulo,semilla+i*101).forEach((x,k)=>{ t[k]+=x; });
+    });
     hechos.set(k,t); return t;
   }
   // Dónde cae la sombra (luz desde arriba a la izquierda). Las máscaras se difuminan: el rayado se desvanece hacia la luz
@@ -259,9 +260,9 @@ window.AscensoFigura=(()=>{
   const MANOS_PIES={
     lineas:"M186.4 291.6 C188.6 289.4 192.2 289.4 194 291.8 M186 297.4 C187.4 300.6 191.6 301.2 193.8 298.4"
       +" M183.8 343.4 C185.2 342.6 186.8 343.2 187.2 345 M195.6 341.8 C196.4 341.2 197 341.6 197.2 342.6"
-      +" M189.6 349.4 C189.8 352.2 190.6 354.8 191.6 357.2 M192.6 349.6 C193.2 352.4 194 354.8 195 356.8"
-      +" M186.9 357.4 C186.7 358.6 186.8 359.8 187.1 360.6 M189.6 357.8 C189.4 359 189.5 360.2 189.8 360.9 M192.3 357.9 C192.2 359.1 192.4 360.2 192.7 360.8 M194.6 357.4 C194.5 358.6 194.8 359.8 195.2 360.4"
-      +" M195.4 358.6 C194.8 359 194.8 359.7 195.4 360 M192.9 359.4 C192.5 359.7 192.5 360.2 192.9 360.4"
+      +" M189 350.4 C188.2 352.6 187.2 354.6 186 356.6 M192.2 350.8 C191.8 353 191.4 355 190.8 357"
+      +" M182.4 357.4 C181.9 358.4 181.8 359.4 182 360.1 M185.2 357.8 C184.9 358.8 184.9 359.7 185.1 360.4 M188.2 358 C188 359 188.1 359.8 188.3 360.4 M191.6 357.8 C191.6 358.8 191.8 359.6 192 360.2"
+      +" M194.6 358.4 C193.8 358.7 193.7 359.5 194.3 359.9 M189.9 359.1 C189.5 359.4 189.5 359.9 189.9 360.1 M186.6 359.1 C186.2 359.4 186.2 359.9 186.6 360.1"
       +" M131.2 163.4 C130.2 164.6 130.2 165.8 131 166.6 M107.8 161.2 C107.2 163 107.2 165 107.8 166.8"
       +" M96.2 162.1 C92.2 162.2 87.8 162.6 83.4 163.2 M96.6 163.8 C92.6 164 88.2 164.3 82.4 164.5 M97.2 165.5 C93.6 165.7 90.2 165.9 86.6 166.1"
       +" M91.4 160.9 C91.1 161.4 91.1 161.9 91.3 162.3 M86.8 161.7 C86.5 162.2 86.5 162.7 86.7 163.1 M91 163.4 C90.8 163.8 90.8 164.2 91 164.6 M86.6 163.9 C86.4 164.3 86.4 164.7 86.6 165.1 M91.6 165.1 C91.4 165.5 91.4 166 91.6 166.3"
@@ -269,7 +270,7 @@ window.AscensoFigura=(()=>{
       +" M105 160.7 C102.6 161.9 99.6 162.3 96.6 161.8 M96.6 158 C95.9 158.3 95.8 158.9 96.3 159.3 M101.2 159.2 C100.9 159.7 100.9 160.2 101.1 160.6",
     tono:"M96.2 162.5 C92.2 162.6 87.8 163 83.4 163.6 L83.4 164.2 C87.8 163.6 92.2 163.2 96.2 163.1 Z M96.6 164.2 C92.6 164.4 88.2 164.7 82.4 164.9 L82.6 165.4 C88.2 165.2 92.6 164.9 96.6 164.8 Z"
       +" M105 161.2 C102.6 162.4 99.6 162.8 96.6 162.3 L96.6 163 C99.6 163.4 102.6 163 105 161.8 Z"
-      +" M187.2 357.8 L187.6 357.8 L187.6 360.6 L187.2 360.6 Z M189.9 358.2 L190.3 358.2 L190.3 360.9 L189.9 360.9 Z M192.6 358.2 L193 358.2 L193 360.8 L192.6 360.8 Z M195 357.8 L195.4 357.8 L195.4 360.4 L195 360.4 Z",
+      +" M182.6 357.6 L183 357.6 L182.6 360.2 L182.2 360.2 Z M185.4 358 L185.8 358 L185.6 360.4 L185.2 360.4 Z M188.4 358.2 L188.8 358.2 L188.7 360.4 L188.3 360.4 Z M191.8 358 L192.2 358 L192.3 360.2 L191.9 360.2 Z",
   };
 
   // Estudio al margen: una cabeza de perfil con el rostro dividido en tres partes iguales
@@ -298,7 +299,7 @@ window.AscensoFigura=(()=>{
       ticks.push(`M${f1(x)} ${SQ.y+SQ.l+1.5}L${f1(x)} ${f1(SQ.y+SQ.l+1.5+largo)}`, `M${SQ.x-1.5} ${f1(y)}L${f1(SQ.x-1.5-largo)} ${f1(y)}`); }
     const ROMANOS=["I","II","III","IV","V","VI","VII","VIII"];
     for(let i=0;i<8;i++) numeros.push(`<text x="${SQ.x-9}" y="${f1(SQ.y+(i+0.5)*SQ.l/8+1.6)}" font-size="4.4" text-anchor="end">${ROMANOS[i]}</text>`);
-    const sombra=(d,cl,mascara)=>`<g clip-path="url(#${id}c)"><g mask="url(#${id}${mascara})"><path class="${cl}" d="${d}"/></g></g>`;
+    const sombra=(d,cl,mascara)=>`<g clip-path="url(#${id}c)"><g mask="url(#${id}${mascara})">${d.map((x,k)=>`<path class="${cl} vf-tinta${k}" d="${x}"/>`).join("")}</g></g>`;
     const tramaA=rayado(SOMBRA[figura],2,45,figura==="mujer"?11:7), tramaB=rayado(SOMBRA_HONDA,2.1,-40,figura==="mujer"?23:19);
     const brazo=giro(b.hombro[0],b.hombro[1],18,0.945), brazoD=giro(400-b.hombro[0],b.hombro[1],-18,0.945);
     const pierna=giro(b.cadera[0],b.cadera[1],22,0.965), piernaD=giro(400-b.cadera[0],b.cadera[1],-22,0.965);
@@ -307,10 +308,14 @@ window.AscensoFigura=(()=>{
       // 1 · El dibujo: contorno, cabello y la geometría (siempre)
       null,
       // 2 · La segunda postura: brazos en alto y piernas abiertas, tocando el círculo
-      ["pose2",`<path transform="${brazo}" d="${a}"/><path transform="${brazoD}" d="${reflejar(a)}"/><path transform="${pierna}" d="${p}"/><path transform="${piernaD}" d="${reflejar(p)}"/>`],
+      ["pose2",(()=>{
+        const miembros=[[brazo,a],[brazoD,reflejar(a)],[pierna,p],[piernaD,reflejar(p)]];
+        return miembros.map(([t,d])=>`<path class="vf-p2-carne" transform="${t}" d="${d}"/><path class="vf-p2-sombra" transform="${t}" d="${d}" filter="url(#${id}vs)"/>`).join("")
+          +miembros.map(([t,d])=>`<path class="vf-p2-linea" transform="${t}" d="${d}"/>`).join("");
+      })()],
       // 3 · Rostro y cabello
       ["detalle",`<g clip-path="url(#${id}c)"><path class="vf-t-sombra vf-t-cara" d="${par(ROSTRO[figura].tono)} ${ROSTRO[figura].tonoCentro}" filter="url(#${id}t)"/><path class="vf-t-luz" d="${ROSTRO[figura].luz}" filter="url(#${id}t)"/></g>`
-        +`<g class="vf-cabellera" clip-path="url(#${id}h)"><use class="vf-c-sombra" href="#${id}P" filter="url(#${id}vs)"/><use class="vf-c-luz" href="#${id}P" filter="url(#${id}vl)"/><path class="vf-hebras" d="${par(hebras(figura))}"/></g>`
+        +`<g class="vf-cabellera" clip-path="url(#${id}h)"><path class="vf-hebras" d="${par(hebras(figura))}"/></g>`
         +`<path class="vf-fino" d="${par(ROSTRO[figura].lado)}"/><path class="vf-fino vf-ojo" d="${par(ROSTRO[figura].fuerte)}"/><path class="vf-ceja" d="${par(cejas(figura))}"/>${IRIS(194.75,135.95)}${IRIS(205.25,135.95)}`],
       // 4 · Las proporciones: el cuadrado dividido en cabezas (I–VIII), palmos y dedos
       ["debajo",`<path class="vf-medida" d="${ticks.join("")}"/><g class="vf-numeros">${numeros.join("")}</g>`],
@@ -346,9 +351,9 @@ window.AscensoFigura=(()=>{
 .vitruvio .vf-geo{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.75;opacity:.78;stroke-linecap:round}
 .vitruvio .vf-doble{stroke-width:.35;opacity:.45}
 .vitruvio .vf-marco{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.35;opacity:.45}
-.vitruvio .vf-trazo{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.85;stroke-linecap:round;stroke-linejoin:round}
-.vitruvio .vf-eco{stroke-width:.4;opacity:.38}
-.vitruvio .vf-peso{stroke-width:1.5;opacity:var(--vf-peso,.85)}
+.vitruvio .vf-trazo{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.68;stroke-linecap:round;stroke-linejoin:round}
+.vitruvio .vf-eco{stroke-width:.3;opacity:.32}
+.vitruvio .vf-peso{stroke-width:1.3;opacity:var(--vf-peso,.85)}
 .vitruvio .vf-penti>*{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.32;opacity:.2;stroke-linecap:round}
 .vitruvio .vf-f-sombra{flood-color:rgb(var(--vf-sombra,110,58,30))}
 .vitruvio .vf-f-luz{flood-color:var(--vf-luz,#fffaf0)}
@@ -361,8 +366,12 @@ window.AscensoFigura=(()=>{
 .vitruvio .vf-menudo{stroke-width:.3;opacity:.7}
 .vitruvio .vf-pelo{stroke-width:.6}
 .vitruvio .vf-cabello{fill:var(--vf-papel,#f2e8d3);fill-opacity:.94}
-.vitruvio .vf-tinte{fill:rgb(var(--vf-tono-pelo,128,88,52));opacity:.13}
-.vitruvio .vf-pose2 path{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.75;opacity:.72;stroke-linecap:round;stroke-linejoin:round}
+.vitruvio .vf-tinte{fill:rgb(var(--vf-tono-pelo,128,88,52));opacity:.2}
+.vitruvio .vf-guia-cara{fill:none;stroke:var(--vf-guia,#a4855f);stroke-width:.3;opacity:.7;stroke-dasharray:1.4 1}
+.vitruvio .vf-guia-cara.vf-tenue{opacity:.25}
+.vitruvio .vf-p2-linea{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.62;opacity:.72;stroke-linecap:round;stroke-linejoin:round}
+.vitruvio .vf-p2-carne{fill:rgb(var(--vf-carne,214,174,128));opacity:calc(var(--vf-carne-o,.34) * .55)}
+.vitruvio .vf-p2-sombra{fill:#000;opacity:calc(var(--vf-v-borde,.42) * .6)}
 .vitruvio .vf-fino{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.42;stroke-linecap:round;opacity:.72}
 .vitruvio .vf-iris{fill:var(--vf-tinta,#5a3a20);opacity:.4}
 .vitruvio .vf-pupila{fill:var(--vf-tinta,#5a3a20);opacity:.9}
@@ -375,6 +384,8 @@ window.AscensoFigura=(()=>{
 .vitruvio .vf-c-luz{opacity:.7}
 .vitruvio .vf-trama{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.3;opacity:.6;stroke-linecap:round}
 .vitruvio .vf-cruzada{opacity:.5}
+.vitruvio .vf-trama.vf-tinta1{stroke-opacity:.7}
+.vitruvio .vf-trama.vf-tinta2{stroke-opacity:.45;stroke-width:.26}
 .vitruvio .vf-medida{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.4;opacity:.6}
 .vitruvio .vf-numeros text,.vitruvio .vf-nota text,.vitruvio .vf-firma text{fill:var(--vf-tinta,#5a3a20);font-family:var(--serif,Georgia),Georgia,serif;font-style:italic}
 .vitruvio .vf-numeros text{opacity:.6;font-style:normal}
@@ -392,16 +403,17 @@ window.AscensoFigura=(()=>{
 .vitruvio .vf-sello-aro{fill:none;stroke:rgba(255,236,220,.45);stroke-width:.35}
 .vitruvio .vf-sello-lema{fill:rgba(255,236,220,.75);font-family:var(--serif,Georgia),Georgia,serif;letter-spacing:.2px}
 .vitruvio .vf-sello-letra{fill:rgba(255,236,220,.88);font-family:var(--serif,Georgia),Georgia,serif;font-weight:700}
+.vitruvio .vf-verjura{fill:none;stroke:var(--vf-grano,#7a5a36);stroke-width:.18;opacity:.05}
 .vitruvio .vf-manchas circle{fill:var(--vf-grano,#7a5a36);fill-opacity:.12}
 .vitruvio .vf-estudio-t{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.4;opacity:.75;stroke-linecap:round}
 .vitruvio .vf-esfera{fill:none;stroke:var(--vf-tinta,#5a3a20);stroke-width:.35;opacity:.3}
 .vitruvio .vf-esfera-oro{stroke:var(--vf-oro,#b07d2a);stroke-width:.55;opacity:.95}
-.vitruvio .vf-anillo{fill:none;stroke:var(--vf-oro,#b07d2a);stroke-width:2;stroke-linecap:round}
+.vitruvio .vf-anillo{fill:none;stroke:var(--vf-oro,#b07d2a);stroke-width:1.8;stroke-linecap:round}
 .vitruvio .vf-perla{fill:var(--vf-oro,#b07d2a);stroke:var(--vf-papel,#f2e8d3);stroke-width:.8}
 @keyframes vf-trazar{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
 @keyframes vf-aparecer{from{opacity:0}}
 @keyframes vf-crecer{from{stroke-dashoffset:var(--d,0)}to{stroke-dashoffset:0}}
-@keyframes vf-latido{0%,100%{stroke-width:2}50%{stroke-width:3.8}}
+@keyframes vf-latido{0%,100%{stroke-width:1.8}50%{stroke-width:3.4}}
 @keyframes vf-destello{0%,100%{transform:scale(1)}50%{transform:scale(1.8)}}
 .vitruvio.vf-animada .vf-traza{stroke-dasharray:1 1;animation:vf-trazar 1.9s cubic-bezier(.45,.05,.25,1) both}
 .vitruvio.vf-animada .vf-eco,.vitruvio.vf-animada .vf-peso{animation-delay:.2s}
@@ -428,6 +440,8 @@ window.AscensoFigura=(()=>{
   // queda dentro (dx, dy hacia la luz: el borde contrario queda en sombra). Así brazos, piernas y torso ganan volumen.
   const filtroBorde=(id,dx,dy,difuminado,clase)=>`<filter id="${id}" x="-5%" y="-5%" width="110%" height="110%"><feOffset in="SourceAlpha" dx="${dx}" dy="${dy}" result="o"/><feComposite in="SourceAlpha" in2="o" operator="out" result="r"/><feGaussianBlur in="r" stdDeviation="${difuminado}" result="b"/><feComposite in="b" in2="SourceAlpha" operator="in" result="m"/><feFlood class="${clase}"/><feComposite in2="m" operator="in"/></filter>`;
 
+  // Papel verjurado: corondeles cada 26 y puntizones muy juntos, como el papel hecho a mano
+  const VERJURA=(()=>{ const out=[]; for(let x=58;x<356;x+=26) out.push(`M${x} 75V402`); for(let y=76;y<402;y+=1.6) out.push(`M42 ${f1(y)}H358`); return out.join(""); })();
   // Manchas del papel (siempre las mismas)
   const MANCHAS=(()=>{ const r=azar(77), out=[]; for(let i=0;i<9;i++){ const lado=i%4, t=r(); const x=lado===0?50+r()*8:lado===1?342+r()*8:52+t*296, y=lado===2?84+r()*6:lado===3?392+r()*5:90+t*300; out.push(`<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.2+r()*2.8)}" opacity="${(0.4+r()*0.6).toFixed(2)}"/>`); } return out.join(""); })();
 
@@ -453,19 +467,21 @@ window.AscensoFigura=(()=>{
     const zonasSvg=Object.entries(ZONAS_FORMA).map(([k,l])=>`<g class="vf-zona${k===zonaActiva?" on":""}" data-zona="${k}" style="--b:${Math.max(0,Math.min(1,brillo[k]||0)).toFixed(3)}">${elipses(l)}</g>`).join("");
     const sel=zonaActiva&&ZONAS_FORMA[zonaActiva]?`<g clip-path="url(#${id}c)" class="vf-sel">${elipses(ZONAS_FORMA[zonaActiva])}</g>`:"";
     const p=Math.max(0,Math.min(1,nivel)), ang=-Math.PI/2+p*2*Math.PI;
-    // La esfera: 72 marcas por fuera del círculo; las ya recorridas, doradas
+    // El anillo dorado va justo por fuera del círculo dibujado, y la esfera (72 marcas) por dentro; donde se apoyan los
+    // pies no hay marcas. Las ya recorridas, doradas.
     let marcasOro="", marcasTinta="";
-    for(let i=0;i<72;i++){ const a=-Math.PI/2+i/72*2*Math.PI, l=i%6?2:3.6, c=Math.cos(a), sn=Math.sin(a), r0=C.r+1.6;
+    const RA=C.r+2.3;
+    for(let i=0;i<72;i++){ if(i>=33&&i<=39) continue; const a=-Math.PI/2+i/72*2*Math.PI, l=-(i%6?1.6:3), c=Math.cos(a), sn=Math.sin(a), r0=C.r-1.2;
       const m=`M${f1(C.x+r0*c)} ${f1(C.y+r0*sn)}L${f1(C.x+(r0+l)*c)} ${f1(C.y+(r0+l)*sn)}`; if(i/72<p-1e-9) marcasOro+=m; else marcasTinta+=m; }
     const anillo=`<path class="vf-esfera" d="${marcasTinta}"/><path class="vf-esfera vf-esfera-oro" d="${marcasOro}"/>`
-      +`<circle class="vf-anillo" style="stroke:url(#${id}oro);--d:${p.toFixed(4)}" cx="${C.x}" cy="${C.y}" r="${C.r}" pathLength="1" stroke-dasharray="${p.toFixed(4)} 1" transform="rotate(-90 ${C.x} ${C.y})"${p<0.004?' stroke-opacity="0"':""}/>`
-      +(p>0.004&&p<0.996?`<circle class="vf-perla" style="fill:url(#${id}gema)" cx="${f1(C.x+C.r*Math.cos(ang))}" cy="${f1(C.y+C.r*Math.sin(ang))}" r="2.9"/>`:"");
+      +`<circle class="vf-anillo" style="stroke:url(#${id}oro);--d:${p.toFixed(4)}" cx="${C.x}" cy="${C.y}" r="${RA}" pathLength="1" stroke-dasharray="${p.toFixed(4)} 1" transform="rotate(-90 ${C.x} ${C.y})"${p<0.004?' stroke-opacity="0"':""}/>`
+      +(p>0.004&&p<0.996?`<circle class="vf-perla" style="fill:url(#${id}gema)" cx="${f1(C.x+RA*Math.cos(ang))}" cy="${f1(C.y+RA*Math.sin(ang))}" r="2.7"/>`:"");
     let obj="";
     if(objetivos!=null){
-      const o=Math.max(0,Math.min(1,objetivos)), [ox,oy]=enCuadrado(o);
+      const o=Math.max(0,Math.min(1,objetivos)), [ox,oy]=enCuadrado(o), m=2.3, L2=SQ.l+2*m;
       // Sin progreso no se pinta nada (el extremo redondo de un trazo vacío dejaría un punto sobre la cabeza)
-      obj=`<path class="vf-anillo vf-obj" style="stroke:url(#${id}oro);--d:${o.toFixed(4)}" d="M${SQ.x+SQ.l/2} ${SQ.y} h${SQ.l/2} v${SQ.l} h${-SQ.l} v${-SQ.l} Z" pathLength="1" stroke-dasharray="${o.toFixed(4)} 1"${o<0.004?' stroke-opacity="0"':""}/>`
-        +(o>0.004&&o<0.996?`<circle class="vf-perla" style="fill:url(#${id}gema)" cx="${f1(ox)}" cy="${f1(oy)}" r="2.5"/>`:"");
+      obj=`<path class="vf-anillo vf-obj" style="stroke:url(#${id}oro);--d:${o.toFixed(4)}" d="M${SQ.x+SQ.l/2} ${SQ.y-m} h${L2/2} v${L2} h${-L2} v${-L2} Z" pathLength="1" stroke-dasharray="${o.toFixed(4)} 1"${o<0.004?' stroke-opacity="0"':""}/>`
+        +(o>0.004&&o<0.996?`<circle class="vf-perla" style="fill:url(#${id}gema)" cx="${f1(ox+(ox<=SQ.x+0.01?-m:ox>=SQ.x+SQ.l-0.01?m:0))}" cy="${f1(oy+(oy<=SQ.y+0.01?-m:oy>=SQ.y+SQ.l-0.01?m:0))}" r="2.4"/>`:"");
     }
     // Las esquinas del cuadrado se pasan un poco, como en un dibujo de taller
     const geo=`<circle class="vf-geo" cx="${C.x}" cy="${C.y}" r="${C.r}"/>`
@@ -480,7 +496,7 @@ window.AscensoFigura=(()=>{
         <radialGradient id="${id}v" cx="50%" cy="46%" r="72%"><stop offset="55%" class="vf-vineta" stop-opacity="0"/><stop offset="100%" class="vf-vineta" stop-opacity=".22"/></radialGradient>
         <filter id="${id}g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.05"/><feComposite in="SourceGraphic" operator="in"/></filter>
         <filter id="${id}m" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".018" numOctaves="3" seed="9"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.25"/><feComposite in="SourceGraphic" operator="in"/></filter>
-        <filter id="${id}p" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".06" numOctaves="2" seed="2"/><feDisplacementMap in="SourceGraphic" scale="1.3" xChannelSelector="R" yChannelSelector="G"/></filter>
+        <filter id="${id}p" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".06" numOctaves="2" seed="2"/><feDisplacementMap in="SourceGraphic" scale="1.3" xChannelSelector="R" yChannelSelector="G" result="t"/><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="8"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  .9 0 0 0 .35" result="a"/><feComposite in="t" in2="a" operator="in"/></filter>
         <filter id="${id}w" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="5.5" result="b"/><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .7 .45"/><feComposite in="b" operator="in"/></filter>
         <filter id="${id}d"><feGaussianBlur stdDeviation="5"/></filter>
         <filter id="${id}bd" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency=".07" numOctaves="3" seed="13"/><feDisplacementMap in="SourceGraphic" scale="4.5" xChannelSelector="R" yChannelSelector="G"/></filter>
@@ -491,6 +507,7 @@ window.AscensoFigura=(()=>{
         <radialGradient id="${id}cera" cx="40%" cy="36%" r="70%"><stop offset="0" class="vf-cera-luz"/><stop offset="1" class="vf-cera"/></radialGradient>
         ${filtroBorde(id+"vb",-10,-6,6,"vf-f-sombra")}${filtroBorde(id+"vs",-3.4,-2.2,2.2,"vf-f-sombra")}${filtroBorde(id+"vl",3,2.2,2.4,"vf-f-luz")}
         <filter id="${id}vr" x="-5%" y="-5%" width="110%" height="110%"><feOffset in="SourceAlpha" dx="-2.6" dy="-1.8" result="o"/><feComposite in="SourceAlpha" in2="o" operator="out" result="r"/><feMorphology in="r" operator="dilate" radius="1.3" result="d"/><feGaussianBlur in="d" stdDeviation=".7" result="b"/><feFlood flood-color="#fff"/><feComposite in2="b" operator="in"/></filter>
+        <mask id="${id}gm" maskUnits="userSpaceOnUse" x="40" y="74" width="320" height="330"><rect x="40" y="74" width="320" height="330" fill="#fff"/><use href="#${id}S" fill="#4a4a4a"/></mask>
         <mask id="${id}pm" maskUnits="userSpaceOnUse" x="40" y="74" width="320" height="330"><use href="#${id}S" filter="url(#${id}vr)"/></mask>
         <filter id="${id}t" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.1"/></filter>
         <filter id="${id}tl" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.2"/></filter>
@@ -501,13 +518,14 @@ window.AscensoFigura=(()=>{
         <mask id="${id}2" maskUnits="userSpaceOnUse" x="40" y="74" width="320" height="330"><rect x="40" y="74" width="320" height="330" fill="#fff"/><use href="#${id}S" fill="#000" stroke="#000" stroke-width="2.4"/><use href="#${id}P" fill="#000" stroke="#000" stroke-width="2.4"/></mask>
       </defs>
       <g filter="url(#${id}bd)">
-        <rect class="vf-papel" x="42" y="76" width="316" height="326" rx="7"/>
-        <rect class="vf-grano" x="42" y="76" width="316" height="326" rx="7" filter="url(#${id}m)" opacity=".07"/>
-        <rect class="vf-grano" x="42" y="76" width="316" height="326" rx="7" filter="url(#${id}g)" opacity=".16"/>
-        <rect x="42" y="76" width="316" height="326" rx="7" fill="url(#${id}v)"/>
+        <rect class="vf-papel" x="42" y="74.6" width="316" height="327.8" rx="7"/>
+        <rect class="vf-grano" x="42" y="74.6" width="316" height="327.8" rx="7" filter="url(#${id}m)" opacity=".07"/>
+        <rect class="vf-grano" x="42" y="74.6" width="316" height="327.8" rx="7" filter="url(#${id}g)" opacity=".16"/>
+        <rect x="42" y="74.6" width="316" height="327.8" rx="7" fill="url(#${id}v)"/>
+        <path class="vf-verjura" d="${VERJURA}"/>
         <g class="vf-manchas" filter="url(#${id}fx)">${MANCHAS}</g>
       </g>
-      ${lugares.debajo}
+      <g mask="url(#${id}gm)">${lugares.debajo}</g>
       <g filter="url(#${id}p)">${geo}</g>
       <g class="vf-aparece" clip-path="url(#${id}c)"><use class="vf-carne" href="#${id}S" filter="url(#${id}w)"/><g class="vf-zonas" filter="url(#${id}w)">${zonasSvg}</g>
         <g class="vf-volumen"><use class="vf-v-ancha" href="#${id}S" filter="url(#${id}vb)"/><use class="vf-v-borde" href="#${id}S" filter="url(#${id}vs)"/><use class="vf-v-luz" href="#${id}S" filter="url(#${id}vl)"/></g>
@@ -519,8 +537,10 @@ window.AscensoFigura=(()=>{
         <use class="vf-trazo vf-traza" href="#${id}K"/>
         <use class="vf-trazo vf-eco vf-traza" transform="translate(.45 .5)" href="#${id}K"/>
         <use class="vf-trazo vf-peso vf-traza" href="#${id}K" mask="url(#${id}pm)"/>
-        <use class="vf-cabello vf-aparece" href="#${id}P"/><use class="vf-tinte vf-aparece" href="#${id}P" filter="url(#${id}w)"/><use class="vf-trazo vf-pelo vf-traza" href="#${id}P"/>${b.oreja?`<path class="vf-trazo vf-pelo" d="${par(b.oreja)}"/>`:""}
+        <use class="vf-cabello vf-aparece" href="#${id}P"/><use class="vf-tinte vf-aparece" href="#${id}P" filter="url(#${id}w)"/>
+        <g class="vf-aparece" clip-path="url(#${id}h)"><use class="vf-c-sombra" href="#${id}P" filter="url(#${id}vs)"/><use class="vf-c-luz" href="#${id}P" filter="url(#${id}vl)"/></g><use class="vf-trazo vf-pelo vf-traza" href="#${id}P"/>${b.oreja?`<path class="vf-trazo vf-pelo" d="${par(b.oreja)}"/>`:""}
       </g>
+      <path class="vf-guia-cara${etapa>=3?" vf-tenue":""}" d="M200 ${figura==="mujer"?125:126} L200 150 M${figura==="mujer"?188.4:188} 135.9 L${figura==="mujer"?211.6:212} 135.9 M196 142.2 L204 142.2 M196.6 145.6 L203.4 145.6"/>
       <g class="vf-penti" filter="url(#${id}q)"><use class="vf-traza" href="#${id}B" transform="translate(200 240) scale(1.007 1.003) translate(-200 -240) translate(.7 -.5)"/><use class="vf-traza" href="#${id}B" transform="translate(200 240) scale(.994 1.002) translate(-200 -240) translate(-.4 .8)"/></g>
       <g class="vf-aparece">${lugares.detalle}</g>
       ${anillo}${obj}
