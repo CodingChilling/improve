@@ -6532,3 +6532,36 @@ dialog.tdlg.diario {
     padding: 6px 16px 20px;
   }
 }
+
+/* ---------- Áreas de los mapas ---------- */
+.mv-menu .mm-sw {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 4px;
+  vertical-align: -1px;
+}
+.mz-input {
+  position: absolute;
+  z-index: 6;
+  width: 220px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(var(--surface2), var(--surface2)), var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.5);
+}
+.mz-input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .mz-input {
+    font-size: 16px;
+  }
+}

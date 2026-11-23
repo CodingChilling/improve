@@ -63,6 +63,23 @@ hoy que dentro de un mes.
 - **Pasar entre tareas y tableros**: desde la ficha de una tarjeta, «Pasar a tareas del día»; desde la
   ficha de una tarea, «Pasar a un tablero». La checklist viaja con ella en los dos sentidos.
 
+#### Mapas
+
+En la misma vista, bajo los tableros, están los **mapas**: nodos unidos por hilos, cada uno con su libreta y,
+dentro, su propio nivel con más nodos. El botón **?** del mapa muestra todos los gestos y atajos.
+
+**Áreas de color.** Con **«+ Área»** se añade una zona de color (rectángulo, cuadrado, óvalo o círculo) para
+delimitar partes del mapa, con su título y, al lado, cuántos nodos hay dentro (por ejemplo «Terminados · 12»).
+Tienen su propia paleta de tonos apagados, distinta de la de los nodos.
+- Se agarran por el **título** o el **borde**: así, dentro de un área grande se sigue pudiendo desplazar el mapa
+  y seleccionar nodos. Al moverla, **los nodos de dentro van con ella**; con <kbd>Alt</kbd> (o, en el móvil,
+  desde sus opciones › «Mover sin los nodos») se mueve sola.
+- Las **esquinas** cambian el tamaño (los cuadrados y los círculos no pierden la proporción).
+- **Doble clic** en el título (o <kbd>F2</kbd>) para cambiarlo. **Clic derecho** (en el móvil, tocar otra vez el
+  título de un área seleccionada) para la forma, el color, **bloquearla** (no se mueve ni cambia de tamaño sin
+  querer), traerla al frente o enviarla al fondo, o eliminarla (los nodos se quedan).
+- El buscador de tableros y mapas también encuentra las áreas por su título, y la imagen PNG del mapa las incluye.
+
 ### Calendario (la fecha)
 
 Calendario mensual con eventos de colores. Cada evento tiene título, color, hora opcional y puede durar

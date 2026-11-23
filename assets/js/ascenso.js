@@ -154,8 +154,13 @@ const B_COLORS=["#2E86AB","#3D9468","#D9822B","#C0392B","#5B5FC7","#9B59B6","#D4
 // maps   {id: {title, color, fav, order, notes, created}}           color = acento del mapa
 // mnodes {id: {map, parent, title, color, x, y, notes, created}}    parent null = primer nivel; color "" = acento
 // mlinks {id: {a, b}}                                               hilos entre nodos del mismo nivel
+// mzones {id: {map, parent, title, shape, x, y, w, h, color, locked, order, created}}
+//        áreas de color de un nivel; x, y es la esquina superior izquierda; shape: rect, cuadrado, ovalo o circulo
 const LIMITE_LIBRETA=1000000;   // caracteres por libreta (unas 350 páginas)
 const M_COLORS=["#7F77DD","#BA7517","#1D9E75","#378ADD","#D4537E","#D85A30","#639922","#888780"];
+// Las áreas tienen su propia paleta, de tonos apagados, para no confundirse con los colores vivos de los nodos
+const Z_COLORS=[["#C9A66B","Arena"],["#8FAE8B","Salvia"],["#8BA3BC","Niebla"],["#A99BC9","Lavanda"],["#C99AA9","Rosa"],["#C4896B","Terracota"],["#7E8F9E","Pizarra"],["#A9A46A","Oliva"]];
+const Z_FORMAS=[["rect","Rectángulo"],["cuadrado","Cuadrado"],["ovalo","Óvalo"],["circulo","Círculo"]];
 function cleanMapData(x){
   const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, obj=v=>v&&typeof v==="object"?v:{};
   const pos=v=>(v===null||v===undefined||v==="")?null:(Number.isFinite(+v)?Math.round(+v*10)/10:null);
@@ -187,7 +192,19 @@ function cleanMapData(x){
     const k=[l.a,l.b].sort().join("|"); if(pairs.has(k)) continue; pairs.add(k);
     mlinks[id]={a:l.a, b:l.b};
   }
-  return {maps, mnodes, mlinks};
+  const mzones={}, num=v=>v!==null&&v!==""&&Number.isFinite(+v)?+v:null;
+  for(const [id,z] of Object.entries(obj(x.mzones))){
+    if(!ID.test(id)||!z||!maps[z.map]||!Z_FORMAS.some(f=>f[0]===z.shape)) continue;
+    const parent=typeof z.parent==="string"&&z.parent?z.parent:null;
+    if(parent&&(!mnodes[parent]||mnodes[parent].map!==z.map)) continue;
+    const X=num(z.x), Y=num(z.y), W=num(z.w), H=num(z.h);
+    if(X==null||Y==null||!(W>=10)||!(H>=10)) continue;
+    const igual=z.shape==="cuadrado"||z.shape==="circulo";
+    mzones[id]={map:z.map, parent, title:String(z.title||"").trim().slice(0,80), shape:z.shape, x:X, y:Y, w:W, h:igual?W:H,
+      color:HEX.test(z.color||"")?z.color.toUpperCase():Z_COLORS[0][0], locked:!!z.locked, order:Number.isFinite(+z.order)?Math.round(+z.order):0,
+      created:String(z.created||"").slice(0,40)};
+  }
+  return {maps, mnodes, mlinks, mzones};
 }
 function cleanBoardData(x){
   const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, F=/^\d{4}-\d{2}-\d{2}$/;
@@ -1472,20 +1489,27 @@ function renderSearch(){
   const nodes=Object.entries(state.mnodes)
     .filter(([,n])=>fold(n.title).includes(q)||fold(n.notes).includes(q))
     .sort((a,b)=>(fold(b[1].title).includes(q))-(fold(a[1].title).includes(q))).slice(0,30);
+  // Y áreas de los mapas, por su título
+  const zonas=Object.entries(state.mzones).filter(([,z])=>z.title&&fold(z.title).includes(q)).slice(0,20);
   const where=n=>{ const p=[]; let x=n.parent; while(x&&state.mnodes[x]){ p.unshift(state.mnodes[x].title); x=state.mnodes[x].parent; } return [state.maps[n.map].title,...p].map(esc).join(" › "); };
   const html=res.map(([id,c])=>{ const l=state.blists[c.list], b=state.boards[l.board];
       return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">${c.archived?"📦 Archivada":"Tarjeta"} · ${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")+
-    nodes.map(([id,n])=>`<button type="button" class="sr sr-node" data-srn="${id}" style="--c:${n.color||state.maps[n.map].color}"><span class="sr-t">${esc(n.title)}</span><span class="sr-w">Nodo · ${where(n)}</span></button>`).join("");
-  bvResults.innerHTML = html || `<p class="sr-empty">No hay tarjetas ni nodos con «${esc(bvQ.value.trim())}».</p>`;
+    nodes.map(([id,n])=>`<button type="button" class="sr sr-node" data-srn="${id}" style="--c:${n.color||state.maps[n.map].color}"><span class="sr-t">${esc(n.title)}</span><span class="sr-w">Nodo · ${where(n)}</span></button>`).join("")+
+    zonas.map(([id,z])=>`<button type="button" class="sr sr-node" data-srz="${id}" style="--c:${z.color}"><span class="sr-t">${esc(z.title)}</span><span class="sr-w">Área · ${where(z)}</span></button>`).join("");
+  bvResults.innerHTML = html || `<p class="sr-empty">No hay tarjetas, nodos ni áreas con «${esc(bvQ.value.trim())}».</p>`;
   bvResults.hidden=false;
 }
 bvQ.addEventListener("input",renderSearch);
 bvQ.addEventListener("focus",renderSearch);
 bvQ.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ bvQ.value=""; bvResults.hidden=true; }
-  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr],[data-srn]"); if(f) f.click(); }
+  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr],[data-srn],[data-srz]"); if(f) f.click(); }
 });
 bvResults.addEventListener("click",e=>{
+  const rz=e.target.closest("[data-srz]");
+  if(rz){ const id=rz.dataset.srz, z=state.mzones[id]; if(!z) return;
+    bvQ.value=""; bvResults.hidden=true;
+    setMap(z.map); goLevel(z.parent); mZona=id; selectionChanged(); centrarZona(id); return; }
   const rn=e.target.closest("[data-srn]");
   if(rn){ const n=state.mnodes[rn.dataset.srn]; if(!n) return;
     bvQ.value=""; bvResults.hidden=true;
@@ -1499,7 +1523,7 @@ bvResults.addEventListener("click",e=>{
 // ======================================================================
 // ---------- Mapas de nodos (en la vista de tableros, sección «Mapas») ----------
 // ======================================================================
-let mapLevel=null, mSel=null, mSelLink=null, mNoteEditing=false;
+let mapLevel=null, mSel=null, mSelLink=null, mNoteEditing=false, mZona=null;
 let nbMapOpen=false, nmDraft={title:"", color:M_COLORS[0]};
 // Reparto mapa | libreta, en % del mapa. Empieza con la libreta más grande (40 | 60), y se puede ajustar
 let mSplit=(()=>{ try{ const v=+localStorage.getItem("ascenso-reparto-mapa-libreta"); return v>=20&&v<=80?v:40; }catch(e){ return 40; } })();
@@ -1520,7 +1544,7 @@ function levelPath(){ const p=[]; let n=mapLevel; while(n&&state.mnodes[n]){ p.u
 // Historial ligero: se guarda una sola copia de referencia (cada elemento como texto) y, en cada paso,
 // solo los elementos que cambiaron. Así deshacer no ocupa más memoria aunque haya libretas muy largas.
 let mUndo=[], mRedo=[], mTyping=false, mBase=null, mBaseOf=null;
-const MCOLS=["maps","mnodes","mlinks"];
+const MCOLS=["maps","mnodes","mlinks","mzones"];
 function mEnsureBase(){
   if(mBase && mBaseOf===state) return;
   mBase={}; mBaseOf=state; mUndo=[]; mRedo=[];          // datos nuevos (importados o recargados): historial nuevo
@@ -1551,6 +1575,7 @@ function mAfterRestore(){
   if(mSel && !state.mnodes[mSel]) mSel=null;
   mMulti=new Set([...mMulti].filter(id=>state.mnodes[id]));
   if(mSelLink && !state.mlinks[mSelLink]) mSelLink=null;
+  if(mZona && !state.mzones[mZona]) mZona=null;
   save(); renderBoards();
 }
 function mUndoDo(){
@@ -1606,6 +1631,7 @@ function deleteMap(mid){
     for(const [lid,l] of Object.entries(state.mlinks)) if(l.a===id||l.b===id) delete state.mlinks[lid];
     delete state.mnodes[id];
   }
+  for(const [zid,z] of Object.entries(state.mzones)) if(z.map===mid) delete state.mzones[zid];
   delete state.maps[mid];
   save(); setBoard("home");
 }
@@ -1633,6 +1659,7 @@ function mapViewHTML(mid,m){
         <canvas id="mv-cv" aria-label="Mapa de nodos"></canvas>
         <div class="mv-tools">
           <button type="button" data-mtool="new">+ Nodo</button>
+          <button type="button" data-mtool="area" aria-haspopup="menu">+ Área</button>
           <button type="button" data-mtool="out" aria-label="Alejar">−</button>
           <button type="button" data-mtool="in" aria-label="Acercar">+</button>
           <button type="button" data-mtool="fit" aria-label="Ajustar a la pantalla" title="Ajustar a la pantalla">⤢</button>
@@ -1660,6 +1687,10 @@ function helpHTML(){
     ["Organizar",[["Arrastrar","Mover los nodos seleccionados"],["Soltar un nodo sobre otro","Meterlo dentro de ese nodo"],["Clic derecho › Mover a…","Llevarlo a otro nivel"],
       [K("Ctrl+C")+" · "+K("Ctrl+X")+" · "+K("Ctrl+V"),"Copiar, cortar y pegar (también entre mapas)"],["Pegar una lista de texto","Un nodo por línea; las sangradas, dentro"],
       [K("Supr"),"Eliminar"],[K("Ctrl+Z")+" · "+K("Ctrl+Y"),"Deshacer y rehacer"]]],
+    ["Áreas",[["Botón «+ Área»","Rectángulo, cuadrado, óvalo o círculo, con título"],["Arrastrar su título o su borde","Moverla, con los nodos de dentro"],
+      [K("Alt")+" + arrastrar","Moverla sola (en el móvil: opciones › Mover sin los nodos)"],["Arrastrar sus esquinas","Cambiar el tamaño"],
+      ["Doble clic en el título o "+K("F2"),"Cambiar el título"],["Clic derecho (en el móvil: tocarla otra vez)","Forma, color, bloquear, delante o detrás, eliminar"],
+      [K("Supr"),"Eliminar el área (los nodos se quedan)"]]],
     ["Exportar",[["Menú ⋯ › Exportar como imagen","Guardar el nivel que ves como PNG"],["Clic derecho en el fondo","También ahí"]]],
     ["Moverse",[["Doble clic en un nodo o "+K("Intro"),"Entrar en su nivel"],[IS_MAC?K("⌫")+" o "+K("⌘")+"+"+K("[")+" o "+K("⌘")+"+"+K("↑"):K("Retroceso")+" o "+K("Alt")+"+"+K("←"),"Subir un nivel"],["La ruta de arriba","Ir a cualquier nivel"],
       ["Rueda del ratón","Acercar y alejar"],["Arrastrar el fondo","Desplazarse"],["Botón ⤢","Ajustar a la pantalla"]]],
@@ -2728,6 +2759,7 @@ function removeNodes(ids){
   const add=id=>{ for(const k of ch[id]||[]){ all.add(k); add(k); } };
   ids.forEach(add);
   for(const [lid,l] of Object.entries(state.mlinks)) if(all.has(l.a)||all.has(l.b)) delete state.mlinks[lid];
+  for(const [zid,z] of Object.entries(state.mzones)) if(z.parent&&all.has(z.parent)) delete state.mzones[zid];
   all.forEach(id=>delete state.mnodes[id]);
 }
 function askDeleteNode(id){
@@ -2775,6 +2807,7 @@ const posOf=id=>(MG.tmp&&MG.tmp[id])||state.mnodes[id];
 function mgFit(silent){
   if(!MG||!MG.W) return;
   const items=levelNodes(curMapId(),mapLevel).map(([id])=>posOf(id)).filter(p=>p.x!=null);
+  for(const [,z] of levelZones(curMapId(),mapLevel)) items.push({x:z.x+40,y:z.y+30},{x:z.x+z.w-40,y:z.y+z.h-40});
   if(!items.length){ mCam[MG.key]={z:1, ox:MG.W/2, oy:MG.H/2}; if(!silent) mgDraw(); return; }
   const xs=items.map(p=>p.x), ys=items.map(p=>p.y);
   const x0=Math.min(...xs)-60, x1=Math.max(...xs)+60, y0=Math.min(...ys)-50, y1=Math.max(...ys)+70;
@@ -2816,6 +2849,134 @@ function mgLoop(){
   MG.anim=requestAnimationFrame(tick);
 }
 function hexA(h,a){ const v=parseInt(h.slice(1),16); return `rgba(${v>>16&255},${v>>8&255},${v&255},${a})`; }
+
+// ---- Áreas de color de los mapas ----
+// Delimitan zonas de un nivel. Se agarran por su título o su borde (no por dentro: así, dentro de un área grande se
+// sigue pudiendo desplazar el mapa y seleccionar nodos). Al moverlas, los nodos de dentro van con ellas.
+const levelZones=(mid,lvl)=>Object.entries(state.mzones).filter(([,z])=>z.map===mid&&(z.parent||null)===(lvl||null)).sort((a,b)=>a[1].order-b[1].order);
+const zRedonda=z=>z.shape==="ovalo"||z.shape==="circulo";
+const zIgual=forma=>forma==="cuadrado"||forma==="circulo";
+function zDentro(z,px,py){
+  if(zRedonda(z)){ const rx=z.w/2, ry=z.h/2, dx=(px-z.x-rx)/rx, dy=(py-z.y-ry)/ry; return dx*dx+dy*dy<=1; }
+  return px>=z.x&&px<=z.x+z.w&&py>=z.y&&py<=z.y+z.h;
+}
+function zEnBorde(z,px,py,tol){
+  if(zRedonda(z)){ const rx=z.w/2, ry=z.h/2, r=Math.hypot((px-z.x-rx)/rx,(py-z.y-ry)/ry); return Math.abs(r-1)*Math.min(rx,ry)<=tol; }
+  const cerca=px>=z.x-tol&&px<=z.x+z.w+tol&&py>=z.y-tol&&py<=z.y+z.h+tol, dentro=px>z.x+tol&&px<z.x+z.w-tol&&py>z.y+tol&&py<z.y+z.h-tol;
+  return cerca&&!dentro;
+}
+const zEsquinas=z=>[["nw",z.x,z.y],["ne",z.x+z.w,z.y],["sw",z.x,z.y+z.h],["se",z.x+z.w,z.y+z.h]];
+function nodosEnZona(z){ return levelNodes(z.map,z.parent).filter(([id])=>{ const p=posOf(id); return p&&p.x!=null&&zDentro(z,p.x,p.y); }).map(([id])=>id); }
+// Mezcla de dos colores (#rrggbb): el rótulo se oscurece o aclara un poco hacia el color del texto, para leerse bien
+function mezclaHex(a,b,t){ const A=parseInt(a.slice(1),16), B=/^#[0-9a-f]{6}$/i.test(b)?parseInt(b.slice(1),16):A, f=s=>Math.round(((A>>s)&255)*(1-t)+((B>>s)&255)*t); return `rgb(${f(16)},${f(8)},${f(0)})`; }
+function candado(ctx,x,y,s,col){
+  ctx.save(); ctx.fillStyle=col; ctx.strokeStyle=col; ctx.lineWidth=s*.14;
+  ctx.fillRect(x,y+s*.45,s*.8,s*.55); ctx.beginPath(); ctx.arc(x+s*.4,y+s*.45,s*.26,Math.PI,0); ctx.stroke(); ctx.restore();
+}
+// El rótulo: título y cuántos nodos hay dentro. Arriba a la izquierda; en óvalos y círculos, arriba en el centro
+function zRotulo(ctx,z,zoom,font){
+  const n=nodosEnZona(z).length, texto=z.title?`${z.title} · ${n}`:(n===1?"1 nodo":n+" nodos");
+  const fs=12.5/zoom, pad=11/zoom;                       // siempre del mismo tamaño en pantalla: orientan también de lejos
+  ctx.font=`600 ${fs}px ${font}`;
+  const w=ctx.measureText(texto).width+(z.locked?fs*1.15:0);
+  let x=z.x+pad, y=z.y+pad+fs*.8;
+  if(zRedonda(z)){ x=z.x+z.w/2-w/2; y=z.y+Math.max(pad+fs, z.h*.13+fs*.5); }
+  return {texto,x,y,w,fs,x0:x-5/zoom,y0:y-fs-3/zoom,x1:x+w+5/zoom,y1:y+fs*.4};
+}
+function dibujarZonas(ctx,zonas,{zoom,font,ink,seleccion,cajas}){
+  for(const [id,z] of zonas){
+    ctx.globalAlpha=1;
+    ctx.beginPath();
+    if(zRedonda(z)) ctx.ellipse(z.x+z.w/2,z.y+z.h/2,z.w/2,z.h/2,0,0,Math.PI*2);
+    else if(ctx.roundRect) ctx.roundRect(z.x,z.y,z.w,z.h,Math.min(16,z.w/6,z.h/6)); else ctx.rect(z.x,z.y,z.w,z.h);
+    ctx.fillStyle=hexA(z.color,.14); ctx.fill();
+    ctx.strokeStyle=hexA(z.color,.8); ctx.lineWidth=1.6/zoom; ctx.stroke();
+    const r=zRotulo(ctx,z,zoom,font), col=mezclaHex(z.color,ink,.28);
+    ctx.fillStyle=col; ctx.textAlign="left"; ctx.textBaseline="alphabetic"; ctx.fillText(r.texto,r.x,r.y);
+    if(z.locked) candado(ctx,r.x+r.w-r.fs*.85,r.y-r.fs*.82,r.fs*.85,col);
+    if(cajas) cajas[id]=r;
+    if(seleccion===id){
+      ctx.strokeStyle=ink; ctx.lineWidth=1.3/zoom; ctx.setLineDash([6/zoom,4/zoom]);
+      ctx.strokeRect(z.x-5/zoom,z.y-5/zoom,z.w+10/zoom,z.h+10/zoom); ctx.setLineDash([]);
+      if(!z.locked){ const s=10/zoom; ctx.fillStyle=ink; for(const [,hx,hy] of zEsquinas(z)){ ctx.fillRect(hx-s/2,hy-s/2,s,s); } }
+    }
+  }
+}
+// Qué área hay bajo el puntero (en la pantalla): una esquina del área seleccionada, el rótulo o el borde de alguna
+function hitZona(x,y){
+  if(!MG) return null;
+  const c=cam(), [wx,wy]=toWorld(x,y), tol=9/c.z, zs=levelZones(curMapId(),mapLevel);
+  const sel=mZona&&state.mzones[mZona];
+  if(sel&&!sel.locked&&zs.some(([id])=>id===mZona)) for(const [parte,hx,hy] of zEsquinas(sel)) if(Math.abs(wx-hx)<=tol+4/c.z&&Math.abs(wy-hy)<=tol+4/c.z) return {id:mZona, parte};
+  for(let i=zs.length-1;i>=0;i--){ const [id,z]=zs[i], b=MG.zCajas&&MG.zCajas[id];
+    if(b&&wx>=b.x0&&wx<=b.x1&&wy>=b.y0&&wy<=b.y1) return {id, parte:"rotulo"}; }
+  for(let i=zs.length-1;i>=0;i--){ const [id,z]=zs[i]; if(zEnBorde(z,wx,wy,tol)) return {id, parte:"borde"}; }
+  return null;
+}
+// Cambiar el tamaño desde una esquina: la contraria se queda fija. Cuadrados y círculos no pierden la proporción
+function zRedimensionar(z,d,dx,dy){
+  const f=d.from, MIN=40, izq=d.parte[1]==="w", arr=d.parte[0]==="n";
+  let x0=f.x, y0=f.y, x1=f.x+f.w, y1=f.y+f.h;
+  if(izq) x0=Math.min(f.x+dx,x1-MIN); else x1=Math.max(f.x+f.w+dx,x0+MIN);
+  if(arr) y0=Math.min(f.y+dy,y1-MIN); else y1=Math.max(f.y+f.h+dy,y0+MIN);
+  let w=x1-x0, h=y1-y0;
+  if(zIgual(z.shape)){ const s=Math.max(w,h); w=h=s; if(izq) x0=x1-s; if(arr) y0=y1-s; }
+  z.x=Math.round(x0); z.y=Math.round(y0); z.w=Math.round(w); z.h=Math.round(h);
+}
+function zCambiarForma(z,forma){
+  z.shape=forma;
+  if(zIgual(forma)){ const cx=z.x+z.w/2, cy=z.y+z.h/2, s=Math.round(Math.max(z.w,z.h)); z.x=Math.round(cx-s/2); z.y=Math.round(cy-s/2); z.w=z.h=s; }
+}
+function crearZona(forma,wx,wy){
+  const mid=curMapId(); if(!mid||!MG||!MG.W) return;
+  mRemember();
+  const c=cam(); if(wx==null) [wx,wy]=toWorld(MG.W/2,MG.H/2);
+  const base=Math.max(120,Math.min(MG.W,MG.H)*.55/c.z), w=Math.round(zIgual(forma)?base:base*1.5), h=Math.round(base);
+  const zs=levelZones(mid,mapLevel), usados=new Set(zs.map(([,z])=>z.color));
+  const color=(Z_COLORS.find(([k])=>!usados.has(k))||Z_COLORS[zs.length%Z_COLORS.length])[0];
+  const id=newId("z");
+  state.mzones[id]={map:mid, parent:mapLevel||null, title:"", shape:forma, x:Math.round(wx-w/2), y:Math.round(wy-h/2), w, h, color, locked:false,
+    order:Math.max(0,...zs.map(([,z])=>z.order))+1, created:new Date().toISOString()};
+  clearSel(); mZona=id; save(); selectionChanged(); renombrarZona(id);
+}
+function menuFormas(x,y,wx,wy){ openMgMenu(x,y,Z_FORMAS.map(([k,n])=>[n,()=>crearZona(k,wx,wy)])); }
+// El título se escribe en un recuadro encima del propio rótulo
+function renombrarZona(id){
+  const z=state.mzones[id], g=document.getElementById("mv-graph"); if(!z||!g||!MG) return;
+  const viejo=g.querySelector(".mz-input"); if(viejo) viejo.remove();
+  mgDraw();
+  const c=cam(), b=(MG.zCajas||{})[id], i=document.createElement("input");
+  i.type="text"; i.className="mz-input"; i.maxLength=80; i.value=z.title; i.placeholder="Título del área"; i.setAttribute("aria-label","Título del área");
+  const sx=b?b.x0*c.z+c.ox:z.x*c.z+c.ox+8, sy=b?b.y0*c.z+c.oy:z.y*c.z+c.oy+8;
+  i.style.left=Math.max(4,Math.min(sx-4,MG.W-230))+"px"; i.style.top=Math.max(4,Math.min(sy-6,MG.H-44))+"px";
+  g.appendChild(i); i.focus(); i.select();
+  let hecho=false;
+  const fin=ok=>{ if(hecho) return; hecho=true; const v=i.value.replace(/\s+/g," ").trim().slice(0,80); i.remove();
+    const zz=state.mzones[id]; if(ok&&zz&&v!==zz.title){ mRemember(); zz.title=v; save(); } mgDraw(); };
+  i.addEventListener("keydown",ev=>{ ev.stopPropagation(); if(ev.key==="Enter"){ ev.preventDefault(); fin(true); } else if(ev.key==="Escape"){ ev.preventDefault(); fin(false); } });
+  i.addEventListener("blur",()=>fin(true));
+}
+function abrirMenuZona(id,x,y){
+  const z=state.mzones[id]; if(!z) return;
+  if(mZona!==id){ clearSel(); mZona=id; selectionChanged(); }
+  const cambia=f=>()=>{ const zz=state.mzones[id]; if(!zz) return; mRemember(); f(zz); save(); mgDraw(); };
+  const hermanas=()=>levelZones(z.map,z.parent).map(([,o])=>o.order);
+  const items=[["Cambiar título",()=>renombrarZona(id)],
+    ["Forma…",()=>openMgMenu(x,y,Z_FORMAS.map(([k,n])=>[(z.shape===k?"✓ ":"")+n,cambia(zz=>zCambiarForma(zz,k))]))],
+    ["Color…",()=>openMgMenu(x,y,Z_COLORS.map(([k,n])=>[(z.color===k?"✓ ":"")+n,cambia(zz=>{ zz.color=k; }),"",k]))],
+    [z.locked?"Desbloquear":"Bloquear",cambia(zz=>{ zz.locked=!zz.locked; })]];
+  if(!z.locked) items.push(["Mover sin los nodos",()=>{ MG.soloZona=id; mvToast("Arrastra el área por su título o su borde: los nodos se quedarán donde están",false); }]);
+  items.push(["Traer al frente",cambia(zz=>{ zz.order=Math.max(...hermanas())+1; })],
+    ["Enviar al fondo",cambia(zz=>{ zz.order=Math.min(...hermanas())-1; })],
+    ["Eliminar área",()=>{ mRemember(); delete state.mzones[id]; mZona=null; save(); mgDraw(); mvToast("Área eliminada (los nodos siguen ahí)"); },"danger"]);
+  openMgMenu(x,y,items);
+}
+// Llevar la vista a un área (desde el buscador)
+function centrarZona(id){
+  const z=state.mzones[id]; if(!MG||!z) return;
+  const c=cam(), zoom=Math.max(.35,Math.min(1.4,MG.W/(z.w+120),MG.H/(z.h+120)));
+  mCam[MG.key]={z:zoom, ox:MG.W/2-(z.x+z.w/2)*zoom, oy:MG.H/2-(z.y+z.h/2)*zoom, user:true}; mgDraw();
+}
 // Animación suave: los nodos flotan unos pocos píxeles, el brillo respira, los hilos del nodo activo llevan
 // una pequeña luz y los nodos aparecen con un leve rebote. Se dibuja a 30 imágenes por segundo como mucho,
 // se detiene si la ventana no está a la vista y se desactiva si el sistema pide reducir el movimiento.
@@ -2855,6 +3016,9 @@ function mgDraw(){
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
   ctx.setTransform(dpr*c.z,0,0,dpr*c.z,dpr*c.ox,dpr*c.oy);
   const colorOf=n=>n.color||m.color;
+  // áreas (debajo de todo)
+  MG.zCajas={}; dibujarZonas(ctx,levelZones(mid,mapLevel),{zoom:c.z, font, ink, seleccion:mZona, cajas:MG.zCajas});
+  ctx.globalAlpha=1;
   // hilos
   for(const [lid,l] of links){ const a=ap(l.a), b=ap(l.b); if(a.x==null||b.x==null) continue;
     const via=focus&&(l.a===focus||l.b===focus)?focus:(mSel&&(l.a===mSel||l.b===mSel)?mSel:null);
@@ -2908,10 +3072,17 @@ function hitLink(x,y){
   return null;
 }
 function closeMgMenu(){ if(MG&&MG.menu){ MG.menu.remove(); MG.menu=null; } }
+// Cuándo empezó la última pulsación (ratón o dedo): un clic cuya pulsación empezó antes de abrirse el menú no es para él
+let ultimaPulsacion=0;
+document.addEventListener("pointerdown",()=>{ ultimaPulsacion=performance.now(); },true);
 function openMgMenu(x,y,items){
   closeMgMenu();
+  const abierto=performance.now();
   const g=document.getElementById("mv-graph"), el=document.createElement("div"); el.className="mv-menu"; el.setAttribute("role","menu");
-  items.forEach(([t,fn,cls])=>{ const b=document.createElement("button"); b.type="button"; b.textContent=t; if(cls) b.className=cls; b.onclick=()=>{ closeMgMenu(); fn(); }; el.appendChild(b); });
+  items.forEach(([t,fn,cls,muestra])=>{ const b=document.createElement("button"); b.type="button"; b.textContent=t; if(cls) b.className=cls;
+    if(muestra){ const i=document.createElement("i"); i.className="mm-sw"; i.style.background=muestra; b.prepend(i); }
+    // (Abierto con el dedo, el menú aparece bajo él: el clic que llega justo después del toque no debe elegir nada)
+    b.onclick=ev=>{ if(ev.detail>0&&ultimaPulsacion<abierto) return; closeMgMenu(); fn(); }; el.appendChild(b); });
   g.appendChild(el);
   el.style.left=Math.min(x, MG.W-el.offsetWidth-8)+"px"; el.style.top=Math.min(y, MG.H-el.offsetHeight-8)+"px";
   MG.menu=el; const f=el.querySelector("button"); if(f) f.focus();
@@ -2922,8 +3093,8 @@ function selIds(){
   const s=new Set(mMulti); if(mSel) s.add(mSel);
   return [...s].filter(id=>{ const n=state.mnodes[id]; return n && n.map===curMapId() && (n.parent||null)===(mapLevel||null); });
 }
-function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; }
-function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; }
+function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; mZona=null; }
+function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; mZona=null; }
 function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); }
 const mapActive=()=>!boardsView.hidden && !!curMapId() && !!MG && !cdlg.open;
 const isTyping=()=>{ const a=document.activeElement; return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable); };
@@ -3103,6 +3274,9 @@ function bindCanvas(cv){
     if(dedos.size>2) return;
     // Lo que hubiera empezado el primer dedo (mover un nodo, el mapa…) se deja como estaba
     if(MG.drag){ for(const id of MG.drag.ids){ const n=state.mnodes[id], f=MG.drag.from[id]; if(n){ n.x=f.x; n.y=f.y; } } MG.drag=null; MG.dropTarget=null; }
+    if(MG.zdrag){ const d=MG.zdrag, z=state.mzones[d.id]; if(z) Object.assign(z,d.from);
+      for(const [id,f] of Object.entries(d.nodos)){ const n=state.mnodes[id]; if(n){ n.x=f.x; n.y=f.y; } } MG.zdrag=null; }
+    MG.zTap=null;
     MG.pan=null; MG.rect=null; if(MG.wire&&!MG.wire.pick) MG.wire=null; cv.classList.remove("panning");
     pellizco=medir();
   });
@@ -3120,7 +3294,7 @@ function bindCanvas(cv){
   const dedoFuera=e=>{
     if(!dedos.delete(e.pointerId)) return;
     if(pellizco){ e.stopImmediatePropagation(); if(!dedos.size) pellizco=null; }
-    else if(e.type==="pointercancel"){ MG.pan=null; MG.rect=null; MG.drag=null; MG.dropTarget=null; cv.classList.remove("panning"); mgDraw(); }
+    else if(e.type==="pointercancel"){ MG.pan=null; MG.rect=null; MG.drag=null; MG.dropTarget=null; MG.zdrag=null; MG.zTap=null; cv.classList.remove("panning"); mgDraw(); }
   };
   cv.addEventListener("pointerup",dedoFuera); cv.addEventListener("pointercancel",dedoFuera);
   cv.addEventListener("pointerdown",e=>{
@@ -3143,8 +3317,23 @@ function bindCanvas(cv){
       MG.drag={ids, ox:wx, oy:wy, from:Object.fromEntries(ids.map(i=>[i,{x:state.mnodes[i].x, y:state.mnodes[i].y}])), moved:false};
       mgDraw(); return;
     }
-    const lid=hitLink(x,y);
+    // Un área: por su título o su borde se selecciona y se mueve (con los nodos de dentro); por sus esquinas, cambia de tamaño.
+    // Su título y sus esquinas van antes que los hilos que pasen por encima; su borde, después
+    const zh=!multi&&!e.shiftKey?hitZona(x,y):null;
+    const lid=zh&&zh.parte!=="borde"?null:hitLink(x,y);
     if(lid && !multi && !e.shiftKey){ clearSel(); mSelLink=lid; selectionChanged(); return; }
+    if(zh){
+      const z=state.mzones[zh.id], yaSel=mZona===zh.id;
+      if(!yaSel){ clearSel(); mZona=zh.id; selectionChanged(); }
+      const toque=e.pointerType==="touch";
+      if(z.locked){ MG.zTap={id:zh.id, yaSel, toque}; mgDraw(); return; }
+      const [wx,wy]=toWorld(x,y), esquina=zh.parte.length===2, solo=e.altKey||MG.soloZona===zh.id;
+      MG.soloZona=null;
+      const nodos=esquina||solo?[]:nodosEnZona(z);
+      MG.zdrag={id:zh.id, parte:zh.parte, ox:wx, oy:wy, from:{x:z.x,y:z.y,w:z.w,h:z.h},
+        nodos:Object.fromEntries(nodos.map(i=>[i,{x:state.mnodes[i].x, y:state.mnodes[i].y}])), moved:false, yaSel, toque};
+      mgDraw(); return;
+    }
     if(multi || e.shiftKey){                           // Mayús o Ctrl + arrastrar en el fondo: recuadro de selección
       MG.rect={x0:x, y0:y, x1:x, y1:y, base:multi?new Set(selIds()):new Set()}; mgDraw(); return;
     }
@@ -3154,6 +3343,15 @@ function bindCanvas(cv){
   });
   cv.addEventListener("pointermove",e=>{
     const [x,y]=pos(e); MG.lastPointer=[x,y];
+    if(MG.zdrag){
+      const d=MG.zdrag, z=state.mzones[d.id]; if(!z){ MG.zdrag=null; return; }
+      const [wx,wy]=toWorld(x,y), dx=wx-d.ox, dy=wy-d.oy;
+      if(!d.moved){ if(Math.hypot(dx,dy)*cam().z<3) return; mRemember(); d.moved=true; }
+      if(d.parte.length===2) zRedimensionar(z,d,dx,dy);
+      else { z.x=Math.round(d.from.x+dx); z.y=Math.round(d.from.y+dy);
+        for(const [id,f] of Object.entries(d.nodos)){ const n=state.mnodes[id]; if(n&&f.x!=null){ n.x=Math.round(f.x+dx); n.y=Math.round(f.y+dy); } } }
+      mgDraw(); return;
+    }
     if(MG.drag){
       const [wx,wy]=toWorld(x,y), dx=wx-MG.drag.ox, dy=wy-MG.drag.oy;
       if(!MG.drag.moved){ if(Math.hypot(dx,dy)*cam().z<3) return; mRemember(); MG.drag.moved=true; }
@@ -3172,10 +3370,22 @@ function bindCanvas(cv){
     if(MG.pan){ const c=cam(); c.ox=MG.pan.ox+x-MG.pan.x; c.oy=MG.pan.oy+y-MG.pan.y; c.user=true; mgDraw(); return; }
     if(MG.wire){ const [wx,wy]=toWorld(x,y); MG.wire.x=wx; MG.wire.y=wy; mgDraw(); }
     const h=hitNode(x,y);
-    if(h!==MG.hover){ MG.hover=h; cv.style.cursor=h?"pointer":""; mgDraw(); }
+    if(h!==MG.hover){ MG.hover=h; mgDraw(); }
+    // El puntero avisa de lo que se puede hacer con un área
+    let cursor=h?"pointer":"";
+    if(!h&&!MG.pan&&!MG.rect&&e.pointerType==="mouse"){ const zh=hitZona(x,y); if(zh){ const z=state.mzones[zh.id];
+      cursor=z.locked?"default":zh.parte==="nw"||zh.parte==="se"?"nwse-resize":zh.parte==="ne"||zh.parte==="sw"?"nesw-resize":"move"; } }
+    if(cv.style.cursor!==cursor) cv.style.cursor=cursor;
   });
   cv.addEventListener("pointerup",e=>{
     const [x,y]=pos(e);
+    if(MG.zdrag){
+      const d=MG.zdrag; MG.zdrag=null;
+      if(d.moved) save();
+      else if(d.toque&&d.yaSel) abrirMenuZona(d.id,x,y);         // con el dedo: tocar otra vez un área seleccionada abre sus opciones
+      mgDraw(); return;
+    }
+    if(MG.zTap){ const t=MG.zTap; MG.zTap=null; if(t.toque&&t.yaSel) abrirMenuZona(t.id,x,y); return; }
     if(MG.drag){
       const d=MG.drag; MG.drag=null;
       if(d.moved && MG.dropTarget){
@@ -3199,11 +3409,12 @@ function bindCanvas(cv){
   cv.addEventListener("dblclick",e=>{
     const [x,y]=pos(e), id=hitNode(x,y);
     if(id){ goLevel(id); return; }
+    const zh=hitZona(x,y); if(zh&&zh.parte.length>2){ renombrarZona(zh.id); return; }
     const [wx,wy]=toWorld(x,y); createNode(wx,wy,null);
   });
   cv.addEventListener("wheel",e=>{ e.preventDefault(); const [x,y]=pos(e); zoomAt(x,y,e.deltaY<0?1.12:1/1.12); },{passive:false});
   cv.addEventListener("contextmenu",e=>{
-    e.preventDefault(); const [x,y]=pos(e), id=hitNode(x,y), lid=id?null:hitLink(x,y);
+    e.preventDefault(); const [x,y]=pos(e), id=hitNode(x,y), zh=id?null:hitZona(x,y), lid=id||(zh&&zh.parte!=="borde")?null:hitLink(x,y);
     MG.lastPointer=[x,y];
     if(id){
       if(!selIds().includes(id)) selectOnly(id); else mSel=id;
@@ -3218,8 +3429,9 @@ function bindCanvas(cv){
     }
     else if(lid){ clearSel(); mSelLink=lid; selectionChanged();
       openMgMenu(x,y,[["Quitar conexión",()=>{ mRemember(); delete state.mlinks[lid]; mSelLink=null; save(); mgDraw(); },"danger"]]); }
+    else if(zh) abrirMenuZona(zh.id,x,y);
     else { const [wx,wy]=toWorld(x,y);
-      const items=[["Nuevo nodo aquí",()=>createNode(wx,wy,null)]];
+      const items=[["Nuevo nodo aquí",()=>createNode(wx,wy,null)],["Nueva área aquí…",()=>menuFormas(x,y,wx,wy)]];
       if(mClip) items.push(["Pegar "+(mClip.count===1?"el nodo copiado":mClip.count+" nodos copiados"),()=>pasteClip(wx,wy)]);
       items.push(["Seleccionar todo",()=>{ const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); }],
                  ["Ajustar a la pantalla",()=>mgFit(false)],["Exportar como imagen (PNG)",exportMapPNG]);
@@ -3232,8 +3444,8 @@ function bindCanvas(cv){
 // todos los nombres visibles y los mismos colores y brillos que en Ascenso. Se descarga a la carpeta de descargas.
 function exportMapPNG(){
   const mid=curMapId(), m=state.maps[mid]; if(!m) return;
-  const lv=levelNodes(mid,mapLevel).filter(([,n])=>n.x!=null);
-  if(!lv.length){ mvToast("Este nivel no tiene nodos que exportar",false); return; }
+  const lv=levelNodes(mid,mapLevel).filter(([,n])=>n.x!=null), zonas=levelZones(mid,mapLevel);
+  if(!lv.length&&!zonas.length){ mvToast("Este nivel no tiene nodos que exportar",false); return; }
   const css=getComputedStyle(document.documentElement), v=k=>css.getPropertyValue(k).trim();
   const ink=v("--ink"), muted=v("--muted"), line=v("--line"), bg=getComputedStyle(document.querySelector(".mv-body")||document.body).backgroundColor;
   const font=getComputedStyle(document.body).fontFamily, serif=getComputedStyle(document.querySelector("h1,.brand")||document.body).fontFamily;
@@ -3245,6 +3457,7 @@ function exportMapPNG(){
   let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
   for(const k of info){ const p=k.n, halo=k.r+k.g*5.5+4;
     x0=Math.min(x0,p.x-halo,p.x-k.tw/2); x1=Math.max(x1,p.x+halo,p.x+k.tw/2); y0=Math.min(y0,p.y-halo); y1=Math.max(y1,p.y+k.r+24); }
+  for(const [,z] of zonas){ x0=Math.min(x0,z.x-4); x1=Math.max(x1,z.x+z.w+4); y0=Math.min(y0,z.y-4); y1=Math.max(y1,z.y+z.h+4); }
   const pad=48, head=74, W=Math.ceil(x1-x0+pad*2), H=Math.ceil(y1-y0+pad*2+head), S=2;
   const cv=document.createElement("canvas"); cv.width=W*S; cv.height=H*S;
   const c=cv.getContext("2d"); c.scale(S,S);
@@ -3258,6 +3471,9 @@ function exportMapPNG(){
   c.fillStyle=m.color; c.fillRect(pad,pad+40,36,3);
   c.translate(pad-x0, pad+head-y0);
   const colorOf=n=>n.color||m.color;
+  // Áreas
+  dibujarZonas(c,zonas,{zoom:1, font, ink});
+  c.globalAlpha=1;
   // Hilos
   c.lineWidth=1.2; c.strokeStyle=line; c.globalAlpha=.9;
   for(const l of links){ const a=state.mnodes[l.a], b=state.mnodes[l.b]; c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke(); }
@@ -3296,6 +3512,7 @@ bvBody.addEventListener("click",e=>{
   if((el=q("[data-delmap]"))){ armDelete(el,()=>deleteMap(curMapId()),"Pulsa otra vez para eliminar el mapa"); return; }
   if((el=q("[data-mtool]"))){ const k=el.dataset.mtool;
     if(k==="new"){ const c=cam(); createNode((MG.W/2-c.ox)/c.z+(Math.random()-.5)*60, (MG.H/2-c.oy)/c.z+(Math.random()-.5)*60, mSel); }
+    else if(k==="area"){ const g=document.getElementById("mv-graph").getBoundingClientRect(), r=el.getBoundingClientRect(); menuFormas(r.left-g.left, r.top-g.top); }
     else if(k==="in") zoomAt(MG.W/2,MG.H/2,1.2); else if(k==="out") zoomAt(MG.W/2,MG.H/2,1/1.2); else mgFit(false);
     return; }
   if((el=q("[data-mcolor]"))){ mRemember(); for(const id of selIds()) state.mnodes[id].color=el.dataset.mcolor; save(); mgDraw(); return; }
@@ -3371,10 +3588,13 @@ document.addEventListener("keydown",e=>{
   if(typing) return;
   if(k==="?" ){ e.preventDefault(); toggleHelp(); return; }
   if(k==="Escape"){ const mv=document.querySelector(".mv-move");
-    if(mHelpOpen) toggleHelp(false); else if(mv) mv.remove(); else if(MG&&MG.wire){ MG.wire=null; mgDraw(); } else if(MG&&MG.menu) closeMgMenu(); else if(selIds().length||mSelLink){ clearSel(); selectionChanged(); } return; }
+    if(mHelpOpen) toggleHelp(false); else if(mv) mv.remove(); else if(MG&&MG.wire){ MG.wire=null; mgDraw(); } else if(MG&&MG.menu) closeMgMenu(); else if(selIds().length||mSelLink||mZona){ clearSel(); selectionChanged(); } return; }
   if(mod && (k==="a"||k==="A")){ e.preventDefault(); const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); return; }
   if(k==="Tab" && mSel && selIds().length===1){ e.preventDefault(); createNear(mSel,mSel); return; }
+  if(k==="F2" && mZona && state.mzones[mZona]){ e.preventDefault(); renombrarZona(mZona); return; }
   if(k==="F2" && (mSel||mapLevel)){ e.preventDefault(); focusTitle(); return; }
+  if((k==="Delete" || (e.metaKey && k==="Backspace")) && mZona && state.mzones[mZona] && !selIds().length){
+    e.preventDefault(); mRemember(); delete state.mzones[mZona]; mZona=null; save(); mgDraw(); mvToast("Área eliminada (los nodos siguen ahí)"); return; }
   if(k==="Delete" || (e.metaKey && k==="Backspace")){ e.preventDefault(); const ids=selIds(); if(ids.length) askDeleteNodes(ids); else if(mSelLink){ mRemember(); delete state.mlinks[mSelLink]; mSelLink=null; save(); mgDraw(); } return; }
   if(k==="Enter" && mSel){ e.preventDefault(); goLevel(mSel); return; }
   if(k==="Backspace" || (e.altKey && k==="ArrowLeft") || (e.metaKey && (k==="[" || k==="ArrowUp"))){ if(mapLevel){ e.preventDefault(); goUp(); } }
@@ -4145,7 +4365,7 @@ function saveLocal(){
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
 function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
-  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks})); }
+  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks,mzones:state.mzones})); }
 async function api(method,path,body){
   if(LOCAL) return AscensoLocal.api(method,path,body);
   const opt={method, headers:{"X-Ascenso":"1"}};
@@ -4202,7 +4422,7 @@ async function sync(){
     }
     // Colecciones con identificador: primero se crean o actualizan (en orden de dependencia) y luego se borran (al revés)
     const COLS=[["tags","etiquetas"],["tasks","tareas"],["boards","tableros"],["blabels","etiquetas-tablero"],["blists","listas"],["cards","tarjetas"],["events","eventos"],
-                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"]];
+                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"],["mzones","zonas"]];
     // Los nodos se envían de los de primer nivel hacia dentro (un padre siempre antes que sus hijos)
     const depth=(coll,id)=>{ let d=0, p=coll[id]&&coll[id].parent; while(p&&coll[p]&&d<500){ d++; p=coll[p].parent; } return d; };
     const ordered=(k,coll)=>k==="mnodes"?Object.entries(coll).sort((a,b)=>depth(coll,a[0])-depth(coll,b[0])):Object.entries(coll);
