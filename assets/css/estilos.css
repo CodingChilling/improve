@@ -7870,3 +7870,165 @@ dialog.tdlg.diario {
   color: var(--muted);
   font-size: 1.3rem;
 }
+/* Bloqueo con PIN o huella (bloqueo.js): mientras está bloqueada no se ve nada más */
+html.bloqueada {
+  overflow: hidden;
+}
+html.bloqueada body > :not(#bloqueo) {
+  visibility: hidden !important;
+}
+.bloqueo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--ink);
+  overflow-y: auto;
+}
+.bloqueo[hidden] {
+  display: none;
+}
+/* Centrada con márgenes automáticos: si no cabe (el panel del olvido abierto), se desplaza sin cortarse por arriba */
+.bq-caja {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: auto;
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+.bq-marca {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.bq-caja h2 {
+  margin: 0 0 18px;
+  font-size: 1.6rem;
+}
+.bq-puntos {
+  display: flex;
+  gap: 14px;
+  min-height: 16px;
+}
+.bq-puntos i {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+}
+.bq-puntos i.on {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+.bq-puntos.mal {
+  animation: bq-mal 0.35s ease-in-out;
+}
+@keyframes bq-mal {
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bq-puntos.mal {
+    animation: none;
+  }
+}
+.bq-msg {
+  min-height: 2.6em;
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.bq-teclado {
+  display: grid;
+  grid-template-columns: repeat(3, 72px);
+  gap: 14px 22px;
+  justify-content: center;
+}
+.bq-teclado button {
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+.bq-teclado button:active:not(:disabled) {
+  background: var(--line);
+}
+.bq-teclado button:disabled {
+  opacity: 0.4;
+}
+.bq-teclado [data-tecla="borrar"] {
+  border-color: transparent;
+  background: none;
+  font-size: 1.3rem;
+}
+.bq-teclado .bq-huella {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: transparent;
+  background: none;
+}
+.bq-teclado .bq-huella[hidden] {
+  visibility: hidden;
+  display: flex;
+}
+.bq-huella svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.bq-entrar {
+  margin-top: 20px;
+  min-width: 160px;
+}
+.bq-olvido {
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+.bq-olvido-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 0.88rem;
+  text-align: left;
+}
+.bq-olvido-panel p {
+  margin: 0 0 10px;
+}
+.bq-borrar[data-armed] {
+  border-color: var(--p-urgente);
+  color: var(--p-urgente);
+}
+.bq-sub {
+  margin: 14px 0 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bq-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.bq-form .pf-campo input {
+  max-width: 220px;
+  letter-spacing: 0.3em;
+}

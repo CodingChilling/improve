@@ -18,5 +18,7 @@ window.AscensoTema=(()=>{
   function poner(t){ try{ if(t==="auto") localStorage.removeItem(CLAVE); else localStorage.setItem(CLAVE,t); }catch(e){} aplicar(t); document.dispatchEvent(new CustomEvent("ascenso:tema",{detail:t})); }
   aplicar(leer());
   document.addEventListener("DOMContentLoaded",()=>aplicar(leer()));
+  // Si este dispositivo tiene bloqueo (bloqueo.js), la página no se ve hasta comprobar el PIN o la huella
+  try{ if(localStorage.getItem("ascenso-bloqueo")==="1") document.documentElement.classList.add("bloqueada"); }catch(e){}
   return {leer, poner};
 })();

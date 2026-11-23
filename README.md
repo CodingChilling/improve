@@ -149,13 +149,31 @@ Presidido por un **Hombre o una Mujer de Vitruvio** (a elegir), dibujado como un
   - **Hábitos**: % por hábito y por día de la semana, rachas de cada hábito y el calendario del último año.
   - **Productividad**: tareas terminadas en el tiempo, por prioridad y por etiqueta, cuánto se tarda en terminarlas,
     atrasadas, tarjetas y checklists.
+  - **Objetivos**: metas con fecha límite, medidas con tus datos: una racha de N días, un hábito al N % de los días,
+    N tareas terminadas, N reflexiones, N libros leídos (aplicación nueva) o llegar a un nivel. Se ve el progreso, lo
+    que falta y los días que quedan; los cumplidos y no alcanzados aparte; se pueden archivar o eliminar. Cada objetivo
+    cumplido suma 150 puntos de experiencia, y el **cuadrado de la figura** se completa con el progreso medio de los
+    que tienes en curso. En el Resumen aparecen los que están en curso.
   - **Descubrimientos**: relaciones en tus datos (hábitos que van juntos, cómo influyen en el ánimo o en las tareas,
     tu mejor día de la semana, lo que falla primero cuando se rompe la racha, tendencias…). Solo aparecen con al
     menos dos semanas de datos en cada caso y diferencias claras, y se presentan como coincidencias, no como causas.
+- **Resúmenes** de la semana, el mes y el año ya terminados (en el Resumen, «Tus resúmenes»): hábitos cumplidos y el más
+  constante, mejor racha, tareas por prioridad, ánimo medio, reflexiones, objetivos cumplidos, experiencia ganada y
+  niveles subidos, y un descubrimiento con los datos de entonces. Con ‹ › se va a los anteriores, y **«Guardar como
+  imagen»** descarga una lámina de 1080 × 1350 para compartir («Ascenso - Semana del 9 de noviembre.png»). El lunes, el
+  día 1 y el 1 de enero, una línea discreta en la página del día avisa de que el resumen está listo.
 - **Ánimo**: bajo los hábitos del día, cinco caras para decir cómo te sientes (tocar la misma otra vez lo quita).
 - **Ajustes**: tu figura, tu nombre (para saludarte) y «mi porqué»; las zonas del cuerpo; el tema (automático, claro u oscuro, de cada
-  dispositivo); la **Cuenta**; y la configuración que antes estaba al final de la página del día: hábitos, tipos de
+  dispositivo); el **Bloqueo**; la **Cuenta**; y la configuración que antes estaba al final de la página del día: hábitos, tipos de
   entreno, imágenes y copia de seguridad.
+
+### Bloqueo con PIN o huella (Perfil › Ajustes › Bloqueo)
+
+Solo en la aplicación instalable, y de cada dispositivo. Con un **PIN** de 4 a 8 cifras (y, si el dispositivo lo
+permite, con la **huella o la cara**), Ascenso no muestra nada al abrirse hasta desbloquearlo, y vuelve a pedirlo al
+volver de segundo plano tras el tiempo elegido (al salir, 1, 5 o 15 minutos). Tras 5 intentos fallidos hay que esperar
+(30 s, 1 min, 5 min…). Si se olvida el PIN, la única salida es borrar los datos de Ascenso de ese dispositivo (con
+cuenta, se recuperan al volver a entrar). Es una barrera para quien coja el dispositivo, no un cifrado de los datos.
 
 ### Cuenta y sincronización (Perfil › Ajustes › Cuenta)
 
@@ -295,6 +313,9 @@ assets/
   js/perfil.js            El perfil: resumen con la figura y el nivel, y Ajustes
   js/niveles.js           Experiencia, rachas y los 120 niveles con nombre
   js/estadisticas.js      Estadísticas del perfil, zonas del cuerpo y descubrimientos
+  js/objetivos.js         Objetivos con fecha: cómo van, calculado con los datos
+  js/resumenes.js         Resúmenes de la semana, el mes y el año, y su imagen para compartir
+  js/bloqueo.js           Bloqueo del dispositivo con PIN o huella (WebAuthn)
   js/figura.js            El Hombre y la Mujer de Vitruvio (SVG propio) y sus capas de detalle
   js/tema.js              Tema claro, oscuro o automático
   js/libreria.js          La librería: estantería y lector de EPUB y PDF, subrayados y notas
@@ -350,6 +371,7 @@ En la versión clásica, tablas de `ascenso.db`:
 - Calendario: `eventos`.
 - Tableros: `tableros`, `listas`, `tarjetas`, `etiquetas_tablero`, `tarjeta_etiquetas_tablero` y `checklist`.
 - La checklist de cada tarea diaria: `checklist_tarea`.
+- Objetivos del perfil: `objetivos` (el perfil y la figura van en `config`).
 
 Al arrancar, el servidor crea o actualiza las tablas sin tocar los datos existentes.
 
@@ -402,6 +424,11 @@ identificadores, los nombres de tus dispositivos ni tu contraseña.
   Publica desde un repositorio que controles y protege tu cuenta de GitHub.
 - En el dispositivo, los datos están sin cifrar en el almacenamiento del navegador (como en cualquier app):
   conviene tener bloqueo de pantalla y el cifrado del dispositivo activado.
+- **Bloqueo de Ascenso.** El PIN no se guarda: solo un resumen PBKDF2-SHA256 (250 000 iteraciones, sal aleatoria) en
+  la base de datos del dispositivo, que no se sincroniza; de la huella o la cara se guarda solo el identificador de la
+  credencial (WebAuthn, con verificación de la persona obligatoria). En `localStorage` solo queda una marca de «hay
+  bloqueo» para ocultar la página antes de pintarla. Es una barrera de la interfaz, no un cifrado: quien pueda leer el
+  almacenamiento del navegador (con las herramientas de desarrollo, por ejemplo) puede ver los datos.
 - El email de la cuenta no se puede cambiar (forma parte de la derivación de las claves).
 - Los conflictos se resuelven por registro, quedándose con el último cambio; no se mezclan dos ediciones del
   mismo texto.

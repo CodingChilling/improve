@@ -30,7 +30,7 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 | Archivo | Qué comprueba |
 |---|---|
 | `paridad.test.mjs` | `servidor-local.js` responde igual que `servidor.py` a más de cien operaciones (válidas y no válidas), y la copia que exporta la versión de Python se importa tal cual. |
-| `local.test.mjs` | La página guarda en IndexedDB y no en `localStorage`; migración de datos antiguos; imágenes de las libretas y limpieza de huérfanas; la versión clásica sigue funcionando. |
+| `local.test.mjs` | La página guarda en IndexedDB y no en `localStorage`; migración de datos antiguos; imágenes de las libretas y limpieza de huérfanas; la versión clásica sigue funcionando (con el perfil y los objetivos en `ascenso.db`, y sin bloqueo). |
 | `movil.test.mjs` | iPhone y Android emulados: nada desborda la pantalla; arrastrar tareas, tarjetas y nodos con el dedo; zoom con dos dedos; la barra de abajo, el botón «atrás» y los tamaños para el dedo. |
 | `libreria.test.mjs` | La librería: añadir un EPUB y un PDF (generados en `libros.mjs`), que el contenido hostil de un libro no llegue a la página, leer, índice, subrayados y notas, posición recordada, ajustes, móvil, y sincronización cifrada entre dos dispositivos. |
 | `pwa.test.mjs` | Lo que se publica en GitHub Pages: solo la aplicación, rutas relativas, política de seguridad, funcionamiento sin conexión y aviso de versión nueva. |
@@ -38,6 +38,10 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 | `sync.test.mjs` | Dos dispositivos con la misma cuenta: altas, cambios, borrados (también en cascada), edición sin conexión, conflictos, imágenes, dos pestañas, sesión recordada. Y que el servidor no recibe nada sin cifrar. |
 | `perfil.test.mjs` | El perfil: niveles (120 nombres, curva, experiencia que sube y baja con los datos), acceso por la racha y la barra, Ajustes (figura, nombre, «mi porqué», tema, configuración movida, cuenta). |
 | `estadisticas.test.mjs` | Las estadísticas con datos sintéticos: periodos, % y rachas por hábito, calendario, productividad, ánimo, zonas del cuerpo y descubrimientos (solo con datos suficientes, nunca como causas). |
+| `objetivos.test.mjs` | Los objetivos con datos sintéticos: cómo se mide cada tipo, cuándo se cumplen o no, y los 150 puntos de experiencia (también con objetivos de nivel). |
+| `objetivos-ui.test.mjs` | Los objetivos desde el perfil: crear (con errores), progreso, cuadrado de la figura, título escapado, archivar y eliminar con dos toques. |
+| `resumenes.test.mjs` | Los resúmenes: periodos cerrados y sus títulos, cifras de una semana, aviso del lunes en el día, navegar ‹ ›, mes, y la imagen PNG de 1080 × 1350. |
+| `bloqueo.test.mjs` | El bloqueo: poner el PIN (sin guardarlo), oculta desde antes de pintar, espera tras 5 fallos (también al recargar), segundo plano, huella con un autenticador virtual de WebAuthn, cambiar el PIN y «olvidé el PIN». |
 | `zonas.test.mjs` | Áreas de color de los mapas, con ratón y con el dedo: crear, mover con los nodos de dentro o sola, tamaño, forma, color, bloquear, título, buscar, borrar y deshacer. |
 | `notas.test.mjs` | Las frases (ids únicos y completos) y el diario de reflexiones y notas: lista con la frase de cada día, filtros, búsqueda e ir al día. |
 | `entreno.test.mjs` | Tipos de entreno propios (añadir, color, quitar con sustituto o archivar) y cambios de entreno de un día: hacia las semanas siguientes, nunca hacia las pasadas. |

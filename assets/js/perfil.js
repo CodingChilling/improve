@@ -59,6 +59,8 @@ window.AscensoPerfil=(()=>{
       </div>
       <p class="pf-nota">«Automático» sigue el modo claro u oscuro del dispositivo. La elección es de este dispositivo.</p>
     </section>
+    <section class="pf-caja" id="pf-bloqueo"><h3>Bloqueo</h3><div id="pf-bloqueo-sitio">${(window.AscensoBloqueo||{}).disponible?"":
+      `<p class="pf-nota">${(window.ASCENSO_CONFIG||{}).clasico?"El bloqueo con PIN o con la huella está en la aplicación nueva (la que se instala en el móvil). Esta versión clásica guarda los datos en ascenso.db, en tu ordenador: los protege la sesión de tu ordenador.":"Este navegador no permite el bloqueo con PIN."}</p>`}</div></section>
     ${cuentaDisponible?`<section class="pf-caja" id="pf-cuenta"><h3>Cuenta</h3><div id="pf-cuenta-sitio"></div></section>`:""}
     <div id="pf-config"></div>`;
   for(const id of ["cfg","typecfgbox","imgcfgbox","backupbox"]){ const d=$(id); if(d) $("pf-config").appendChild(d); }
@@ -457,7 +459,7 @@ window.AscensoPerfil=(()=>{
     if(informe){ informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML=""; }
     for(const b of vista.querySelectorAll(".pf-tabs [data-pf]")) b.setAttribute("aria-selected",String(b.dataset.pf===t));
     for(const [k,el] of Object.entries(SECCIONES)) el.hidden=k!==t;
-    if(t==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); if(cuentaDisponible) Cuenta.montarEn($("pf-cuenta-sitio")); if(typeof renderCfg==="function") try{ renderCfg(); renderTypeCfg(); }catch(err){} }
+    if(t==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); if(window.AscensoBloqueo&&window.AscensoBloqueo.disponible) window.AscensoBloqueo.pintarAjustes($("pf-bloqueo-sitio")); if(cuentaDisponible) Cuenta.montarEn($("pf-cuenta-sitio")); if(typeof renderCfg==="function") try{ renderCfg(); renderTypeCfg(); }catch(err){} }
     pintarPestana();
     const tab=vista.querySelector(`.pf-tabs [data-pf="${t}"]`); if(tab&&tab.scrollIntoView) tab.scrollIntoView({block:"nearest",inline:"nearest"});
     return true;
