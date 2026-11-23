@@ -6846,6 +6846,9 @@ dialog.tdlg.diario {
 .pf-cuerpo section[hidden] {
   display: none;
 }
+.pf-cuerpo > section {
+  margin-top: 0;
+}
 .pf-portada {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -7591,5 +7594,143 @@ dialog.tdlg.diario {
   }
   .pf-periodos button {
     min-height: 40px;
+  }
+}
+/* Perfil · Objetivos */
+.pf-objs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-obj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.pf-obj:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+.pf-obj-cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.pf-obj-cab strong {
+  font-size: 1rem;
+}
+.pf-obj-cab small,
+.pf-obj-cifra {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+.pf-obj-marca {
+  margin-right: 6px;
+  color: var(--gold);
+}
+.pf-obj.no .pf-b b {
+  background: var(--muted);
+}
+.pf-obj-acc {
+  display: flex;
+  gap: 16px;
+}
+.pf-obj-acc .linklike {
+  font-size: 0.84rem;
+}
+.pf-obj-acc .pf-borrar[data-armed] {
+  color: var(--p-urgente);
+  font-weight: 600;
+}
+.pf-objs-res .add.alt {
+  margin-top: 10px;
+}
+.pf-obj-nuevo summary,
+.pf-obj-arch summary {
+  cursor: pointer;
+  list-style: none;
+}
+.pf-obj-nuevo summary::-webkit-details-marker,
+.pf-obj-arch summary::-webkit-details-marker {
+  display: none;
+}
+.pf-obj-nuevo summary h3,
+.pf-obj-arch summary h3 {
+  display: inline;
+  margin: 0;
+}
+.pf-obj-nuevo summary::after,
+.pf-obj-arch summary::after {
+  content: "+";
+  float: right;
+  font-size: 1.3rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+.pf-obj-nuevo[open] summary::after,
+.pf-obj-arch[open] summary::after {
+  content: "–";
+}
+.pf-obj-nuevo[open] summary,
+.pf-obj-arch[open] summary {
+  margin-bottom: 12px;
+}
+.pf-obj-tipos {
+  display: flex;
+  flex-wrap: wrap;
+}
+.pf-obj-tipos button:disabled {
+  opacity: 0.45;
+}
+.pf-obj-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0 12px;
+  margin-top: 12px;
+}
+.pf-campo select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.pf-obj-atajos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.pf-obj-atajos button {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pf-error {
+  margin: 0 0 10px;
+  color: var(--p-urgente);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .pf-campo select {
+    font-size: 16px;
+    min-height: 42px;
+  }
+  .pf-obj-atajos button,
+  .pf-obj-acc .linklike {
+    min-height: 36px;
   }
 }
