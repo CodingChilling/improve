@@ -44,7 +44,9 @@ PAGINA = "ascenso.html"
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 FECHA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
-TIPOS = {"climb", "strength", "active", "rest"}
+TIPOS_BASE = {"climb", "strength", "active", "rest"}     # los de siempre (formato antiguo de «tipos»)
+MAX_TIPOS = 20
+MAX_PLANES = 400
 UMBRALES = {0.5, 0.66, 0.75, 1.0}
 PRIORIDADES = {"urgente", "alta", "media", "baja"}
 LISTAS = {"pendiente", "proceso", "hecha"}
@@ -254,6 +256,23 @@ CREATE TABLE IF NOT EXISTS conexiones (
   hasta TEXT NOT NULL REFERENCES nodos(id) ON DELETE CASCADE,
   CHECK (desde <> hasta)
 );
+-- Áreas de color de los mapas (rectángulo, cuadrado, óvalo o círculo), en un nivel: el del mapa (padre vacío)
+-- o el de dentro de un nodo
+CREATE TABLE IF NOT EXISTS zonas (
+  id        TEXT PRIMARY KEY,
+  mapa_id   TEXT NOT NULL REFERENCES mapas(id) ON DELETE CASCADE,
+  padre_id  TEXT REFERENCES nodos(id) ON DELETE CASCADE,
+  titulo    TEXT NOT NULL DEFAULT '',
+  forma     TEXT NOT NULL CHECK (forma IN ('rect', 'cuadrado', 'ovalo', 'circulo')),
+  x         REAL NOT NULL,
+  y         REAL NOT NULL,
+  ancho     REAL NOT NULL,
+  alto      REAL NOT NULL,
+  color     TEXT NOT NULL,
+  bloqueada INTEGER NOT NULL DEFAULT 0,
+  orden     INTEGER NOT NULL DEFAULT 0,
+  creada    TEXT NOT NULL DEFAULT ''
+);
 
 -- Imágenes de las libretas (comprimidas al pegarlas). Las que ya no aparecen en ninguna libreta
 -- se marcan como huérfanas y se borran solas a los 30 días
@@ -268,9 +287,9 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   huerfano_desde TEXT
 );
 """
-VERSION_BD = 11
+VERSION_BD = 12
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 13
+VERSION_APP = 15
 
 
 class ErrorDatos(Exception):
@@ -399,12 +418,19 @@ def leer_estado(con):
         for r in con.execute("SELECT * FROM nodos")
     }
     conexiones = {r["id"]: {"a": r["desde"], "b": r["hasta"]} for r in con.execute("SELECT * FROM conexiones")}
+    zonas = {
+        r["id"]: {"map": r["mapa_id"], "parent": r["padre_id"], "title": r["titulo"], "shape": r["forma"],
+                  "x": r["x"], "y": r["y"], "w": r["ancho"], "h": r["alto"], "color": r["color"],
+                  "locked": bool(r["bloqueada"]), "order": r["orden"], "created": r["creada"]}
+        for r in con.execute("SELECT * FROM zonas")
+    }
     adjuntos = {r["id"]: {"t": r["tipo"], "w": r["ancho"], "h": r["alto"]}
                 for r in con.execute("SELECT id, tipo, ancho, alto FROM adjuntos")}
     vacia = (not config and not habitos and not dias and not historial and not etiquetas
              and not tareas and not notas and not eventos and not tableros and not mapas)
     return {
         "plan": config.get("plan"),
+        "planes": config.get("planes"),
         "thr": config.get("thr"),
         "tipos": config.get("tipos"),
         "habits": habitos,
@@ -421,6 +447,7 @@ def leer_estado(con):
         "maps": mapas,
         "mnodes": nodos,
         "mlinks": conexiones,
+        "mzones": zonas,
         "att": adjuntos,
         "vacia": vacia,
         "version": VERSION_APP,
@@ -428,16 +455,50 @@ def leer_estado(con):
 
 
 def validar_plan(plan):
-    if not isinstance(plan, list) or len(plan) != 7 or any(p not in TIPOS for p in plan):
+    if not isinstance(plan, list) or len(plan) != 7 or any(not isinstance(p, str) or not ID_RE.match(p) for p in plan):
         raise ErrorDatos("plan semanal no válido")
-    return plan
+    return list(plan)
 
 
 def validar_tipos(tipos):
-    """Nombres propios de los tipos de entreno (Escalada, Fuerza…): solo los cuatro tipos, con texto breve."""
-    if not isinstance(tipos, dict):
-        raise ErrorDatos("nombres de los tipos no válidos")
-    return {k: str(v).strip()[:30] for k, v in tipos.items() if k in TIPOS and str(v).strip()}
+    """Tipos de entreno: lista de {id, name, color, oculto}. (Formato antiguo: nombres de los cuatro de siempre.)"""
+    if isinstance(tipos, dict):
+        return {k: str(v).strip()[:30] for k, v in tipos.items() if k in TIPOS_BASE and str(v).strip()}
+    if not isinstance(tipos, list) or not tipos or len(tipos) > MAX_TIPOS:
+        raise ErrorDatos("tipos de entreno no válidos")
+    vistos, salida = set(), []
+    for t in tipos:
+        if not isinstance(t, dict) or not isinstance(t.get("id"), str) or not ID_RE.match(t["id"]) or t["id"] in vistos:
+            raise ErrorDatos("tipos de entreno no válidos")
+        nombre = str(t.get("name") or "").strip()[:30]
+        color = str(t.get("color") or "")
+        if not nombre or not COLOR_RE.match(color):
+            raise ErrorDatos("tipos de entreno no válidos")
+        vistos.add(t["id"])
+        salida.append({"id": t["id"], "name": nombre, "color": color.upper(), "oculto": t.get("oculto") is True})
+    if all(t["oculto"] for t in salida):
+        raise ErrorDatos("tipos de entreno no válidos")
+    return salida
+
+
+def validar_planes(planes):
+    """Versiones del plan semanal por fechas: [{desde, plan}], ordenadas y sin fechas repetidas."""
+    if not isinstance(planes, list) or len(planes) > MAX_PLANES:
+        raise ErrorDatos("planes no válidos")
+    salida, vistas = [], set()
+    for v in planes:
+        if not isinstance(v, dict):
+            raise ErrorDatos("planes no válidos")
+        desde = str(v.get("desde") or "")
+        try:
+            date.fromisoformat(desde)
+        except ValueError:
+            raise ErrorDatos("planes no válidos")
+        if not FECHA_RE.match(desde) or desde in vistas:
+            raise ErrorDatos("planes no válidos")
+        vistas.add(desde)
+        salida.append({"desde": desde, "plan": validar_plan(v.get("plan"))})
+    return sorted(salida, key=lambda v: v["desde"])
 
 
 def validar_umbral(thr):
@@ -487,7 +548,7 @@ def validar_dia(d):
         if not 20 <= peso <= 400:
             raise ErrorDatos("peso fuera de rango")
     tipo = d.get("type")
-    if tipo is not None and tipo not in TIPOS:
+    if tipo is not None and (not isinstance(tipo, str) or not ID_RE.match(tipo)):
         raise ErrorDatos("tipo de entreno no válido")
     marcas = d.get("c") or {}
     if not isinstance(marcas, dict):
@@ -503,6 +564,8 @@ def guardar_config(con, datos):
         con.execute("INSERT OR REPLACE INTO config VALUES ('thr', ?)", (json.dumps(validar_umbral(datos["thr"])),))
     if "tipos" in datos:
         con.execute("INSERT OR REPLACE INTO config VALUES ('tipos', ?)", (json.dumps(validar_tipos(datos["tipos"])),))
+    if "planes" in datos:
+        con.execute("INSERT OR REPLACE INTO config VALUES ('planes', ?)", (json.dumps(validar_planes(datos["planes"])),))
 
 
 def guardar_habitos(con, lista):
@@ -886,6 +949,64 @@ def guardar_nodo(con, nid, datos):
     )
 
 
+FORMAS_ZONA = {"rect", "cuadrado", "ovalo", "circulo"}
+
+
+def _numero(valor):
+    """Un número (o un texto con un número); cualquier otra cosa no vale."""
+    if isinstance(valor, bool):
+        return float("nan")
+    if isinstance(valor, (int, float)):
+        return float(valor)
+    if isinstance(valor, str) and valor.strip():
+        try:
+            return float(valor)
+        except ValueError:
+            return float("nan")
+    return float("nan")
+
+
+def guardar_zona(con, zid, datos):
+    zid = comprobar_id(zid, "área")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("área no válida")
+    mapa = comprobar_id(datos.get("map"), "mapa")
+    if not con.execute("SELECT 1 FROM mapas WHERE id = ?", (mapa,)).fetchone():
+        raise ErrorDatos("el mapa no existe")
+    padre = datos.get("parent")
+    if padre:
+        padre = comprobar_id(padre, "nodo")
+        fila = con.execute("SELECT mapa_id FROM nodos WHERE id = ?", (padre,)).fetchone()
+        if not fila or fila["mapa_id"] != mapa:
+            raise ErrorDatos("el nodo no es de este mapa")
+    else:
+        padre = None
+    forma = str(datos.get("shape") or "")
+    if forma not in FORMAS_ZONA:
+        raise ErrorDatos("forma no válida")
+    x, y = real_o_nada(datos.get("x")), real_o_nada(datos.get("y"))
+    if x is None or y is None:
+        raise ErrorDatos("posición no válida")
+    ancho, alto = _numero(datos.get("w")), _numero(datos.get("h"))
+    if not (10 <= ancho <= 100000 and 10 <= alto <= 100000):
+        raise ErrorDatos("tamaño de área no válido")
+    if forma in ("cuadrado", "circulo"):
+        alto = ancho                       # cuadrados y círculos: igual de anchos que de altos
+    color = str(datos.get("color") or "")
+    if not COLOR_RE.match(color):
+        raise ErrorDatos("color no válido")
+    orden = entero(datos.get("order", 0), "orden")
+    con.execute(
+        """INSERT INTO zonas (id, mapa_id, padre_id, titulo, forma, x, y, ancho, alto, color, bloqueada, orden, creada)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET mapa_id=excluded.mapa_id, padre_id=excluded.padre_id, titulo=excluded.titulo,
+             forma=excluded.forma, x=excluded.x, y=excluded.y, ancho=excluded.ancho, alto=excluded.alto,
+             color=excluded.color, bloqueada=excluded.bloqueada, orden=excluded.orden""",
+        (zid, mapa, padre, str(datos.get("title") or "").strip()[:80], forma, x, y, ancho, alto, color.upper(),
+         int(datos.get("locked") is True), orden, str(datos.get("created") or "")[:40]),
+    )
+
+
 def guardar_conexion(con, cid, datos):
     cid = comprobar_id(cid, "conexión")
     if not isinstance(datos, dict):
@@ -966,6 +1087,7 @@ def limpiar_adjuntos():
 borrar_mapa = borrar_de("mapas", "mapa")
 borrar_nodo = borrar_de("nodos", "nodo")
 borrar_conexion = borrar_de("conexiones", "conexión")
+borrar_zona = borrar_de("zonas", "área")
 
 
 def nodos_por_profundidad(nodos):
@@ -984,6 +1106,7 @@ RUTAS_TABLEROS = {
     "/api/mapas/": (guardar_mapa, borrar_mapa),
     "/api/nodos/": (guardar_nodo, borrar_nodo),
     "/api/conexiones/": (guardar_conexion, borrar_conexion),
+    "/api/zonas/": (guardar_zona, borrar_zona),
 }
 
 
@@ -1002,7 +1125,7 @@ def importar(con, estado):
     con.execute("DELETE FROM dias")
     con.execute("DELETE FROM habitos")
     con.execute("DELETE FROM config")
-    guardar_config(con, {k: estado[k] for k in ("plan", "thr", "tipos") if estado.get(k) is not None})
+    guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos") if estado.get(k) is not None})
     guardar_habitos(con, estado.get("habits") or [])
     for fecha, d in estado["days"].items():
         guardar_dia(con, str(fecha), d)
@@ -1044,6 +1167,10 @@ def importar(con, estado):
     if isinstance(conexiones, dict):
         for ident, datos in conexiones.items():
             guardar_conexion(con, ident, datos)
+    zonas = estado.get("mzones") or {}
+    if isinstance(zonas, dict):
+        for ident, datos in zonas.items():
+            guardar_zona(con, ident, datos)
 
 
 def listar_imagenes():

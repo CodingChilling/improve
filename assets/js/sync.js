@@ -36,15 +36,21 @@ window.AscensoSync=(()=>{
     if(cuerpo instanceof Uint8Array){ body=cuerpo; h["Content-Type"]="application/octet-stream"; }
     else if(cuerpo!==undefined){ body=JSON.stringify(cuerpo); h["Content-Type"]="application/json"; }
     let r;
-    try{ r=await fetch(URL_BASE+ruta,{method:metodo,headers:h,body,cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"}); }
-    catch(e){ throw new ErrorRed(); }
+    // Una red que no contesta (wifi sin salida, cobertura muy mala) cuenta como «sin conexión», en vez de dejar la
+    // sincronización esperando para siempre. Los archivos tienen más margen: pueden pesar varios megas.
+    const corte=new AbortController(), reloj=setTimeout(()=>corte.abort(),binario||body instanceof Uint8Array?300000:30000);
+    try{ r=await fetch(URL_BASE+ruta,{method:metodo,headers:h,body,cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",signal:corte.signal}); }
+    catch(e){ clearTimeout(reloj); throw new ErrorRed(); }
     if(!r.ok){
       let j={}; try{ j=await r.json(); }catch(e){}
       throw new ErrorServidor(r.status,j.error_code||j.code||j.error||j.statusCode,j.msg||j.message||j.error_description);
     }
-    if(binario) return r.arrayBuffer();
-    const t=await r.text();
-    return t?JSON.parse(t):null;
+    try{
+      if(binario) return await r.arrayBuffer();
+      const t=await r.text();
+      return t?JSON.parse(t):null;
+    }catch(e){ if(e instanceof SyntaxError) throw e; throw new ErrorRed(); }
+    finally{ clearTimeout(reloj); }
   }
   const direccionVuelta=()=>location.origin+location.pathname;      // adonde vuelven los enlaces de los emails
 
@@ -110,7 +116,10 @@ window.AscensoSync=(()=>{
     document.dispatchEvent(new CustomEvent("ascenso:sync",{detail:info}));
     if(canal&&lider) canal.postMessage({tipo:"estado",info});
   }
-  const informe=()=>({estado,detalle,pendientes,email:cuenta?cuenta.email:null});
+  // guardado: {faltan, persistente} — cuántos archivos de la cuenta faltan aún en el dispositivo (para usarlo sin
+  // conexión) y si el navegador se ha comprometido a no borrar los datos de Ascenso cuando le falte espacio
+  let guardado={faltan:null,persistente:null};
+  const informe=()=>({estado,detalle,pendientes,email:cuenta?cuenta.email:null,guardado});
 
   // ---------------------------------------------------------------- bajada
   async function bajar(){
@@ -222,6 +231,7 @@ window.AscensoSync=(()=>{
       poner(pendientes?"sincronizando":"sincronizado");
       if(pendientes) otraVez=true;
       tiempoReal.conectar();
+      if(!pendientes) setTimeout(guardarParaSinConexion,1500);
     }catch(e){
       if(cuenta!==c) return;
       try{ pendientes=(await Almacen.todos("pendientes")).length; }catch(e2){}
@@ -281,14 +291,57 @@ window.AscensoSync=(()=>{
   // ---------------------------------------------------------------- imágenes de las libretas
   const tipoDe=u=>u[0]===0x89&&u[1]===0x50?"image/png":u[0]===0xFF&&u[1]===0xD8?"image/jpeg":u[0]===0x47&&u[1]===0x49?"image/gif":"image/webp";
   // Una imagen que está en la cuenta pero aún no en este dispositivo se descarga la primera vez que hace falta
-  async function descargarAdjunto(id){
+  async function descargarAdjunto(id,tipoConocido){
     const c=cuenta; if(!c) return null;
     try{
       const cifrado=await conSesion(async t=>pedir(await rutaAdjunto(c,id),{token:t,binario:true}));
-      const datos=await Cifrado.descifrarArchivo(c.claves,cifrado), tipo=tipoDe(new Uint8Array(datos));
+      const datos=await Cifrado.descifrarArchivo(c.claves,cifrado), tipo=tipoConocido||tipoDe(new Uint8Array(datos));
+      if(cuenta!==c) return null;
       await Local.guardarBlob(id,tipo,datos);
+      document.dispatchEvent(new CustomEvent("ascenso:archivos"));
       return {id,tipo,datos};
     }catch(e){ return null; }
+  }
+
+  // ---------------------------------------------------------------- todo a mano para usarlo sin conexión
+  // Con conexión, se van bajando las imágenes de las libretas y los libros que aún no estén en este dispositivo,
+  // de uno en uno y sin prisa. Así, sin conexión se ve lo mismo que la última vez que hubo red.
+  let guardando=false, noDisponibles=new Set();
+  async function comprobarPersistencia(){
+    try{ if(navigator.storage&&navigator.storage.persisted) guardado={...guardado,persistente:await navigator.storage.persisted()}; }catch(e){}
+  }
+  async function pedirPersistencia(){
+    try{ if(navigator.storage&&navigator.storage.persist&&!(await navigator.storage.persisted())) await navigator.storage.persist(); }catch(e){}
+    await comprobarPersistencia();
+  }
+  async function guardarParaSinConexion(){
+    if(guardando||!cuenta||!lider) return;
+    guardando=true;
+    const c=cuenta;
+    try{
+      let faltan=(await Local.faltanEnDispositivo()).filter(a=>!(a.tabla==="archivos"&&a.bytes>LIMITE_ARCHIVO));   // esos nunca llegan a la cuenta
+      // Primero las imágenes (pesan poco), después los libros, de menor a mayor
+      faltan.sort((a,b)=>(a.tabla==="archivos")-(b.tabla==="archivos")||a.bytes-b.bytes);
+      for(const a of faltan){
+        if(cuenta!==c||!navigator.onLine||estado==="error"&&detalle==="sesion") break;
+        if(noDisponibles.has(a.id)) continue;
+        // Con poco espacio libre, los libros se dejan para cuando se abran
+        if(a.tabla==="archivos"){
+          try{ const e=await navigator.storage.estimate(); if(e.quota&&e.usage+a.bytes*1.2>e.quota*0.8) continue; }catch(err){}
+          try{ if(navigator.connection&&navigator.connection.saveData) continue; }catch(err){}
+        }
+        if(!await descargarAdjunto(a.id,a.tipo)){
+          if(!navigator.onLine) break;
+          noDisponibles.add(a.id);                     // no está en la cuenta (o falló): se reintenta la próxima vez que se abra Ascenso
+        }
+      }
+      if(cuenta===c){
+        guardado={...guardado,faltan:(await Local.faltanEnDispositivo()).length};
+        await comprobarPersistencia();
+        poner(estado,detalle);
+      }
+    }catch(e){ /* otra vez será */ }
+    finally{ guardando=false; }
   }
 
   // ---------------------------------------------------------------- dispositivos
@@ -396,10 +449,18 @@ window.AscensoSync=(()=>{
     if(!entrada) throw new Error("No hay ningún inicio de sesión en curso.");
     const nueva=entrada; entrada=null;
     detener();
+    // La misma cuenta que ya estaba en este dispositivo (la sesión había caducado): se sigue donde se estaba. Los
+    // cambios pendientes se envían y solo se baja lo que falte; nada se vuelve a subir ni a descargar entero.
+    const anterior=await Almacen.meta("cuenta");
+    if(anterior&&anterior.userId===nueva.userId&&modo!=="reemplazar"){
+      cuenta=nueva; await guardarCuenta();
+      noDisponibles=new Set(); pedirPersistencia(); arrancar();
+      return "continuar";
+    }
     if(modo==="reemplazar") await Local.vaciarDatos(); else await Local.encolarTodo();
     await Almacen.tx(["meta"],"readwrite",s=>{ s.meta.put({clave:"ultimo_seq",valor:0}); s.meta.delete("descarga_completa"); s.meta.delete("dispositivo_visto"); });
     cuenta=nueva; await guardarCuenta();
-    arrancar();
+    noDisponibles=new Set(); pedirPersistencia(); arrancar();
     return modo;
   }
   const cancelarEntrada=()=>{ entrada=null; };
@@ -417,7 +478,7 @@ window.AscensoSync=(()=>{
     await Almacen.tx(["meta"],"readwrite",s=>{ for(const k of ["cuenta","ultimo_seq","descarga_completa","dispositivo_visto","archivos_sin_subir"]) s.meta.delete(k); });
     if(borrarDatos) await Local.vaciarDatos();
     if(canal) canal.postMessage({tipo:"cuenta"});
-    pendientes=0; poner("sin-cuenta");
+    pendientes=0; guardado={faltan:null,persistente:guardado.persistente}; poner("sin-cuenta");
   }
 
   const cambiarContrasena=(actual,nueva)=>paraPersona(async()=>{
@@ -480,6 +541,8 @@ window.AscensoSync=(()=>{
     if(!disponible) return;
     dispositivo=await Local.dispositivo();
     await cargarCuenta();
+    // Con cuenta, se pide al navegador que no borre los datos de Ascenso aunque le falte espacio
+    if(cuenta) pedirPersistencia(); else comprobarPersistencia();
     if((await Almacen.meta("esquema"))!==ESQUEMA){
       await Almacen.tx(["meta"],"readwrite",m=>{
         if(cuenta){ m.meta.put({clave:"ultimo_seq",valor:0}); m.meta.delete("descarga_completa"); }
@@ -503,7 +566,7 @@ window.AscensoSync=(()=>{
       }
       if(d.tipo==="pregunta"&&lider) canal.postMessage({tipo:"estado",info:informe()});      // una pestaña recién abierta pregunta cómo va
       if(d.tipo==="estado") clearTimeout(tRelevo);              // la pestaña que sincroniza está viva
-      if(d.tipo==="estado"&&!lider&&d.info){ estado=d.info.estado; detalle=d.info.detalle; pendientes=d.info.pendientes; document.dispatchEvent(new CustomEvent("ascenso:sync",{detail:informe()})); }
+      if(d.tipo==="estado"&&!lider&&d.info){ estado=d.info.estado; detalle=d.info.detalle; pendientes=d.info.pendientes; if(d.info.guardado) guardado=d.info.guardado; document.dispatchEvent(new CustomEvent("ascenso:sync",{detail:informe()})); }
     };
     poner(cuenta?"sincronizando":"sin-cuenta");
     // Con varias pestañas abiertas, solo una sincroniza; las demás ven sus cambios al momento

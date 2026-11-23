@@ -15,7 +15,11 @@ En los dos casos, sin dependencias: ni frameworks, ni paquetes que instalar para
 ## Qué incluye
 
 - **Hábitos** diarios configurables (en qué días aplican, si cuentan para la racha o el porcentaje semanal), racha y progreso semanal, registro de peso.
-- **Plan semanal** de entrenamiento (escalada, fuerza, descanso activo, descanso).
+- **Plan semanal** de entrenamiento: escalada, fuerza, descanso activo, descanso y los tipos que añadas, cada uno
+  con su nombre y su color (en «Tipos de entreno»). Cambiar el entreno de un día de esta semana o de una siguiente lo
+  cambia para ese día y los mismos días de las semanas que vienen; en una semana pasada, solo para ese día. Las
+  semanas pasadas no cambian nunca por lo que se haga después. Al quitar un tipo ya usado, eliges a cuál pasan sus
+  días desde esta semana; las semanas pasadas lo conservan.
 - **Tareas** por día al estilo de Trello: tres listas (Pendientes, En proceso, Hechas), arrastrar y soltar, prioridades (urgente, alta, media, baja), etiquetas con color y una checklist en la ficha de cada tarea.
 - **Frase del día** y **imagen del día**, sin repetirse hasta agotar todas, con historial guardado.
 - **Copia de seguridad**: exportar e importar todos los datos en JSON.
@@ -31,7 +35,7 @@ elementos que ya están en la página y que, a primera vista, parecen solo decor
 |---|---|
 | El título **«Ascenso»** | Los tableros |
 | La **fecha** bajo el título | El calendario con los eventos |
-| Las **comillas** de la frase del día | La reflexión y las notas del día |
+| Las **comillas** de la frase del día | La reflexión y las notas del día (y, desde ahí, «Todas tus notas») |
 | El **marco** de la imagen del día | Otra imagen para ese día |
 | El **texto de estado** («Guardado…», al pie de la página y en la cabecera de los tableros) | La cuenta y la sincronización |
 | El **nombre del autor** de la frase del día | La librería (solo en la aplicación instalable) |
@@ -59,6 +63,23 @@ hoy que dentro de un mes.
 - **Pasar entre tareas y tableros**: desde la ficha de una tarjeta, «Pasar a tareas del día»; desde la
   ficha de una tarea, «Pasar a un tablero». La checklist viaja con ella en los dos sentidos.
 
+#### Mapas
+
+En la misma vista, bajo los tableros, están los **mapas**: nodos unidos por hilos, cada uno con su libreta y,
+dentro, su propio nivel con más nodos. El botón **?** del mapa muestra todos los gestos y atajos.
+
+**Áreas de color.** Con **«+ Área»** se añade una zona de color (rectángulo, cuadrado, óvalo o círculo) para
+delimitar partes del mapa, con su título y, al lado, cuántos nodos hay dentro (por ejemplo «Terminados · 12»).
+Tienen su propia paleta de tonos apagados, distinta de la de los nodos.
+- Se agarran por el **título** o el **borde**: así, dentro de un área grande se sigue pudiendo desplazar el mapa
+  y seleccionar nodos. Al moverla, **los nodos de dentro van con ella**; con <kbd>Alt</kbd> (o, en el móvil,
+  desde sus opciones › «Mover sin los nodos») se mueve sola.
+- Las **esquinas** cambian el tamaño (los cuadrados y los círculos no pierden la proporción).
+- **Doble clic** en el título (o <kbd>F2</kbd>) para cambiarlo. **Clic derecho** (en el móvil, tocar otra vez el
+  título de un área seleccionada) para la forma, el color, **bloquearla** (no se mueve ni cambia de tamaño sin
+  querer), traerla al frente o enviarla al fondo, o eliminarla (los nodos se quedan).
+- El buscador de tableros y mapas también encuentra las áreas por su título, y la imagen PNG del mapa las incluye.
+
 ### Calendario (la fecha)
 
 Calendario mensual con eventos de colores. Cada evento tiene título, color, hora opcional y puede durar
@@ -69,6 +90,10 @@ salta a ese día. Los eventos solo aparecen dentro del calendario.
 
 Una ventanita con dos pestañas, **Reflexión** y **Notas**, ligada al día seleccionado. Se guarda sola
 mientras escribes, sin botones. Los días en que hay algo escrito, las comillas se ven un poco más intensas.
+
+En el pie del bloc, **«Todas tus notas»** abre el diario: todas tus reflexiones y notas, de la más reciente a la más
+antigua, cada una con la frase de ese día. Se puede buscar (también en las frases), ver solo reflexiones o solo
+notas, e ir a cualquier día para seguir escribiendo.
 
 ### Imagen del día (el marco)
 
@@ -108,6 +133,11 @@ Ascenso funciona igual, solo en ese dispositivo. Con cuenta:
 - **Iniciar sesión** en otro dispositivo: se escribe la contraseña una vez y el dispositivo queda conectado hasta
   que cierres la sesión. Si ese dispositivo ya tenía datos, Ascenso pregunta si los fusiona con la cuenta o los
   sustituye por los de la cuenta.
+- **Sin conexión**: la sesión se queda guardada en el dispositivo y Ascenso abre igual sin red, con todo lo que había
+  la última vez que hubo conexión. Mientras hay conexión se van guardando en el dispositivo, sin abrirlas, las
+  imágenes de las libretas y los libros de la cuenta (los libros, si hay espacio libre y el modo de ahorro de datos
+  está apagado). El panel de la cuenta dice si ya está todo o cuánto falta. Si la sesión llegara a caducar, todo
+  sigue a la vista y al volver a entrar se continúa donde se estaba, sin volver a subir ni descargar nada entero.
 - **Estado**, siempre a la vista en ese mismo texto: sincronizado, sincronizando, sin conexión (con los cambios
   pendientes) o error. Sin conexión todo sigue funcionando; los cambios se envían solos al volver.
 - **Cambiar la contraseña**, **recuperarla** (enlace por email + clave de recuperación), ver los **dispositivos**

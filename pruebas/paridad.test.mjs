@@ -13,6 +13,23 @@ const OPERACIONES = [
   ["PUT", "config", { plan: ["climb"] }],
   ["PUT", "config", { thr: 0.6 }],
   ["PUT", "config", { tipos: [] }],
+  // Tipos de entreno propios y plan semanal por fechas
+  ["PUT", "config", { tipos: [{ id: "climb", name: " Roca ", color: "#d39b2a" }, { id: "kyoga", name: "Yoga", color: "#16A085", oculto: 1 }, { id: "rest", name: "Descanso", color: "#8E989B", oculto: true }] }],
+  ["PUT", "config", { tipos: [{ id: "climb", name: "", color: "#D39B2A" }] }],
+  ["PUT", "config", { tipos: [{ id: "climb", name: "x", color: "rojo" }] }],
+  ["PUT", "config", { tipos: [{ id: "a", name: "x", color: "#000000" }, { id: "a", name: "y", color: "#000000" }] }],
+  ["PUT", "config", { tipos: [{ id: "a b", name: "x", color: "#000000" }] }],
+  ["PUT", "config", { tipos: [{ id: "a", name: "x", color: "#000000", oculto: true }] }],
+  ["PUT", "config", { tipos: Array.from({ length: 21 }, (_, i) => ({ id: "t" + i, name: "x", color: "#000000" })) }],
+  ["PUT", "config", { plan: ["climb", "kyoga", "rest", "climb", "active", "rest", "rest"] }],
+  ["PUT", "config", { plan: ["climb", "mal id", "rest", "climb", "active", "rest", "rest"] }],
+  ["PUT", "config", { planes: [{ desde: "2026-03-02", plan: ["kyoga", "kyoga", "rest", "climb", "active", "rest", "rest"] }, { desde: "2026-02-02", plan: ["climb", "kyoga", "rest", "climb", "active", "rest", "rest"] }] }],
+  ["PUT", "config", { planes: [{ desde: "2026-02-30", plan: ["climb", "climb", "climb", "climb", "climb", "climb", "climb"] }] }],
+  ["PUT", "config", { planes: [{ desde: "2026-02-02", plan: ["climb"] }] }],
+  ["PUT", "config", { planes: [{ desde: "2026-02-02", plan: ["climb", "climb", "climb", "climb", "climb", "climb", "climb"] }, { desde: "2026-02-02", plan: ["rest", "rest", "rest", "rest", "rest", "rest", "rest"] }] }],
+  ["PUT", "config", { planes: "x" }],
+  ["PUT", "dias/2026-01-09", { type: "kyoga" }],
+  ["PUT", "dias/2026-01-10", { type: "no vale" }],
   ["PUT", "habitos", [{ id: "h1", t: " Leer ", s: "20 min", days: [true, false, true, true, true, true, false] }, { id: "h2", streak: false, week: false }, { id: "h3", t: largo(80) }]],
   ["PUT", "habitos", [{ id: "h1" }, { id: "h1" }]],
   ["PUT", "habitos", [{ id: "con espacio" }]],
@@ -119,6 +136,25 @@ const OPERACIONES = [
   ["PUT", "nodos/n7", { map: "m2", title: "En m2" }],
   ["PUT", "nodos/n8", { map: "m2", title: "En m2 también" }],
   ["PUT", "conexiones/x4", { a: "n7", b: "n8" }],
+  // Áreas de color de los mapas
+  ["PUT", "zonas/z1", { map: "m1", title: " Terminados ", shape: "rect", x: -10.5, y: 20, w: 300, h: 200, color: "#c9a66b", locked: true, order: 2, created: "2026-01-02" }],
+  ["PUT", "zonas/z2", { map: "m1", parent: "n1", shape: "circulo", x: 0, y: 0, w: 150, h: 90, color: "#8FAE8B" }],
+  ["PUT", "zonas/z3", { map: "m1", parent: "n3", shape: "ovalo", x: "5", y: "6", w: "120", h: "60", color: "#8BA3BC", locked: 1 }],
+  ["PUT", "zonas/z4", { map: "m2", shape: "cuadrado", x: 1, y: 1, w: 50, h: 80, color: "#A99BC9" }],
+  ["PUT", "zonas/z5", { map: "m1", title: "x".repeat(100), shape: "rect", x: 0, y: 0, w: 10, h: 100000, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "triangulo", x: 0, y: 0, w: 50, h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "rect", x: 0, y: 0, w: 9, h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "rect", x: 0, y: 0, w: 50, h: 100001, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "rect", x: null, y: 0, w: 50, h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "rect", x: 0, y: 0, w: "ancho", h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "rect", x: 0, y: 0, w: 50, h: 50, color: "verde" }],
+  ["PUT", "zonas/z6", { map: "no-existe", shape: "rect", x: 0, y: 0, w: 50, h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", parent: "n7", shape: "rect", x: 0, y: 0, w: 50, h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", { map: "m1", shape: "rect", x: 0, y: 0, w: 50, h: 50, color: "#000000", order: "x" }],
+  ["PUT", "zonas/mal id", { map: "m1", shape: "rect", x: 0, y: 0, w: 50, h: 50, color: "#000000" }],
+  ["PUT", "zonas/z6", "no es un área"],
+  ["PUT", "zonas/z7", { map: "m1", shape: "rect", x: 0, y: 0, w: 50, h: 50, color: "#000000" }],
+  ["DELETE", "zonas/z7"],
   ["DELETE", "nodos/n3"],
   ["DELETE", "conexiones/x1"],
   ["DELETE", "mapas/m2"],
@@ -153,6 +189,8 @@ test("servidor-local.js responde igual que servidor.py", async () => {
     const estadoPy = await clasico.api("GET", "estado"), estadoJs = await apiLocal(pagina, "GET", "estado");
     assert.deepEqual(estadoJs, estadoPy);
     assert.ok(estadoJs.cards.c1 && estadoJs.mnodes.n4 && !estadoJs.mnodes.n5 && !estadoJs.cards.c5, "los datos de la prueba están (y las cascadas se aplican)");
+    assert.deepEqual(Object.keys(estadoJs.mzones).sort(), ["z1", "z2", "z5"], "las áreas de un nivel o un mapa borrados se van con ellos");
+    assert.equal(estadoJs.mzones.z2.h, 150, "un círculo es tan alto como ancho");
     assert.deepEqual(await apiLocal(pagina, "GET", "adjuntos-copia"), await clasico.api("GET", "adjuntos-copia"));
 
     // «apagar» y «ping» ya no hacen nada

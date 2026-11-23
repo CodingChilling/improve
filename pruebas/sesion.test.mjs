@@ -66,7 +66,8 @@ test("la sesión se recuerda y sobrevive a varias ventanas, a pestañas dormidas
     const C = await ctx.newPage(); await C.goto(app.url); await paginaLista(C);
     antes = enCuenta(sim);
     await apiLocal(C, "PUT", "tareas/s3", tarea("Escrita con la otra ventana dormida"));
-    await esperar(C, () => { const i = window.AscensoSync.informe(); return i.estado === "sincronizado" && i.pendientes === 0; }, null, { limite: 20000, que: "la ventana visible sincroniza por su cuenta" });
+    // (Se mira la cuenta, no el estado de C: C pudo recibir el último «Sincronizado» que A envió antes de dormirse)
+    for (let t = Date.now(); enCuenta(sim) <= antes && Date.now() - t < 20000;) await C.waitForTimeout(200);
     assert.ok(enCuenta(sim) > antes, "el cambio llega a la cuenta aunque la otra ventana no responda");
     // Al despertar, la primera no estorba ni pierde la sesión
     sim.caducarSesiones();

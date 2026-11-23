@@ -66,7 +66,7 @@
         </div>
         <textarea id="np-r" class="np-r" rows="4" maxlength="20000" placeholder="¿Qué te dice hoy esta frase?" aria-label="Reflexión"></textarea>
         <textarea id="np-n" class="np-n" rows="4" maxlength="20000" placeholder="Apuntes sueltos, uno por línea…" aria-label="Notas" hidden></textarea>
-        <div class="np-foot"><span id="np-date"></span><span id="np-saved" class="np-saved" aria-live="polite">Guardado</span></div>
+        <div class="np-foot"><span id="np-date"></span><span id="np-saved" class="np-saved" aria-live="polite">Guardado</span><button type="button" class="np-todas" id="np-todas" aria-haspopup="dialog">Todas tus notas</button></div>
       </div>
     </blockquote>
     <div class="sum-row">
@@ -80,7 +80,7 @@
     <h2 id="h-week">Esta semana</h2>
     <div class="week" id="week"></div>
     <div class="legend" id="legend"></div>
-    <p class="hint">Toca un día para verlo. Cambia su entreno con los botones de abajo.</p>
+    <p class="hint">Toca un día para verlo. Cambia su entreno con los botones de abajo: vale para ese día y los mismos días de las semanas siguientes (en una semana pasada, solo para ese día).</p>
   </section>
 
   <section aria-labelledby="h-day">
@@ -151,9 +151,10 @@
   <details class="cfg" id="typecfgbox">
     <summary>Tipos de entreno</summary>
     <div class="cfgbody">
-      <p>Ponle a cada tipo de día el nombre que quieras. Se usa en el plan semanal, en la semana y en el hábito del entreno. Deja un nombre en blanco para volver al de siempre.</p>
+      <p>Los tipos de día que puedes elegir en el plan, cada uno con su nombre y su color. Se usan en la semana, en el día y en el hábito del entreno. Al quitar uno que ya se ha usado, eliges a qué tipo pasan sus días desde esta semana; los de semanas pasadas lo conservan.</p>
       <div class="typecfg" id="typecfg"></div>
-      <button type="button" class="add alt" id="typereset">Restablecer los nombres</button>
+      <div class="row"><button type="button" class="add" id="typeadd">Añadir tipo</button>
+      <button type="button" class="add alt" id="typereset">Restablecer los de siempre</button></div>
     </div>
   </details>
 
@@ -192,7 +193,7 @@
     </div>
     <span class="bv-sync" id="bv-sync" role="status"></span>
     <div class="bv-search">
-      <input type="search" id="bv-q" placeholder="Buscar tarjetas y nodos…" aria-label="Buscar tarjetas y nodos en todos los tableros y mapas" autocomplete="off">
+      <input type="search" id="bv-q" placeholder="Buscar tarjetas, nodos y áreas…" aria-label="Buscar tarjetas, nodos y áreas en todos los tableros y mapas" autocomplete="off">
       <div class="bv-results" id="bv-results" hidden></div>
     </div>
   </header>

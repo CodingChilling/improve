@@ -724,6 +724,10 @@ window.AscensoLibreria=(()=>{
     } else { pintar(); if(ficha&&ficha.open&&!ficha.querySelector(":focus")) pintarFicha(); }
   });
   document.addEventListener("ascenso:sync",()=>{ if(!vista.hidden&&!L&&!ocupada&&!cuerpo.querySelector(":focus")) pintar(); });
+  // Un libro se ha descargado de la cuenta (en segundo plano, para tenerlo sin conexión)
+  let tArchivos=null;
+  document.addEventListener("ascenso:archivos",()=>{ if(vista.hidden||L) return; clearTimeout(tArchivos);
+    tArchivos=setTimeout(()=>{ if(vista.hidden||L||ocupada) return; cargar().then(pintar,()=>{}); },400); });
 
   // ---------------------------------------------------------------- la puerta: el nombre del autor de la frase del día
   document.addEventListener("click",e=>{ if(e.target.closest("#quote .q-autor")) abrir(); });

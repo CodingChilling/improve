@@ -11,7 +11,9 @@ window.AscensoLocal=(()=>{
 
   const FECHA_RE=/^\d{4}-\d{2}-\d{2}$/, ID_RE=/^[A-Za-z0-9_-]{1,40}$/, COLOR_RE=/^#[0-9A-Fa-f]{6}$/;
   const HORA_RE=/^([01][0-9]|2[0-3]):[0-5][0-9]$/;
-  const TIPOS=new Set(["climb","strength","active","rest"]);
+  const TIPOS_BASE=new Set(["climb","strength","active","rest"]);     // los de siempre (formato antiguo de «tipos»)
+  const MAX_TIPOS=20, MAX_PLANES=400;
+  const FORMAS_ZONA=new Set(["rect","cuadrado","ovalo","circulo"]);   // áreas de los mapas
   const UMBRALES=new Set([0.5,0.66,0.75,1.0]);
   const PRIORIDADES=new Set(["urgente","alta","media","baja"]);
   const PRIORIDADES_TARJETA=new Set([...PRIORIDADES,"ninguna"]);
@@ -21,9 +23,9 @@ window.AscensoLocal=(()=>{
   const MAX_IMAGEN=15*1024*1024;         // bytes por imagen
   const DIAS_HUERFANAS=30;               // días que se conserva una imagen que ya no está en ninguna libreta
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
-  const VERSION_APP=13;
+  const VERSION_APP=15;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
-                "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","adjuntos",
+                "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","zonas","adjuntos",
                 "libros","lecturas","subrayados","archivos"];
   // La librería: no entra en la copia de seguridad (los archivos pesan demasiado), así que importar una copia no la toca
   const TABLAS_LIBRERIA=new Set(["libros","lecturas","subrayados","archivos"]);
@@ -206,25 +208,53 @@ window.AscensoLocal=(()=>{
     for(const [id,v] of nodosT) if(seVe(id,new Set())) nodos[id]={map:v.map,parent:v.parent||null,title:v.title,color:v.color||"",x:v.x,y:v.y,notes:v.notes,created:v.created};
     const conexiones={};
     for(const [id,v] of vivos("conexiones")) if(nodos[v.a]&&nodos[v.b]) conexiones[id]={a:v.a,b:v.b};
+    // Áreas de color de los mapas: las de un mapa o un nivel que ya no existe no se muestran
+    const zonas={};
+    for(const [id,v] of vivos("zonas")) if(mapas[v.map]&&(!v.parent||nodos[v.parent]))
+      zonas[id]={map:v.map,parent:v.parent||null,title:v.title,shape:v.shape,x:v.x,y:v.y,w:v.w,h:v.h,color:v.color,locked:!!v.locked,order:v.order,created:v.created};
     const adjuntos={}; for(const [id,v] of vivos("adjuntos")) adjuntos[id]={t:v.t,w:v.w,h:v.h};
     const hay=o=>Object.keys(o).length>0;
     const vacia=!hay(config)&&!habitos.length&&!hay(dias)&&!hay(historial)&&!hay(etiquetas)&&!hay(tareas)&&!hay(notas)&&!hay(eventos)&&!hay(tableros)&&!hay(mapas);
     const nada=v=>v===undefined?null:v;
-    return {plan:nada(config.plan),thr:nada(config.thr),tipos:nada(config.tipos),habits:habitos,days:dias,hist:historial,tags:etiquetas,tasks:tareas,
-      notes:notas,events:eventos,boards:tableros,blabels:etiquetasTab,blists:listas,cards:tarjetas,maps:mapas,mnodes:nodos,mlinks:conexiones,
+    return {plan:nada(config.plan),planes:nada(config.planes),thr:nada(config.thr),tipos:nada(config.tipos),habits:habitos,days:dias,hist:historial,tags:etiquetas,tasks:tareas,
+      notes:notas,events:eventos,boards:tableros,blabels:etiquetasTab,blists:listas,cards:tarjetas,maps:mapas,mnodes:nodos,mlinks:conexiones,mzones:zonas,
       att:adjuntos,vacia,version:VERSION_APP};
   }
 
   // ---------------------------------------------------------------- validación y guardado
   function validarPlan(plan){
-    if(!Array.isArray(plan)||plan.length!==7||plan.some(p=>!TIPOS.has(p))) mal("plan semanal no válido");
+    if(!Array.isArray(plan)||plan.length!==7||plan.some(p=>typeof p!=="string"||!ID_RE.test(p))) mal("plan semanal no válido");
     return plan.slice();
   }
+  // Tipos de entreno: lista de {id, name, color, oculto}. (Formato antiguo: nombres propios de los cuatro de siempre)
   function validarTipos(tipos){
-    if(!esDic(tipos)) mal("nombres de los tipos no válidos");
-    const o={};
-    for(const [k,v] of Object.entries(tipos)){ const t=String(v).trim(); if(TIPOS.has(k)&&t) o[k]=cortar(t,30); }
-    return o;
+    if(esDic(tipos)){
+      const o={};
+      for(const [k,v] of Object.entries(tipos)){ const t=String(v).trim(); if(TIPOS_BASE.has(k)&&t) o[k]=cortar(t,30); }
+      return o;
+    }
+    if(!Array.isArray(tipos)||!tipos.length||tipos.length>MAX_TIPOS) mal("tipos de entreno no válidos");
+    const vistos=new Set(), out=[];
+    for(const t of tipos){
+      if(!esDic(t)||typeof t.id!=="string"||!ID_RE.test(t.id)||vistos.has(t.id)) mal("tipos de entreno no válidos");
+      const nombre=cortar(texto(t.name).trim(),30), color=texto(t.color);
+      if(!nombre||!COLOR_RE.test(color)) mal("tipos de entreno no válidos");
+      vistos.add(t.id); out.push({id:t.id,name:nombre,color:color.toUpperCase(),oculto:t.oculto===true});
+    }
+    if(out.every(t=>t.oculto)) mal("tipos de entreno no válidos");
+    return out;
+  }
+  // Versiones del plan semanal por fechas: [{desde, plan}], ordenadas y sin fechas repetidas
+  function validarPlanes(planes){
+    if(!Array.isArray(planes)||planes.length>MAX_PLANES) mal("planes no válidos");
+    const out=[], vistas=new Set();
+    for(const v of planes){
+      if(!esDic(v)) mal("planes no válidos");
+      const desde=texto(v.desde);
+      if(!FECHA_RE.test(desde)||fechaReal(desde)===null||vistas.has(desde)) mal("planes no válidos");
+      vistas.add(desde); out.push({desde,plan:validarPlan(v.plan)});
+    }
+    return out.sort((a,b)=>a.desde<b.desde?-1:1);
   }
   function validarUmbral(thr){
     const n=typeof thr==="number"?thr:typeof thr==="string"&&thr.trim()!==""?Number(thr):NaN;
@@ -236,6 +266,7 @@ window.AscensoLocal=(()=>{
     if("plan" in d) op.poner("config","plan",{v:validarPlan(d.plan)});
     if("thr" in d) op.poner("config","thr",{v:validarUmbral(d.thr)});
     if("tipos" in d) op.poner("config","tipos",{v:validarTipos(d.tipos)});
+    if("planes" in d) op.poner("config","planes",{v:validarPlanes(d.planes)});
   }
   function guardarHabitos(op,listaH){
     if(!Array.isArray(listaH)||listaH.length>100) mal("lista de hábitos no válida");
@@ -264,7 +295,7 @@ window.AscensoLocal=(()=>{
       if(!(peso>=20&&peso<=400)) mal("peso fuera de rango");
     } else peso=null;
     const tipo=d.type===undefined?null:d.type;
-    if(tipo!==null&&!TIPOS.has(tipo)) mal("tipo de entreno no válido");
+    if(tipo!==null&&(typeof tipo!=="string"||!ID_RE.test(tipo))) mal("tipo de entreno no válido");
     const marcas=d.c||{};
     if(!esDic(marcas)) mal("marcas no válidas");
     const v={}, c={};
@@ -453,6 +484,32 @@ window.AscensoLocal=(()=>{
     if(na.map!==nb.map||(na.parent||null)!==(nb.parent||null)) mal("solo se pueden conectar nodos del mismo nivel");
     op.poner("conexiones",cid,{a,b});
   }
+  // Área de color de un mapa: rectángulo, cuadrado, óvalo o círculo, en un nivel (el del mapa o el de dentro de un nodo)
+  function guardarZona(op,zid,d){
+    zid=comprobarId(zid,"área");
+    if(!esDic(d)) mal("área no válida");
+    const mapa=comprobarId(d.map,"mapa");
+    if(!op.leer("mapas",mapa)) mal("el mapa no existe");
+    let padre=d.parent;
+    if(padre){
+      padre=comprobarId(padre,"nodo");
+      const fila=op.leer("nodos",padre);
+      if(!fila||fila.map!==mapa) mal("el nodo no es de este mapa");
+    } else padre=null;
+    const forma=texto(d.shape);
+    if(!FORMAS_ZONA.has(forma)) mal("forma no válida");
+    const x=realONada(d.x), y=realONada(d.y);
+    if(x===null||y===null) mal("posición no válida");
+    const num=v=>typeof v==="number"?v:typeof v==="string"&&v.trim()!==""?Number(v):NaN;
+    const ancho=num(d.w), alto0=num(d.h);
+    if(!(Number.isFinite(ancho)&&ancho>=10&&ancho<=100000&&Number.isFinite(alto0)&&alto0>=10&&alto0<=100000)) mal("tamaño de área no válido");
+    const alto=forma==="cuadrado"||forma==="circulo"?ancho:alto0;          // cuadrados y círculos: igual de anchos que de altos
+    const color=texto(d.color);
+    if(!COLOR_RE.test(color)) mal("color no válido");
+    const prev=op.leer("zonas",zid);
+    op.poner("zonas",zid,{map:mapa,parent:padre,title:cortar(texto(d.title).trim(),80),shape:forma,x,y,w:ancho,h:alto,color:color.toUpperCase(),
+      locked:d.locked===true,order:entero(dato(d,"order",0),"orden"),created:prev?prev.created:cortar(texto(d.created),40)});
+  }
 
   // ---- imágenes de las libretas ----
   function deBase64(b64){
@@ -527,6 +584,7 @@ window.AscensoLocal=(()=>{
     const fuera=new Set();
     for(const [nid,n] of op.todos("nodos")) if(n.map===id){ op.borrar("nodos",nid); fuera.add(nid); }
     for(const [cid,c] of op.todos("conexiones")) if(fuera.has(c.a)||fuera.has(c.b)) op.borrar("conexiones",cid);
+    for(const [zid,z] of op.todos("zonas")) if(z.map===id) op.borrar("zonas",zid);
   }
   function borrarNodo(op,id){
     id=comprobarId(id,"nodo");
@@ -534,6 +592,7 @@ window.AscensoLocal=(()=>{
     for(let crece=true;crece;){ crece=false; for(const [nid,n] of nodos) if(n.parent&&fuera.has(n.parent)&&!fuera.has(nid)){ fuera.add(nid); crece=true; } }
     for(const nid of fuera) op.borrar("nodos",nid);
     for(const [cid,c] of op.todos("conexiones")) if(fuera.has(c.a)||fuera.has(c.b)) op.borrar("conexiones",cid);
+    for(const [zid,z] of op.todos("zonas")) if(z.parent&&fuera.has(z.parent)) op.borrar("zonas",zid);
   }
   const borrarSimple=(tabla,que)=>(op,id)=>op.borrar(tabla,comprobarId(id,que));
 
@@ -632,6 +691,7 @@ window.AscensoLocal=(()=>{
     "mapas/":[guardarMapa,borrarMapa],
     "nodos/":[guardarNodo,borrarNodo],
     "conexiones/":[guardarConexion,borrarSimple("conexiones","conexión")],
+    "zonas/":[guardarZona,borrarSimple("zonas","área")],
     "libros/":[guardarLibro,borrarLibro],
     "lecturas/":[guardarLectura,borrarSimple("lecturas","libro")],
     "subrayados/":[guardarSubrayado,borrarSimple("subrayados","subrayado")],
@@ -642,7 +702,7 @@ window.AscensoLocal=(()=>{
     if(!esDic(estado)||!esDic(estado.days)) mal("copia no válida");
     // Se sustituye todo menos las imágenes, igual que en el servidor
     for(const t of TABLAS) if(t!=="adjuntos"&&!TABLAS_LIBRERIA.has(t)) for(const id of op.todos(t).keys()) op.borrar(t,id);
-    const config={}; for(const k of ["plan","thr","tipos"]) if(estado[k]!==null&&estado[k]!==undefined) config[k]=estado[k];
+    const config={}; for(const k of ["plan","planes","thr","tipos"]) if(estado[k]!==null&&estado[k]!==undefined) config[k]=estado[k];
     guardarConfig(op,config);
     guardarHabitos(op,estado.habits||[]);
     for(const [fecha,d] of Object.entries(estado.days)) guardarDia(op,fecha,d);
@@ -658,6 +718,7 @@ window.AscensoLocal=(()=>{
       for(const [,[id,d]] of orden) guardarNodo(op,id,d);
     }
     cada("mlinks",guardarConexion);
+    cada("mzones",guardarZona);
   }
 
   // ---- imágenes del día: la lista se genera al publicar (herramientas/generar.py) ----
@@ -759,6 +820,15 @@ window.AscensoLocal=(()=>{
   });
   // Guarda el contenido de una imagen descargada de la cuenta
   const guardarBlob=(id,tipo,datos)=>Almacen.guardar("adjuntos",{id,tipo,datos});
+  // Imágenes de las libretas y archivos de libros que constan en los datos pero cuyo contenido aún no está aquí
+  // (para tenerlos sin conexión: sync.js los descarga mientras hay red)
+  const faltanEnDispositivo=()=>encolar(async()=>{
+    await preparar();
+    const aqui=new Set(await Almacen.tx(["adjuntos"],"readonly",s=>Almacen.pedir(s.adjuntos.getAllKeys())));
+    const out=[];
+    for(const t of ["adjuntos","archivos"]) for(const [id,r] of mem[t]) if(!r.borrado&&!aqui.has(id)) out.push({id,tabla:t,tipo:r.valores.t,bytes:r.valores.bytes||0});
+    return out;
+  });
 
   // ---------------------------------------------------------------- rutas
   async function atender(metodo,ruta,cuerpo){
@@ -797,7 +867,7 @@ window.AscensoLocal=(()=>{
     // Para la sincronización con la cuenta (sync.js)
     alCambiar:f=>{ escuchas.push(f); },
     dispositivo:()=>preparar().then(()=>dispositivo),
-    aplicarRemotos, encolarTodo, vaciarDatos, marcarSemilla, hayDatosPropios, guardarBlob,
+    aplicarRemotos, encolarTodo, vaciarDatos, marcarSemilla, hayDatosPropios, guardarBlob, faltanEnDispositivo,
     alFaltarAdjunto:f=>{ alFaltar=f; },
     // Para la librería (libreria.js)
     guardarArchivo, leerArchivo,

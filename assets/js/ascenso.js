@@ -1,13 +1,51 @@
 // Ascenso: lógica de la página
-const TYPES = {
-  climb:   {name:"Escalada", cls:"k-climb"},
-  strength:{name:"Fuerza (pierna + empuje)", short:"Fuerza", cls:"k-strength"},
-  active:  {name:"Descanso activo", cls:"k-active"},
-  rest:    {name:"Descanso", cls:"k-rest"}
-};
-// Nombre de cada tipo: el que elijas en «Tipos de entreno» o, si no, el de siempre
-const typeName=id=>(state.tipos&&state.tipos[id])||TYPES[id].short||TYPES[id].name;
-const typeLong=id=>(state.tipos&&state.tipos[id])||TYPES[id].name;
+// ---------- Tipos de entreno ----------
+// Los cuatro de siempre más los que añadas en «Tipos de entreno». Cada uno: {id, name, color, oculto}.
+// Un tipo «oculto» está archivado: ya no se puede elegir, pero los días pasados que lo tenían lo conservan.
+const TIPOS_BASE = [
+  {id:"climb",    name:"Escalada", color:"#D39B2A", cls:"k-climb"},
+  {id:"strength", name:"Fuerza", largo:"Fuerza (pierna + empuje)", color:"#4A72C2", cls:"k-strength"},
+  {id:"active",   name:"Descanso activo", color:"#3D9468", cls:"k-active"},
+  {id:"rest",     name:"Descanso", color:"#8E989B", cls:"k-rest"}
+];
+const MAX_TIPOS=20;
+const COLORES_TIPO=["#C0392B","#D9822B","#8E44AD","#16A085","#2E86AB","#B03A70","#6D8F3A","#7F6A4F","#2C3E50","#D35400"];
+const tipoDe=id=>(state.tipos.find(t=>t.id===id))||{id, name:"Sin tipo", color:"#8E989B", oculto:true};
+const typeName=id=>tipoDe(id).name;
+const typeLong=id=>{ const t=tipoDe(id), b=TIPOS_BASE.find(x=>x.id===id); return b&&b.largo&&t.name===b.name?b.largo:t.name; };
+const tiposVisibles=()=>state.tipos.filter(t=>!t.oculto);
+// La marca de color de un tipo. Los de siempre con su color de siempre usan su clase (que cambia en modo oscuro)
+function marcaTipo(id,clase=""){
+  const t=tipoDe(id), b=TIPOS_BASE.find(x=>x.id===id);
+  return b&&t.color===b.color?`class="${clase} ${b.cls}"`:`class="${clase}" style="background:${t.color}"`;
+}
+function cleanTipos(t){
+  const HEX=/^#[0-9A-Fa-f]{6}$/;
+  if(Array.isArray(t)){
+    const out=[], vistos=new Set();
+    for(const x of t){
+      if(!x||!ID_OK.test(x.id||"")||vistos.has(x.id)) continue;
+      const name=String(x.name||"").trim().slice(0,30); if(!name) continue;
+      vistos.add(x.id); out.push({id:x.id, name, color:HEX.test(x.color||"")?x.color.toUpperCase():"#8E989B", oculto:!!x.oculto});
+      if(out.length>=MAX_TIPOS) break;
+    }
+    if(out.some(x=>!x.oculto)) return out;
+  }
+  // Formato anterior (o nada): los cuatro de siempre, con los nombres que se les hubieran puesto
+  const nombres=t&&typeof t==="object"&&!Array.isArray(t)?t:{};
+  return TIPOS_BASE.map(b=>({id:b.id, name:String(nombres[b.id]??"").trim().slice(0,30)||b.name, color:b.color, oculto:false}));
+}
+// Plan semanal por fechas: «plan» es el de siempre y cada versión de «planes» manda desde su fecha en adelante.
+// Así, cambiar el entreno de esta semana o de las siguientes no toca las semanas que ya pasaron.
+function cleanPlanes(p){
+  const F=/^\d{4}-\d{2}-\d{2}$/, out=[];
+  if(Array.isArray(p)) for(const v of p){
+    if(!v||!F.test(v.desde||"")||!Array.isArray(v.plan)||v.plan.length!==7||!v.plan.every(t=>typeof t==="string"&&ID_OK.test(t))) continue;
+    if(out.some(x=>x.desde===v.desde)) continue;
+    out.push({desde:v.desde, plan:v.plan.slice()});
+  }
+  return out.sort((a,b)=>a.desde<b.desde?-1:1).slice(-400);
+}
 const ALL7=[true,true,true,true,true,true,true];
 const DEFAULT_HABITS = [
   {id:"train",   t:"Entreno del día hecho", s:"Lo que toque según el plan"},
@@ -21,11 +59,12 @@ const cleanHabits = arr => Array.isArray(arr) ? arr.filter(h=>h&&h.id).map(h=>({
   id:String(h.id), t:String(h.t||"Hábito"), s:String(h.s||""), streak:h.streak!==false, week:h.week!==false,
   days:Array.isArray(h.days)&&h.days.length===7?h.days.map(Boolean):ALL7.slice()})) : DEFAULT_HABITS.map(h=>({...h,days:h.days.slice()}));
 const cleanState = (x,fallbackDays) => ({
-  plan:Array.isArray(x.plan)&&x.plan.length===7&&x.plan.every(t=>t in TYPES)?x.plan.slice():DEFAULT_PLAN.slice(),
+  plan:Array.isArray(x.plan)&&x.plan.length===7&&x.plan.every(t=>typeof t==="string"&&ID_OK.test(t))?x.plan.slice():DEFAULT_PLAN.slice(),
+  planes:cleanPlanes(x.planes),
   days:Object.assign({}, fallbackDays||{}, x.days||{}),
   habits:cleanHabits(x.habits),
   thr:[0.5,0.66,0.75,1].includes(+x.thr)?+x.thr:0.66,
-  tipos:(()=>{ const o={}, t=x.tipos&&typeof x.tipos==="object"?x.tipos:{}; for(const k of Object.keys(TYPES)){ const v=String(t[k]??"").trim().slice(0,30); if(v) o[k]=v; } return o; })(),
+  tipos:cleanTipos(x.tipos),
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
@@ -115,8 +154,13 @@ const B_COLORS=["#2E86AB","#3D9468","#D9822B","#C0392B","#5B5FC7","#9B59B6","#D4
 // maps   {id: {title, color, fav, order, notes, created}}           color = acento del mapa
 // mnodes {id: {map, parent, title, color, x, y, notes, created}}    parent null = primer nivel; color "" = acento
 // mlinks {id: {a, b}}                                               hilos entre nodos del mismo nivel
+// mzones {id: {map, parent, title, shape, x, y, w, h, color, locked, order, created}}
+//        áreas de color de un nivel; x, y es la esquina superior izquierda; shape: rect, cuadrado, ovalo o circulo
 const LIMITE_LIBRETA=1000000;   // caracteres por libreta (unas 350 páginas)
 const M_COLORS=["#7F77DD","#BA7517","#1D9E75","#378ADD","#D4537E","#D85A30","#639922","#888780"];
+// Las áreas tienen su propia paleta, de tonos apagados, para no confundirse con los colores vivos de los nodos
+const Z_COLORS=[["#C9A66B","Arena"],["#8FAE8B","Salvia"],["#8BA3BC","Niebla"],["#A99BC9","Lavanda"],["#C99AA9","Rosa"],["#C4896B","Terracota"],["#7E8F9E","Pizarra"],["#A9A46A","Oliva"]];
+const Z_FORMAS=[["rect","Rectángulo"],["cuadrado","Cuadrado"],["ovalo","Óvalo"],["circulo","Círculo"]];
 function cleanMapData(x){
   const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, obj=v=>v&&typeof v==="object"?v:{};
   const pos=v=>(v===null||v===undefined||v==="")?null:(Number.isFinite(+v)?Math.round(+v*10)/10:null);
@@ -148,7 +192,19 @@ function cleanMapData(x){
     const k=[l.a,l.b].sort().join("|"); if(pairs.has(k)) continue; pairs.add(k);
     mlinks[id]={a:l.a, b:l.b};
   }
-  return {maps, mnodes, mlinks};
+  const mzones={}, num=v=>v!==null&&v!==""&&Number.isFinite(+v)?+v:null;
+  for(const [id,z] of Object.entries(obj(x.mzones))){
+    if(!ID.test(id)||!z||!maps[z.map]||!Z_FORMAS.some(f=>f[0]===z.shape)) continue;
+    const parent=typeof z.parent==="string"&&z.parent?z.parent:null;
+    if(parent&&(!mnodes[parent]||mnodes[parent].map!==z.map)) continue;
+    const X=num(z.x), Y=num(z.y), W=num(z.w), H=num(z.h);
+    if(X==null||Y==null||!(W>=10)||!(H>=10)) continue;
+    const igual=z.shape==="cuadrado"||z.shape==="circulo";
+    mzones[id]={map:z.map, parent, title:String(z.title||"").trim().slice(0,80), shape:z.shape, x:X, y:Y, w:W, h:igual?W:H,
+      color:HEX.test(z.color||"")?z.color.toUpperCase():Z_COLORS[0][0], locked:!!z.locked, order:Number.isFinite(+z.order)?Math.round(+z.order):0,
+      created:String(z.created||"").slice(0,40)};
+  }
+  return {maps, mnodes, mlinks, mzones};
 }
 function cleanBoardData(x){
   const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, F=/^\d{4}-\d{2}-\d{2}$/;
@@ -196,7 +252,54 @@ const monday = d => { const m=new Date(d); m.setDate(m.getDate()-dowIdx(m)); m.s
 const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const today = () => { const t=new Date(); t.setHours(0,0,0,0); return t; };
 const dayData = d => state.days[key(d)] || {};
-const typeFor = d => dayData(d).type || state.plan[dowIdx(d)];
+const deKey = k => { const [a,m,d]=k.split("-").map(Number); return new Date(a,m-1,d); };
+// El plan semanal que vale para un día
+const planAt = d => { const k=key(d); let p=state.plan; for(const v of state.planes){ if(v.desde<=k) p=v.plan; else break; } return p; };
+const typeFor = d => dayData(d).type || planAt(d)[dowIdx(d)];
+// Quita las versiones del plan que no cambian nada respecto a la anterior
+function compactarPlanes(){
+  let prev=state.plan.join(); const out=[];
+  for(const v of state.planes){ const j=v.plan.join(); if(j!==prev){ out.push(v); prev=j; } }
+  state.planes=out.slice(-400);
+}
+// Cambiar el entreno de un día. En una semana pasada, solo ese día. Desde la semana actual en adelante, ese día
+// y los mismos días de la semana que vengan después (aunque tuvieran otro), sin tocar las semanas anteriores.
+function cambiarTipo(d,id){
+  const k=key(d), w=dowIdx(d);
+  if(d<monday(today())){
+    if(id===planAt(d)[w]){ if(state.days[k]) delete state.days[k].type; }
+    else (state.days[k]=state.days[k]||{}).type=id;
+    return;
+  }
+  const p=planAt(d).slice(); p[w]=id;
+  state.planes=state.planes.filter(v=>v.desde!==k);
+  for(const v of state.planes) if(v.desde>k) v.plan=v.plan.map((x,i)=>i===w?id:x);
+  state.planes.push({desde:k, plan:p}); state.planes.sort((a,b)=>a.desde<b.desde?-1:1);
+  for(const [f,x] of Object.entries(state.days)) if(f>=k&&x&&x.type!==undefined&&dowIdx(deKey(f))===w) delete x.type;
+  compactarPlanes();
+}
+// ¿Lo usa algún día entre dos fechas (desde incluida, hasta excluida)? El plan de siempre vale hasta la primera versión
+function tipoUsado(id,{desde="0000",hasta="9999"}={}){
+  const tramos=[{desde:"0000",plan:state.plan},...state.planes];
+  for(let i=0;i<tramos.length;i++){
+    const ini=tramos[i].desde, fin=(tramos[i+1]||{desde:"9999"}).desde;
+    if(ini<hasta&&fin>desde&&tramos[i].plan.includes(id)) return true;
+  }
+  return Object.entries(state.days).some(([f,x])=>x&&x.type===id&&f>=desde&&f<hasta);
+}
+// Quitar un tipo: lo que lo tenía desde esta semana en adelante pasa al sustituto; si queda en semanas pasadas,
+// se archiva (deja de poder elegirse, pero esos días lo conservan); si no, se borra del todo
+function quitarTipo(id,sustituto){
+  const lunes=key(monday(today()));
+  if(sustituto&&sustituto!==id){
+    if(!state.planes.some(v=>v.desde===lunes)){ state.planes.push({desde:lunes, plan:planAt(monday(today())).slice()}); state.planes.sort((a,b)=>a.desde<b.desde?-1:1); }
+    for(const v of state.planes) if(v.desde>=lunes) v.plan=v.plan.map(x=>x===id?sustituto:x);
+    for(const [f,x] of Object.entries(state.days)) if(f>=lunes&&x&&x.type===id){ if(planAt(deKey(f))[dowIdx(deKey(f))]===sustituto) delete x.type; else x.type=sustituto; }
+    compactarPlanes();
+  }
+  if(tipoUsado(id)) tipoDe(id).oculto=true;
+  else state.tipos=state.tipos.filter(t=>t.id!==id);
+}
 const applies = (h,d) => h.days[dowIdx(d)];
 const counts = (d,flag) => { const c=dayData(d).c||{}; const hs=state.habits.filter(h=>h[flag]&&applies(h,d)); return {done:hs.filter(h=>c[h.id]).length,total:hs.length}; };
 const ratio = d => { const x=counts(d,"week"); return x.total?x.done/x.total:0; };
@@ -208,11 +311,14 @@ function renderWeek(){
     const d=addDays(m,i), b=document.createElement("button");
     b.className="day"+(key(d)===key(sel)?" sel":"");
     b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+typeLong(typeFor(d)));
-    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
+    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span ${marcaTipo(typeFor(d),"hold")}></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
     b.onclick=()=>{sel=d;render();};
     w.appendChild(b);
   }
-  document.getElementById("legend").innerHTML=Object.entries(TYPES).map(([id,t])=>`<span><b class="${t.cls}"></b>${esc(typeName(id))}</span>`).join("");
+  // Leyenda: los tipos que se pueden elegir y, si salen en esta semana, los archivados
+  const enSemana=new Set(Array.from({length:7},(_,i)=>typeFor(addDays(m,i))));
+  document.getElementById("legend").innerHTML=state.tipos.filter(t=>!t.oculto||enSemana.has(t.id))
+    .map(t=>`<span><b ${marcaTipo(t.id)}></b>${esc(t.name)}</span>`).join("");
 }
 
 // ---- Eventos del día, al lado de la racha ----
@@ -278,16 +384,13 @@ function renderDay(){
     sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}).replace(/^./,c=>c.toUpperCase());
   const p=document.getElementById("plan"); p.innerHTML="";
   const cur=typeFor(sel);
-  for(const [id,t] of Object.entries(TYPES)){
+  // Los tipos que se pueden elegir (y el del día, si está archivado)
+  for(const t of state.tipos.filter(t=>!t.oculto||t.id===cur)){
     const b=document.createElement("button");
-    b.setAttribute("aria-pressed", id===cur);
-    b.innerHTML=`<b class="${t.cls}"></b>${esc(typeName(id))}`;
-    b.onclick=()=>{
-      // Cambia el plan fijo de ese día de la semana
-      state.plan[dowIdx(sel)]=id;
-      const dd=state.days[key(sel)]; if(dd) delete dd.type;
-      save(); render();
-    };
+    b.setAttribute("aria-pressed", t.id===cur);
+    b.innerHTML=`<b ${marcaTipo(t.id)}></b>${esc(t.name)}`;
+    if(t.oculto) b.disabled=true;
+    b.onclick=()=>{ if(t.id===cur) return; cambiarTipo(sel,t.id); save(); render(); };
     p.appendChild(b);
   }
   const ul=document.getElementById("checks"); ul.innerHTML="";
@@ -411,7 +514,69 @@ const QUOTES = [
   ["Quien vence a otros es fuerte; quien se vence a sí mismo es poderoso.","Lao Tse","Tao Te Ching, 33","f65"],
   ["Lo que hay que aprender a hacer, lo aprendemos haciéndolo.","Aristóteles","Ética a Nicómaco, II 1","f66"],
   ["No estropees lo que tienes deseando lo que no tienes.","Epicuro","Sentencias vaticanas, 35","f67"],
-  ["Las montañas me llaman y debo ir.","John Muir","Carta a su hermana, 1873","f68"]
+  ["Las montañas me llaman y debo ir.","John Muir","Carta a su hermana, 1873","f68"],
+  ["Apresúrate a vivir bien y piensa que cada día es, por sí solo, una vida.", "Séneca", "Cartas a Lucilio, 101", "f69"],
+  ["Mientras vivamos, mientras estemos entre los hombres, cultivemos la humanidad.", "Séneca", "Sobre la ira, III 43", "f70"],
+  ["Dondequiera que haya un ser humano, hay ocasión de hacer un bien.", "Séneca", "Sobre la vida feliz, 24", "f71"],
+  ["Gran parte de la vida se nos va haciendo el mal, buena parte sin hacer nada y toda ella haciendo otra cosa.", "Séneca", "Cartas a Lucilio, 1", "f72"],
+  ["Lo que no es útil para la colmena tampoco lo es para la abeja.", "Marco Aurelio", "Meditaciones, VI 54", "f73"],
+  ["Recibir sin orgullo; desprenderse sin apego.", "Marco Aurelio", "Meditaciones, VIII 33", "f74"],
+  ["Cuando más te irrites, recuerda que la vida humana dura un instante.", "Marco Aurelio", "Meditaciones, XI 18", "f75"],
+  ["Si quieres ser buen lector, lee; si quieres escribir, escribe.", "Epicteto", "Disertaciones, II 18", "f76"],
+  ["No hables de tus principios entre la gente: obra conforme a ellos.", "Epicteto", "Enquiridión, 46", "f77"],
+  ["De todo lo que la sabiduría procura para una vida feliz, lo más grande con mucho es la amistad.", "Epicuro", "Máximas capitales, 27", "f78"],
+  ["Nada es suficiente para quien lo suficiente es poco.", "Epicuro", "Fragmentos, según Estobeo", "f79"],
+  ["Una golondrina no hace verano, ni tampoco un solo día.", "Aristóteles", "Ética a Nicómaco, I 7", "f80"],
+  ["La amistad es un alma que habita en dos cuerpos.", "Aristóteles", "Según Diógenes Laercio, V 20", "f81"],
+  ["La primera y mejor de las victorias es vencerse a uno mismo.", "Platón", "Leyes, I 626e", "f82"],
+  ["El comienzo es la parte más importante de cualquier obra.", "Platón", "República, II 377a", "f83"],
+  ["El sol es nuevo cada día.", "Heráclito", "Fragmento 6", "f84"],
+  ["La valentía empequeñece los reveses.", "Demócrito", "Fragmento 213", "f85"],
+  ["La mente no es un vaso que haya que llenar, sino un fuego que hay que encender.", "Plutarco", "Sobre cómo se debe escuchar, 18", "f86"],
+  ["Si tienes un jardín y una biblioteca, no te falta de nada.", "Cicerón", "Cartas a los familiares, IX 4", "f87"],
+  ["La gota horada la piedra.", "Ovidio", "Cartas desde el Ponto, IV 10", "f88"],
+  ["Atrévete a saber.", "Horacio", "Epístolas, I 2", "f89"],
+  ["Aprovecha el día y fíate lo menos posible del mañana.", "Horacio", "Odas, I 11", "f90"],
+  ["Pueden, porque creen que pueden.", "Virgilio", "Eneida, V 231", "f91"],
+  ["Mala decisión es la que no puede cambiarse.", "Publilio Siro", "Sentencias", "f92"],
+  ["Aprender sin pensar es inútil; pensar sin aprender es peligroso.", "Confucio", "Analectas, II 15", "f93"],
+  ["Saber que sabes lo que sabes y que no sabes lo que no sabes: ese es el verdadero saber.", "Confucio", "Analectas, II 17", "f94"],
+  ["Conocer a los demás es inteligencia; conocerse a uno mismo es sabiduría.", "Lao Tse", "Tao Te Ching, 33", "f95"],
+  ["Lo blando y débil vence a lo duro y fuerte.", "Lao Tse", "Tao Te Ching, 36", "f96"],
+  ["Todo lo que somos es fruto de lo que hemos pensado.", "Buda", "Dhammapada, 1", "f97"],
+  ["Más grande que vencer mil veces a mil hombres en la batalla es vencerse a uno mismo.", "Buda", "Dhammapada, 103", "f98"],
+  ["No hagas nada que no sirva para nada.", "Miyamoto Musashi", "El libro de los cinco anillos, Libro de la tierra", "f99"],
+  ["Mi oficio y mi arte es vivir.", "Michel de Montaigne", "Ensayos, II 6", "f100"],
+  ["Quien teme sufrir ya sufre lo que teme.", "Michel de Montaigne", "Ensayos, III 13", "f101"],
+  ["El corazón tiene razones que la razón no conoce.", "Blaise Pascal", "Pensamientos, 277", "f102"],
+  ["El hombre no es más que una caña, la más débil de la naturaleza, pero es una caña que piensa.", "Blaise Pascal", "Pensamientos, 347", "f103"],
+  ["No reír, no llorar ni detestar, sino comprender.", "Baruch Spinoza", "Tratado político, I 4", "f104"],
+  ["No basta con tener un buen ingenio; lo principal es aplicarlo bien.", "René Descartes", "Discurso del método, I", "f105"],
+  ["Obra de tal modo que trates a la humanidad, en tu persona y en la de cualquier otro, siempre como un fin y nunca solo como un medio.", "Immanuel Kant", "Fundamentación de la metafísica de las costumbres, II", "f106"],
+  ["¡Ten el valor de servirte de tu propio entendimiento!", "Immanuel Kant", "¿Qué es la Ilustración?, 1784", "f107"],
+  ["Lo que heredaste de tus padres, gánalo para poseerlo.", "Johann Wolfgang von Goethe", "Fausto, I", "f108"],
+  ["Cada día es una pequeña vida.", "Arthur Schopenhauer", "Aforismos sobre el arte de saber vivir, V", "f109"],
+  ["Hay que llevar aún caos dentro de uno para poder dar a luz una estrella danzarina.", "Friedrich Nietzsche", "Así habló Zaratustra, prólogo 5", "f110"],
+  ["Llega a ser el que eres.", "Friedrich Nietzsche", "La gaya ciencia, 270", "f111"],
+  ["Sin música, la vida sería un error.", "Friedrich Nietzsche", "Crepúsculo de los ídolos, Sentencias y flechas, 33", "f112"],
+  ["La vida solo puede comprenderse mirando hacia atrás, pero ha de vivirse mirando hacia delante.", "Søren Kierkegaard", "Diarios, 1843", "f113"],
+  ["Nunca se ha logrado nada grande sin entusiasmo.", "Ralph Waldo Emerson", "Círculos, 1841", "f114"],
+  ["La mayoría de los hombres llevan vidas de callada desesperación.", "Henry David Thoreau", "Walden", "f115"],
+  ["¡Simplicidad, simplicidad, simplicidad!", "Henry David Thoreau", "Walden", "f116"],
+  ["Lo bueno, si breve, dos veces bueno.", "Baltasar Gracián", "Oráculo manual y arte de prudencia, 105", "f117"],
+  ["No hay cosa que requiera más tiento que la verdad.", "Baltasar Gracián", "Oráculo manual y arte de prudencia, 181", "f118"],
+  ["El que lee mucho y anda mucho, ve mucho y sabe mucho.", "Miguel de Cervantes", "Don Quijote, II 25", "f119"],
+  ["La diligencia es madre de la buena ventura.", "Miguel de Cervantes", "Don Quijote", "f120"],
+  ["Caminante, no hay camino: se hace camino al andar.", "Antonio Machado", "Campos de Castilla, Proverbios y cantares XXIX", "f121"],
+  ["La paciencia todo lo alcanza.", "Teresa de Jesús", "Nada te turbe", "f122"],
+  ["Ama y haz lo que quieras.", "San Agustín", "Comentario a la primera carta de san Juan, VII 8", "f123"],
+  ["Así como un día bien empleado da un dulce sueño, una vida bien empleada da una dulce muerte.", "Leonardo da Vinci", "Códice Trivulziano", "f124"],
+  ["Bien hecho es mejor que bien dicho.", "Benjamin Franklin", "Almanaque del pobre Richard, 1737", "f125"],
+  ["Haz lo que puedas, con lo que tengas, donde estés.", "Theodore Roosevelt", "Autobiografía, 1913, recogiendo un dicho de Bill Widener", "f126"],
+  ["Con resistencia, venceremos.", "Ernest Shackleton", "Lema de su familia, que dio nombre a su barco, el Endurance", "f127"],
+  ["Todos piensan en cambiar el mundo, pero nadie piensa en cambiarse a sí mismo.", "León Tolstói", "Tres métodos de reforma, 1900", "f128"],
+  ["Ten paciencia con todo lo que está sin resolver en tu corazón.", "Rainer Maria Rilke", "Cartas a un joven poeta, 4", "f129"],
+  ["En cada paseo por la naturaleza uno recibe mucho más de lo que busca.", "John Muir", "Senderos escarpados, 1918", "f130"]
 ];
 // ---------- Imágenes: siempre de ./assets/images ----------
 const IMG_DIR="assets/images/";
@@ -419,7 +584,12 @@ const AUTHOR_KEYS={"Marco Aurelio":"marco-aurelio","Séneca":"seneca","Epicteto"
   "Miyamoto Musashi":"musashi","Theodore Roosevelt":"roosevelt","Lao Tse":"lao-tse","Aristóteles":"aristoteles","Heráclito":"heraclito",
   "Miguel de Cervantes":"cervantes","Confucio":"confucio","Sun Tzu":"sun-tzu","Musonio Rufo":"musonio","Zenón de Citio":"zenon",
   "Cleantes":"cleantes","Cicerón":"ciceron","Sócrates":"socrates","Michel de Montaigne":"montaigne","Baruch Spinoza":"spinoza",
-  "Blaise Pascal":"pascal","Henry David Thoreau":"thoreau","Ralph Waldo Emerson":"emerson","Buda":"buda","Epicuro":"epicuro","John Muir":"muir"};
+  "Blaise Pascal":"pascal","Henry David Thoreau":"thoreau","Ralph Waldo Emerson":"emerson","Buda":"buda","Epicuro":"epicuro","John Muir":"muir",
+  "Platón":"platon","Demócrito":"democrito","Plutarco":"plutarco","Ovidio":"ovidio","Horacio":"horacio","Virgilio":"virgilio",
+  "Publilio Siro":"publilio","René Descartes":"descartes","Immanuel Kant":"kant","Johann Wolfgang von Goethe":"goethe",
+  "Arthur Schopenhauer":"schopenhauer","Søren Kierkegaard":"kierkegaard","Baltasar Gracián":"gracian","Antonio Machado":"machado",
+  "Teresa de Jesús":"teresa-de-jesus","San Agustín":"agustin","Leonardo da Vinci":"leonardo","Benjamin Franklin":"franklin",
+  "Ernest Shackleton":"shackleton","León Tolstói":"tolstoi","Rainer Maria Rilke":"rilke"};
 const KEY_NAMES=Object.fromEntries(Object.entries(AUTHOR_KEYS).map(([n,k])=>[k,n]));
 const IMG_RE=/\.(jpe?g|png|webp|gif|avif)$/i;
 let IMAGES=[], imagesReady=false, frameSrc=null, frameArgs=["",""];
@@ -665,6 +835,63 @@ document.addEventListener("pointerdown",e=>{ if(!pad.hidden && !pad.contains(e.t
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !pad.hidden){ closePad(); qmark.focus(); } });
 window.addEventListener("pagehide",persistPadNow);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) persistPadNow(); });
+
+// ---------- Diario: todas las reflexiones y notas escritas, con la frase de cada día ----------
+// Se abre desde el bloc de notas («Todas tus notas»). Se puede buscar y saltar a cualquier día para seguir escribiendo.
+let diario=null, diarioQ="", diarioVer="todo", diarioN=40;
+const fmtDiaLargo=k=>cap(parseKey(k).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"}));
+function abrirDiario(){
+  flushPad(); closePad();
+  if(!diario){
+    diario=document.createElement("dialog"); diario.className="tdlg diario"; diario.id="diariodlg"; diario.setAttribute("aria-label","Tus reflexiones y notas");
+    document.body.appendChild(diario);
+    diario.addEventListener("mousedown",e=>{ diario._fondo=e.target===diario; });
+    diario.addEventListener("click",e=>{
+      if(e.target===diario&&diario._fondo){ diario.close(); return; }
+      if(e.target.closest(".dlg-x")){ diario.close(); return; }
+      const v=e.target.closest("[data-ver]"); if(v){ diarioVer=v.dataset.ver; diarioN=40; pintarDiario(); return; }
+      if(e.target.closest("[data-mas]")){ diarioN+=40; pintarDiario(); return; }
+      const ir=e.target.closest("[data-ir-dia]");
+      if(ir){ diario.close(); sel=parseKey(ir.dataset.irDia); render(); window.scrollTo(0,0); openPad(); }
+    });
+    diario.addEventListener("input",e=>{ if(e.target.matches(".di-q")){ diarioQ=e.target.value; diarioN=40; pintarLista(); } });
+  }
+  diarioQ=""; diarioVer="todo"; diarioN=40;
+  pintarDiario();
+  if(!diario.open) diario.showModal();
+}
+function entradasDiario(){
+  const q=fold(diarioQ.trim());
+  return Object.entries(state.notes).filter(([,n])=>n&&((n.r||"").trim()||(n.n||"").trim()))
+    .map(([k,n])=>{ const h=state.hist[k], fr=h&&QUOTES.find(x=>x[3]===h.q); return {k, r:(n.r||"").trim(), n:(n.n||"").trim(), fr}; })
+    .filter(e=>diarioVer==="todo"||(diarioVer==="r"?e.r:e.n))
+    .filter(e=>!q||fold([e.r,e.n,e.fr?e.fr[0]+" "+e.fr[1]:"",fmtDiaLargo(e.k)].join(" ")).includes(q))
+    .sort((a,b)=>a.k<b.k?1:-1);
+}
+function pintarDiario(){
+  const total=Object.values(state.notes).filter(n=>n&&((n.r||"").trim()||(n.n||"").trim())).length;
+  const op=(v,t)=>`<button type="button" role="tab" data-ver="${v}" aria-selected="${diarioVer===v}">${t}</button>`;
+  diario.innerHTML=`<div class="dlg-head"><h3 class="di-titulo">Tus reflexiones y notas</h3><button type="button" class="dlg-x" aria-label="Cerrar">×</button></div>
+    <div class="di-cuerpo">
+      <p class="di-resumen">${total?total+(total===1?" día con algo escrito.":" días con algo escrito."):"Aún no has escrito nada."} Escribe pulsando las comillas de la frase del día.</p>
+      ${total?`<input type="search" class="di-q" placeholder="Buscar en tus notas y en las frases…" aria-label="Buscar en tus notas" value="${esc(diarioQ)}" autocomplete="off">
+      <div class="di-ver" role="tablist" aria-label="Qué mostrar">${op("todo","Todo")}${op("r","Reflexiones")}${op("n","Notas")}</div>`:""}
+      <div class="di-lista" id="di-lista"></div>
+    </div>`;
+  pintarLista();
+}
+function pintarLista(){
+  const caja=diario&&diario.querySelector("#di-lista"); if(!caja) return;
+  const l=entradasDiario(), vista=l.slice(0,diarioN);
+  if(!l.length){ caja.innerHTML=Object.keys(state.notes).length?`<p class="di-vacio">Nada coincide con la búsqueda.</p>`:""; return; }
+  caja.innerHTML=vista.map(e=>`<article class="di-dia">
+      <header><h4>${esc(fmtDiaLargo(e.k))}</h4><button type="button" class="linklike" data-ir-dia="${e.k}">Ir a este día</button></header>
+      ${e.fr?`<blockquote class="di-frase">«${esc(e.fr[0])}» <cite>${esc(e.fr[1])}</cite></blockquote>`:""}
+      ${e.r&&diarioVer!=="n"?`<div class="di-texto"><span>Reflexión</span><p>${esc(e.r)}</p></div>`:""}
+      ${e.n&&diarioVer!=="r"?`<div class="di-texto"><span>Notas</span><p>${esc(e.n)}</p></div>`:""}
+    </article>`).join("")+(l.length>vista.length?`<button type="button" class="add alt di-mas" data-mas>Mostrar más (${l.length-vista.length})</button>`:"");
+}
+document.getElementById("np-todas").addEventListener("click",abrirDiario);
 // ---------- Calendario (oculto: se abre pulsando la fecha) y eventos ----------
 const EV_COLORS=TAG_COLORS;
 const hdateBtn=document.getElementById("hdate"), calpop=document.getElementById("calpop");
@@ -1262,20 +1489,27 @@ function renderSearch(){
   const nodes=Object.entries(state.mnodes)
     .filter(([,n])=>fold(n.title).includes(q)||fold(n.notes).includes(q))
     .sort((a,b)=>(fold(b[1].title).includes(q))-(fold(a[1].title).includes(q))).slice(0,30);
+  // Y áreas de los mapas, por su título
+  const zonas=Object.entries(state.mzones).filter(([,z])=>z.title&&fold(z.title).includes(q)).slice(0,20);
   const where=n=>{ const p=[]; let x=n.parent; while(x&&state.mnodes[x]){ p.unshift(state.mnodes[x].title); x=state.mnodes[x].parent; } return [state.maps[n.map].title,...p].map(esc).join(" › "); };
   const html=res.map(([id,c])=>{ const l=state.blists[c.list], b=state.boards[l.board];
       return `<button type="button" class="sr" data-sr="${id}" style="--c:${b.color}"><span class="sr-t">${esc(c.title)}</span><span class="sr-w">${c.archived?"📦 Archivada":"Tarjeta"} · ${esc(b.name)} · ${esc(l.title)}</span></button>`; }).join("")+
-    nodes.map(([id,n])=>`<button type="button" class="sr sr-node" data-srn="${id}" style="--c:${n.color||state.maps[n.map].color}"><span class="sr-t">${esc(n.title)}</span><span class="sr-w">Nodo · ${where(n)}</span></button>`).join("");
-  bvResults.innerHTML = html || `<p class="sr-empty">No hay tarjetas ni nodos con «${esc(bvQ.value.trim())}».</p>`;
+    nodes.map(([id,n])=>`<button type="button" class="sr sr-node" data-srn="${id}" style="--c:${n.color||state.maps[n.map].color}"><span class="sr-t">${esc(n.title)}</span><span class="sr-w">Nodo · ${where(n)}</span></button>`).join("")+
+    zonas.map(([id,z])=>`<button type="button" class="sr sr-node" data-srz="${id}" style="--c:${z.color}"><span class="sr-t">${esc(z.title)}</span><span class="sr-w">Área · ${where(z)}</span></button>`).join("");
+  bvResults.innerHTML = html || `<p class="sr-empty">No hay tarjetas, nodos ni áreas con «${esc(bvQ.value.trim())}».</p>`;
   bvResults.hidden=false;
 }
 bvQ.addEventListener("input",renderSearch);
 bvQ.addEventListener("focus",renderSearch);
 bvQ.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ bvQ.value=""; bvResults.hidden=true; }
-  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr],[data-srn]"); if(f) f.click(); }
+  else if(e.key==="Enter"){ const f=bvResults.querySelector("[data-sr],[data-srn],[data-srz]"); if(f) f.click(); }
 });
 bvResults.addEventListener("click",e=>{
+  const rz=e.target.closest("[data-srz]");
+  if(rz){ const id=rz.dataset.srz, z=state.mzones[id]; if(!z) return;
+    bvQ.value=""; bvResults.hidden=true;
+    setMap(z.map); goLevel(z.parent); mZona=id; selectionChanged(); centrarZona(id); return; }
   const rn=e.target.closest("[data-srn]");
   if(rn){ const n=state.mnodes[rn.dataset.srn]; if(!n) return;
     bvQ.value=""; bvResults.hidden=true;
@@ -1289,7 +1523,7 @@ bvResults.addEventListener("click",e=>{
 // ======================================================================
 // ---------- Mapas de nodos (en la vista de tableros, sección «Mapas») ----------
 // ======================================================================
-let mapLevel=null, mSel=null, mSelLink=null, mNoteEditing=false;
+let mapLevel=null, mSel=null, mSelLink=null, mNoteEditing=false, mZona=null;
 let nbMapOpen=false, nmDraft={title:"", color:M_COLORS[0]};
 // Reparto mapa | libreta, en % del mapa. Empieza con la libreta más grande (40 | 60), y se puede ajustar
 let mSplit=(()=>{ try{ const v=+localStorage.getItem("ascenso-reparto-mapa-libreta"); return v>=20&&v<=80?v:40; }catch(e){ return 40; } })();
@@ -1310,7 +1544,7 @@ function levelPath(){ const p=[]; let n=mapLevel; while(n&&state.mnodes[n]){ p.u
 // Historial ligero: se guarda una sola copia de referencia (cada elemento como texto) y, en cada paso,
 // solo los elementos que cambiaron. Así deshacer no ocupa más memoria aunque haya libretas muy largas.
 let mUndo=[], mRedo=[], mTyping=false, mBase=null, mBaseOf=null;
-const MCOLS=["maps","mnodes","mlinks"];
+const MCOLS=["maps","mnodes","mlinks","mzones"];
 function mEnsureBase(){
   if(mBase && mBaseOf===state) return;
   mBase={}; mBaseOf=state; mUndo=[]; mRedo=[];          // datos nuevos (importados o recargados): historial nuevo
@@ -1341,6 +1575,7 @@ function mAfterRestore(){
   if(mSel && !state.mnodes[mSel]) mSel=null;
   mMulti=new Set([...mMulti].filter(id=>state.mnodes[id]));
   if(mSelLink && !state.mlinks[mSelLink]) mSelLink=null;
+  if(mZona && !state.mzones[mZona]) mZona=null;
   save(); renderBoards();
 }
 function mUndoDo(){
@@ -1396,6 +1631,7 @@ function deleteMap(mid){
     for(const [lid,l] of Object.entries(state.mlinks)) if(l.a===id||l.b===id) delete state.mlinks[lid];
     delete state.mnodes[id];
   }
+  for(const [zid,z] of Object.entries(state.mzones)) if(z.map===mid) delete state.mzones[zid];
   delete state.maps[mid];
   save(); setBoard("home");
 }
@@ -1423,6 +1659,7 @@ function mapViewHTML(mid,m){
         <canvas id="mv-cv" aria-label="Mapa de nodos"></canvas>
         <div class="mv-tools">
           <button type="button" data-mtool="new">+ Nodo</button>
+          <button type="button" data-mtool="area" aria-haspopup="menu">+ Área</button>
           <button type="button" data-mtool="out" aria-label="Alejar">−</button>
           <button type="button" data-mtool="in" aria-label="Acercar">+</button>
           <button type="button" data-mtool="fit" aria-label="Ajustar a la pantalla" title="Ajustar a la pantalla">⤢</button>
@@ -1450,6 +1687,10 @@ function helpHTML(){
     ["Organizar",[["Arrastrar","Mover los nodos seleccionados"],["Soltar un nodo sobre otro","Meterlo dentro de ese nodo"],["Clic derecho › Mover a…","Llevarlo a otro nivel"],
       [K("Ctrl+C")+" · "+K("Ctrl+X")+" · "+K("Ctrl+V"),"Copiar, cortar y pegar (también entre mapas)"],["Pegar una lista de texto","Un nodo por línea; las sangradas, dentro"],
       [K("Supr"),"Eliminar"],[K("Ctrl+Z")+" · "+K("Ctrl+Y"),"Deshacer y rehacer"]]],
+    ["Áreas",[["Botón «+ Área»","Rectángulo, cuadrado, óvalo o círculo, con título"],["Arrastrar su título o su borde","Moverla, con los nodos de dentro"],
+      [K("Alt")+" + arrastrar","Moverla sola (en el móvil: opciones › Mover sin los nodos)"],["Arrastrar sus esquinas","Cambiar el tamaño"],
+      ["Doble clic en el título o "+K("F2"),"Cambiar el título"],["Clic derecho (en el móvil: tocarla otra vez)","Forma, color, bloquear, delante o detrás, eliminar"],
+      [K("Supr"),"Eliminar el área (los nodos se quedan)"]]],
     ["Exportar",[["Menú ⋯ › Exportar como imagen","Guardar el nivel que ves como PNG"],["Clic derecho en el fondo","También ahí"]]],
     ["Moverse",[["Doble clic en un nodo o "+K("Intro"),"Entrar en su nivel"],[IS_MAC?K("⌫")+" o "+K("⌘")+"+"+K("[")+" o "+K("⌘")+"+"+K("↑"):K("Retroceso")+" o "+K("Alt")+"+"+K("←"),"Subir un nivel"],["La ruta de arriba","Ir a cualquier nivel"],
       ["Rueda del ratón","Acercar y alejar"],["Arrastrar el fondo","Desplazarse"],["Botón ⤢","Ajustar a la pantalla"]]],
@@ -2518,6 +2759,7 @@ function removeNodes(ids){
   const add=id=>{ for(const k of ch[id]||[]){ all.add(k); add(k); } };
   ids.forEach(add);
   for(const [lid,l] of Object.entries(state.mlinks)) if(all.has(l.a)||all.has(l.b)) delete state.mlinks[lid];
+  for(const [zid,z] of Object.entries(state.mzones)) if(z.parent&&all.has(z.parent)) delete state.mzones[zid];
   all.forEach(id=>delete state.mnodes[id]);
 }
 function askDeleteNode(id){
@@ -2565,6 +2807,7 @@ const posOf=id=>(MG.tmp&&MG.tmp[id])||state.mnodes[id];
 function mgFit(silent){
   if(!MG||!MG.W) return;
   const items=levelNodes(curMapId(),mapLevel).map(([id])=>posOf(id)).filter(p=>p.x!=null);
+  for(const [,z] of levelZones(curMapId(),mapLevel)) items.push({x:z.x+40,y:z.y+30},{x:z.x+z.w-40,y:z.y+z.h-40});
   if(!items.length){ mCam[MG.key]={z:1, ox:MG.W/2, oy:MG.H/2}; if(!silent) mgDraw(); return; }
   const xs=items.map(p=>p.x), ys=items.map(p=>p.y);
   const x0=Math.min(...xs)-60, x1=Math.max(...xs)+60, y0=Math.min(...ys)-50, y1=Math.max(...ys)+70;
@@ -2606,6 +2849,134 @@ function mgLoop(){
   MG.anim=requestAnimationFrame(tick);
 }
 function hexA(h,a){ const v=parseInt(h.slice(1),16); return `rgba(${v>>16&255},${v>>8&255},${v&255},${a})`; }
+
+// ---- Áreas de color de los mapas ----
+// Delimitan zonas de un nivel. Se agarran por su título o su borde (no por dentro: así, dentro de un área grande se
+// sigue pudiendo desplazar el mapa y seleccionar nodos). Al moverlas, los nodos de dentro van con ellas.
+const levelZones=(mid,lvl)=>Object.entries(state.mzones).filter(([,z])=>z.map===mid&&(z.parent||null)===(lvl||null)).sort((a,b)=>a[1].order-b[1].order);
+const zRedonda=z=>z.shape==="ovalo"||z.shape==="circulo";
+const zIgual=forma=>forma==="cuadrado"||forma==="circulo";
+function zDentro(z,px,py){
+  if(zRedonda(z)){ const rx=z.w/2, ry=z.h/2, dx=(px-z.x-rx)/rx, dy=(py-z.y-ry)/ry; return dx*dx+dy*dy<=1; }
+  return px>=z.x&&px<=z.x+z.w&&py>=z.y&&py<=z.y+z.h;
+}
+function zEnBorde(z,px,py,tol){
+  if(zRedonda(z)){ const rx=z.w/2, ry=z.h/2, r=Math.hypot((px-z.x-rx)/rx,(py-z.y-ry)/ry); return Math.abs(r-1)*Math.min(rx,ry)<=tol; }
+  const cerca=px>=z.x-tol&&px<=z.x+z.w+tol&&py>=z.y-tol&&py<=z.y+z.h+tol, dentro=px>z.x+tol&&px<z.x+z.w-tol&&py>z.y+tol&&py<z.y+z.h-tol;
+  return cerca&&!dentro;
+}
+const zEsquinas=z=>[["nw",z.x,z.y],["ne",z.x+z.w,z.y],["sw",z.x,z.y+z.h],["se",z.x+z.w,z.y+z.h]];
+function nodosEnZona(z){ return levelNodes(z.map,z.parent).filter(([id])=>{ const p=posOf(id); return p&&p.x!=null&&zDentro(z,p.x,p.y); }).map(([id])=>id); }
+// Mezcla de dos colores (#rrggbb): el rótulo se oscurece o aclara un poco hacia el color del texto, para leerse bien
+function mezclaHex(a,b,t){ const A=parseInt(a.slice(1),16), B=/^#[0-9a-f]{6}$/i.test(b)?parseInt(b.slice(1),16):A, f=s=>Math.round(((A>>s)&255)*(1-t)+((B>>s)&255)*t); return `rgb(${f(16)},${f(8)},${f(0)})`; }
+function candado(ctx,x,y,s,col){
+  ctx.save(); ctx.fillStyle=col; ctx.strokeStyle=col; ctx.lineWidth=s*.14;
+  ctx.fillRect(x,y+s*.45,s*.8,s*.55); ctx.beginPath(); ctx.arc(x+s*.4,y+s*.45,s*.26,Math.PI,0); ctx.stroke(); ctx.restore();
+}
+// El rótulo: título y cuántos nodos hay dentro. Arriba a la izquierda; en óvalos y círculos, arriba en el centro
+function zRotulo(ctx,z,zoom,font){
+  const n=nodosEnZona(z).length, texto=z.title?`${z.title} · ${n}`:(n===1?"1 nodo":n+" nodos");
+  const fs=12.5/zoom, pad=11/zoom;                       // siempre del mismo tamaño en pantalla: orientan también de lejos
+  ctx.font=`600 ${fs}px ${font}`;
+  const w=ctx.measureText(texto).width+(z.locked?fs*1.15:0);
+  let x=z.x+pad, y=z.y+pad+fs*.8;
+  if(zRedonda(z)){ x=z.x+z.w/2-w/2; y=z.y+Math.max(pad+fs, z.h*.13+fs*.5); }
+  return {texto,x,y,w,fs,x0:x-5/zoom,y0:y-fs-3/zoom,x1:x+w+5/zoom,y1:y+fs*.4};
+}
+function dibujarZonas(ctx,zonas,{zoom,font,ink,seleccion,cajas}){
+  for(const [id,z] of zonas){
+    ctx.globalAlpha=1;
+    ctx.beginPath();
+    if(zRedonda(z)) ctx.ellipse(z.x+z.w/2,z.y+z.h/2,z.w/2,z.h/2,0,0,Math.PI*2);
+    else if(ctx.roundRect) ctx.roundRect(z.x,z.y,z.w,z.h,Math.min(16,z.w/6,z.h/6)); else ctx.rect(z.x,z.y,z.w,z.h);
+    ctx.fillStyle=hexA(z.color,.14); ctx.fill();
+    ctx.strokeStyle=hexA(z.color,.8); ctx.lineWidth=1.6/zoom; ctx.stroke();
+    const r=zRotulo(ctx,z,zoom,font), col=mezclaHex(z.color,ink,.28);
+    ctx.fillStyle=col; ctx.textAlign="left"; ctx.textBaseline="alphabetic"; ctx.fillText(r.texto,r.x,r.y);
+    if(z.locked) candado(ctx,r.x+r.w-r.fs*.85,r.y-r.fs*.82,r.fs*.85,col);
+    if(cajas) cajas[id]=r;
+    if(seleccion===id){
+      ctx.strokeStyle=ink; ctx.lineWidth=1.3/zoom; ctx.setLineDash([6/zoom,4/zoom]);
+      ctx.strokeRect(z.x-5/zoom,z.y-5/zoom,z.w+10/zoom,z.h+10/zoom); ctx.setLineDash([]);
+      if(!z.locked){ const s=10/zoom; ctx.fillStyle=ink; for(const [,hx,hy] of zEsquinas(z)){ ctx.fillRect(hx-s/2,hy-s/2,s,s); } }
+    }
+  }
+}
+// Qué área hay bajo el puntero (en la pantalla): una esquina del área seleccionada, el rótulo o el borde de alguna
+function hitZona(x,y){
+  if(!MG) return null;
+  const c=cam(), [wx,wy]=toWorld(x,y), tol=9/c.z, zs=levelZones(curMapId(),mapLevel);
+  const sel=mZona&&state.mzones[mZona];
+  if(sel&&!sel.locked&&zs.some(([id])=>id===mZona)) for(const [parte,hx,hy] of zEsquinas(sel)) if(Math.abs(wx-hx)<=tol+4/c.z&&Math.abs(wy-hy)<=tol+4/c.z) return {id:mZona, parte};
+  for(let i=zs.length-1;i>=0;i--){ const [id,z]=zs[i], b=MG.zCajas&&MG.zCajas[id];
+    if(b&&wx>=b.x0&&wx<=b.x1&&wy>=b.y0&&wy<=b.y1) return {id, parte:"rotulo"}; }
+  for(let i=zs.length-1;i>=0;i--){ const [id,z]=zs[i]; if(zEnBorde(z,wx,wy,tol)) return {id, parte:"borde"}; }
+  return null;
+}
+// Cambiar el tamaño desde una esquina: la contraria se queda fija. Cuadrados y círculos no pierden la proporción
+function zRedimensionar(z,d,dx,dy){
+  const f=d.from, MIN=40, izq=d.parte[1]==="w", arr=d.parte[0]==="n";
+  let x0=f.x, y0=f.y, x1=f.x+f.w, y1=f.y+f.h;
+  if(izq) x0=Math.min(f.x+dx,x1-MIN); else x1=Math.max(f.x+f.w+dx,x0+MIN);
+  if(arr) y0=Math.min(f.y+dy,y1-MIN); else y1=Math.max(f.y+f.h+dy,y0+MIN);
+  let w=x1-x0, h=y1-y0;
+  if(zIgual(z.shape)){ const s=Math.max(w,h); w=h=s; if(izq) x0=x1-s; if(arr) y0=y1-s; }
+  z.x=Math.round(x0); z.y=Math.round(y0); z.w=Math.round(w); z.h=Math.round(h);
+}
+function zCambiarForma(z,forma){
+  z.shape=forma;
+  if(zIgual(forma)){ const cx=z.x+z.w/2, cy=z.y+z.h/2, s=Math.round(Math.max(z.w,z.h)); z.x=Math.round(cx-s/2); z.y=Math.round(cy-s/2); z.w=z.h=s; }
+}
+function crearZona(forma,wx,wy){
+  const mid=curMapId(); if(!mid||!MG||!MG.W) return;
+  mRemember();
+  const c=cam(); if(wx==null) [wx,wy]=toWorld(MG.W/2,MG.H/2);
+  const base=Math.max(120,Math.min(MG.W,MG.H)*.55/c.z), w=Math.round(zIgual(forma)?base:base*1.5), h=Math.round(base);
+  const zs=levelZones(mid,mapLevel), usados=new Set(zs.map(([,z])=>z.color));
+  const color=(Z_COLORS.find(([k])=>!usados.has(k))||Z_COLORS[zs.length%Z_COLORS.length])[0];
+  const id=newId("z");
+  state.mzones[id]={map:mid, parent:mapLevel||null, title:"", shape:forma, x:Math.round(wx-w/2), y:Math.round(wy-h/2), w, h, color, locked:false,
+    order:Math.max(0,...zs.map(([,z])=>z.order))+1, created:new Date().toISOString()};
+  clearSel(); mZona=id; save(); selectionChanged(); renombrarZona(id);
+}
+function menuFormas(x,y,wx,wy){ openMgMenu(x,y,Z_FORMAS.map(([k,n])=>[n,()=>crearZona(k,wx,wy)])); }
+// El título se escribe en un recuadro encima del propio rótulo
+function renombrarZona(id){
+  const z=state.mzones[id], g=document.getElementById("mv-graph"); if(!z||!g||!MG) return;
+  const viejo=g.querySelector(".mz-input"); if(viejo) viejo.remove();
+  mgDraw();
+  const c=cam(), b=(MG.zCajas||{})[id], i=document.createElement("input");
+  i.type="text"; i.className="mz-input"; i.maxLength=80; i.value=z.title; i.placeholder="Título del área"; i.setAttribute("aria-label","Título del área");
+  const sx=b?b.x0*c.z+c.ox:z.x*c.z+c.ox+8, sy=b?b.y0*c.z+c.oy:z.y*c.z+c.oy+8;
+  i.style.left=Math.max(4,Math.min(sx-4,MG.W-230))+"px"; i.style.top=Math.max(4,Math.min(sy-6,MG.H-44))+"px";
+  g.appendChild(i); i.focus(); i.select();
+  let hecho=false;
+  const fin=ok=>{ if(hecho) return; hecho=true; const v=i.value.replace(/\s+/g," ").trim().slice(0,80); i.remove();
+    const zz=state.mzones[id]; if(ok&&zz&&v!==zz.title){ mRemember(); zz.title=v; save(); } mgDraw(); };
+  i.addEventListener("keydown",ev=>{ ev.stopPropagation(); if(ev.key==="Enter"){ ev.preventDefault(); fin(true); } else if(ev.key==="Escape"){ ev.preventDefault(); fin(false); } });
+  i.addEventListener("blur",()=>fin(true));
+}
+function abrirMenuZona(id,x,y){
+  const z=state.mzones[id]; if(!z) return;
+  if(mZona!==id){ clearSel(); mZona=id; selectionChanged(); }
+  const cambia=f=>()=>{ const zz=state.mzones[id]; if(!zz) return; mRemember(); f(zz); save(); mgDraw(); };
+  const hermanas=()=>levelZones(z.map,z.parent).map(([,o])=>o.order);
+  const items=[["Cambiar título",()=>renombrarZona(id)],
+    ["Forma…",()=>openMgMenu(x,y,Z_FORMAS.map(([k,n])=>[(z.shape===k?"✓ ":"")+n,cambia(zz=>zCambiarForma(zz,k))]))],
+    ["Color…",()=>openMgMenu(x,y,Z_COLORS.map(([k,n])=>[(z.color===k?"✓ ":"")+n,cambia(zz=>{ zz.color=k; }),"",k]))],
+    [z.locked?"Desbloquear":"Bloquear",cambia(zz=>{ zz.locked=!zz.locked; })]];
+  if(!z.locked) items.push(["Mover sin los nodos",()=>{ MG.soloZona=id; mvToast("Arrastra el área por su título o su borde: los nodos se quedarán donde están",false); }]);
+  items.push(["Traer al frente",cambia(zz=>{ zz.order=Math.max(...hermanas())+1; })],
+    ["Enviar al fondo",cambia(zz=>{ zz.order=Math.min(...hermanas())-1; })],
+    ["Eliminar área",()=>{ mRemember(); delete state.mzones[id]; mZona=null; save(); mgDraw(); mvToast("Área eliminada (los nodos siguen ahí)"); },"danger"]);
+  openMgMenu(x,y,items);
+}
+// Llevar la vista a un área (desde el buscador)
+function centrarZona(id){
+  const z=state.mzones[id]; if(!MG||!z) return;
+  const c=cam(), zoom=Math.max(.35,Math.min(1.4,MG.W/(z.w+120),MG.H/(z.h+120)));
+  mCam[MG.key]={z:zoom, ox:MG.W/2-(z.x+z.w/2)*zoom, oy:MG.H/2-(z.y+z.h/2)*zoom, user:true}; mgDraw();
+}
 // Animación suave: los nodos flotan unos pocos píxeles, el brillo respira, los hilos del nodo activo llevan
 // una pequeña luz y los nodos aparecen con un leve rebote. Se dibuja a 30 imágenes por segundo como mucho,
 // se detiene si la ventana no está a la vista y se desactiva si el sistema pide reducir el movimiento.
@@ -2645,6 +3016,9 @@ function mgDraw(){
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
   ctx.setTransform(dpr*c.z,0,0,dpr*c.z,dpr*c.ox,dpr*c.oy);
   const colorOf=n=>n.color||m.color;
+  // áreas (debajo de todo)
+  MG.zCajas={}; dibujarZonas(ctx,levelZones(mid,mapLevel),{zoom:c.z, font, ink, seleccion:mZona, cajas:MG.zCajas});
+  ctx.globalAlpha=1;
   // hilos
   for(const [lid,l] of links){ const a=ap(l.a), b=ap(l.b); if(a.x==null||b.x==null) continue;
     const via=focus&&(l.a===focus||l.b===focus)?focus:(mSel&&(l.a===mSel||l.b===mSel)?mSel:null);
@@ -2698,10 +3072,17 @@ function hitLink(x,y){
   return null;
 }
 function closeMgMenu(){ if(MG&&MG.menu){ MG.menu.remove(); MG.menu=null; } }
+// Cuándo empezó la última pulsación (ratón o dedo): un clic cuya pulsación empezó antes de abrirse el menú no es para él
+let ultimaPulsacion=0;
+document.addEventListener("pointerdown",()=>{ ultimaPulsacion=performance.now(); },true);
 function openMgMenu(x,y,items){
   closeMgMenu();
+  const abierto=performance.now();
   const g=document.getElementById("mv-graph"), el=document.createElement("div"); el.className="mv-menu"; el.setAttribute("role","menu");
-  items.forEach(([t,fn,cls])=>{ const b=document.createElement("button"); b.type="button"; b.textContent=t; if(cls) b.className=cls; b.onclick=()=>{ closeMgMenu(); fn(); }; el.appendChild(b); });
+  items.forEach(([t,fn,cls,muestra])=>{ const b=document.createElement("button"); b.type="button"; b.textContent=t; if(cls) b.className=cls;
+    if(muestra){ const i=document.createElement("i"); i.className="mm-sw"; i.style.background=muestra; b.prepend(i); }
+    // (Abierto con el dedo, el menú aparece bajo él: el clic que llega justo después del toque no debe elegir nada)
+    b.onclick=ev=>{ if(ev.detail>0&&ultimaPulsacion<abierto) return; closeMgMenu(); fn(); }; el.appendChild(b); });
   g.appendChild(el);
   el.style.left=Math.min(x, MG.W-el.offsetWidth-8)+"px"; el.style.top=Math.min(y, MG.H-el.offsetHeight-8)+"px";
   MG.menu=el; const f=el.querySelector("button"); if(f) f.focus();
@@ -2712,8 +3093,8 @@ function selIds(){
   const s=new Set(mMulti); if(mSel) s.add(mSel);
   return [...s].filter(id=>{ const n=state.mnodes[id]; return n && n.map===curMapId() && (n.parent||null)===(mapLevel||null); });
 }
-function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; }
-function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; }
+function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; mZona=null; }
+function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; mZona=null; }
 function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); }
 const mapActive=()=>!boardsView.hidden && !!curMapId() && !!MG && !cdlg.open;
 const isTyping=()=>{ const a=document.activeElement; return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable); };
@@ -2893,6 +3274,9 @@ function bindCanvas(cv){
     if(dedos.size>2) return;
     // Lo que hubiera empezado el primer dedo (mover un nodo, el mapa…) se deja como estaba
     if(MG.drag){ for(const id of MG.drag.ids){ const n=state.mnodes[id], f=MG.drag.from[id]; if(n){ n.x=f.x; n.y=f.y; } } MG.drag=null; MG.dropTarget=null; }
+    if(MG.zdrag){ const d=MG.zdrag, z=state.mzones[d.id]; if(z) Object.assign(z,d.from);
+      for(const [id,f] of Object.entries(d.nodos)){ const n=state.mnodes[id]; if(n){ n.x=f.x; n.y=f.y; } } MG.zdrag=null; }
+    MG.zTap=null;
     MG.pan=null; MG.rect=null; if(MG.wire&&!MG.wire.pick) MG.wire=null; cv.classList.remove("panning");
     pellizco=medir();
   });
@@ -2910,7 +3294,7 @@ function bindCanvas(cv){
   const dedoFuera=e=>{
     if(!dedos.delete(e.pointerId)) return;
     if(pellizco){ e.stopImmediatePropagation(); if(!dedos.size) pellizco=null; }
-    else if(e.type==="pointercancel"){ MG.pan=null; MG.rect=null; MG.drag=null; MG.dropTarget=null; cv.classList.remove("panning"); mgDraw(); }
+    else if(e.type==="pointercancel"){ MG.pan=null; MG.rect=null; MG.drag=null; MG.dropTarget=null; MG.zdrag=null; MG.zTap=null; cv.classList.remove("panning"); mgDraw(); }
   };
   cv.addEventListener("pointerup",dedoFuera); cv.addEventListener("pointercancel",dedoFuera);
   cv.addEventListener("pointerdown",e=>{
@@ -2933,8 +3317,23 @@ function bindCanvas(cv){
       MG.drag={ids, ox:wx, oy:wy, from:Object.fromEntries(ids.map(i=>[i,{x:state.mnodes[i].x, y:state.mnodes[i].y}])), moved:false};
       mgDraw(); return;
     }
-    const lid=hitLink(x,y);
+    // Un área: por su título o su borde se selecciona y se mueve (con los nodos de dentro); por sus esquinas, cambia de tamaño.
+    // Su título y sus esquinas van antes que los hilos que pasen por encima; su borde, después
+    const zh=!multi&&!e.shiftKey?hitZona(x,y):null;
+    const lid=zh&&zh.parte!=="borde"?null:hitLink(x,y);
     if(lid && !multi && !e.shiftKey){ clearSel(); mSelLink=lid; selectionChanged(); return; }
+    if(zh){
+      const z=state.mzones[zh.id], yaSel=mZona===zh.id;
+      if(!yaSel){ clearSel(); mZona=zh.id; selectionChanged(); }
+      const toque=e.pointerType==="touch";
+      if(z.locked){ MG.zTap={id:zh.id, yaSel, toque}; mgDraw(); return; }
+      const [wx,wy]=toWorld(x,y), esquina=zh.parte.length===2, solo=e.altKey||MG.soloZona===zh.id;
+      MG.soloZona=null;
+      const nodos=esquina||solo?[]:nodosEnZona(z);
+      MG.zdrag={id:zh.id, parte:zh.parte, ox:wx, oy:wy, from:{x:z.x,y:z.y,w:z.w,h:z.h},
+        nodos:Object.fromEntries(nodos.map(i=>[i,{x:state.mnodes[i].x, y:state.mnodes[i].y}])), moved:false, yaSel, toque};
+      mgDraw(); return;
+    }
     if(multi || e.shiftKey){                           // Mayús o Ctrl + arrastrar en el fondo: recuadro de selección
       MG.rect={x0:x, y0:y, x1:x, y1:y, base:multi?new Set(selIds()):new Set()}; mgDraw(); return;
     }
@@ -2944,6 +3343,15 @@ function bindCanvas(cv){
   });
   cv.addEventListener("pointermove",e=>{
     const [x,y]=pos(e); MG.lastPointer=[x,y];
+    if(MG.zdrag){
+      const d=MG.zdrag, z=state.mzones[d.id]; if(!z){ MG.zdrag=null; return; }
+      const [wx,wy]=toWorld(x,y), dx=wx-d.ox, dy=wy-d.oy;
+      if(!d.moved){ if(Math.hypot(dx,dy)*cam().z<3) return; mRemember(); d.moved=true; }
+      if(d.parte.length===2) zRedimensionar(z,d,dx,dy);
+      else { z.x=Math.round(d.from.x+dx); z.y=Math.round(d.from.y+dy);
+        for(const [id,f] of Object.entries(d.nodos)){ const n=state.mnodes[id]; if(n&&f.x!=null){ n.x=Math.round(f.x+dx); n.y=Math.round(f.y+dy); } } }
+      mgDraw(); return;
+    }
     if(MG.drag){
       const [wx,wy]=toWorld(x,y), dx=wx-MG.drag.ox, dy=wy-MG.drag.oy;
       if(!MG.drag.moved){ if(Math.hypot(dx,dy)*cam().z<3) return; mRemember(); MG.drag.moved=true; }
@@ -2962,10 +3370,22 @@ function bindCanvas(cv){
     if(MG.pan){ const c=cam(); c.ox=MG.pan.ox+x-MG.pan.x; c.oy=MG.pan.oy+y-MG.pan.y; c.user=true; mgDraw(); return; }
     if(MG.wire){ const [wx,wy]=toWorld(x,y); MG.wire.x=wx; MG.wire.y=wy; mgDraw(); }
     const h=hitNode(x,y);
-    if(h!==MG.hover){ MG.hover=h; cv.style.cursor=h?"pointer":""; mgDraw(); }
+    if(h!==MG.hover){ MG.hover=h; mgDraw(); }
+    // El puntero avisa de lo que se puede hacer con un área
+    let cursor=h?"pointer":"";
+    if(!h&&!MG.pan&&!MG.rect&&e.pointerType==="mouse"){ const zh=hitZona(x,y); if(zh){ const z=state.mzones[zh.id];
+      cursor=z.locked?"default":zh.parte==="nw"||zh.parte==="se"?"nwse-resize":zh.parte==="ne"||zh.parte==="sw"?"nesw-resize":"move"; } }
+    if(cv.style.cursor!==cursor) cv.style.cursor=cursor;
   });
   cv.addEventListener("pointerup",e=>{
     const [x,y]=pos(e);
+    if(MG.zdrag){
+      const d=MG.zdrag; MG.zdrag=null;
+      if(d.moved) save();
+      else if(d.toque&&d.yaSel) abrirMenuZona(d.id,x,y);         // con el dedo: tocar otra vez un área seleccionada abre sus opciones
+      mgDraw(); return;
+    }
+    if(MG.zTap){ const t=MG.zTap; MG.zTap=null; if(t.toque&&t.yaSel) abrirMenuZona(t.id,x,y); return; }
     if(MG.drag){
       const d=MG.drag; MG.drag=null;
       if(d.moved && MG.dropTarget){
@@ -2989,11 +3409,12 @@ function bindCanvas(cv){
   cv.addEventListener("dblclick",e=>{
     const [x,y]=pos(e), id=hitNode(x,y);
     if(id){ goLevel(id); return; }
+    const zh=hitZona(x,y); if(zh&&zh.parte.length>2){ renombrarZona(zh.id); return; }
     const [wx,wy]=toWorld(x,y); createNode(wx,wy,null);
   });
   cv.addEventListener("wheel",e=>{ e.preventDefault(); const [x,y]=pos(e); zoomAt(x,y,e.deltaY<0?1.12:1/1.12); },{passive:false});
   cv.addEventListener("contextmenu",e=>{
-    e.preventDefault(); const [x,y]=pos(e), id=hitNode(x,y), lid=id?null:hitLink(x,y);
+    e.preventDefault(); const [x,y]=pos(e), id=hitNode(x,y), zh=id?null:hitZona(x,y), lid=id||(zh&&zh.parte!=="borde")?null:hitLink(x,y);
     MG.lastPointer=[x,y];
     if(id){
       if(!selIds().includes(id)) selectOnly(id); else mSel=id;
@@ -3008,8 +3429,9 @@ function bindCanvas(cv){
     }
     else if(lid){ clearSel(); mSelLink=lid; selectionChanged();
       openMgMenu(x,y,[["Quitar conexión",()=>{ mRemember(); delete state.mlinks[lid]; mSelLink=null; save(); mgDraw(); },"danger"]]); }
+    else if(zh) abrirMenuZona(zh.id,x,y);
     else { const [wx,wy]=toWorld(x,y);
-      const items=[["Nuevo nodo aquí",()=>createNode(wx,wy,null)]];
+      const items=[["Nuevo nodo aquí",()=>createNode(wx,wy,null)],["Nueva área aquí…",()=>menuFormas(x,y,wx,wy)]];
       if(mClip) items.push(["Pegar "+(mClip.count===1?"el nodo copiado":mClip.count+" nodos copiados"),()=>pasteClip(wx,wy)]);
       items.push(["Seleccionar todo",()=>{ const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); }],
                  ["Ajustar a la pantalla",()=>mgFit(false)],["Exportar como imagen (PNG)",exportMapPNG]);
@@ -3022,8 +3444,8 @@ function bindCanvas(cv){
 // todos los nombres visibles y los mismos colores y brillos que en Ascenso. Se descarga a la carpeta de descargas.
 function exportMapPNG(){
   const mid=curMapId(), m=state.maps[mid]; if(!m) return;
-  const lv=levelNodes(mid,mapLevel).filter(([,n])=>n.x!=null);
-  if(!lv.length){ mvToast("Este nivel no tiene nodos que exportar",false); return; }
+  const lv=levelNodes(mid,mapLevel).filter(([,n])=>n.x!=null), zonas=levelZones(mid,mapLevel);
+  if(!lv.length&&!zonas.length){ mvToast("Este nivel no tiene nodos que exportar",false); return; }
   const css=getComputedStyle(document.documentElement), v=k=>css.getPropertyValue(k).trim();
   const ink=v("--ink"), muted=v("--muted"), line=v("--line"), bg=getComputedStyle(document.querySelector(".mv-body")||document.body).backgroundColor;
   const font=getComputedStyle(document.body).fontFamily, serif=getComputedStyle(document.querySelector("h1,.brand")||document.body).fontFamily;
@@ -3035,6 +3457,7 @@ function exportMapPNG(){
   let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
   for(const k of info){ const p=k.n, halo=k.r+k.g*5.5+4;
     x0=Math.min(x0,p.x-halo,p.x-k.tw/2); x1=Math.max(x1,p.x+halo,p.x+k.tw/2); y0=Math.min(y0,p.y-halo); y1=Math.max(y1,p.y+k.r+24); }
+  for(const [,z] of zonas){ x0=Math.min(x0,z.x-4); x1=Math.max(x1,z.x+z.w+4); y0=Math.min(y0,z.y-4); y1=Math.max(y1,z.y+z.h+4); }
   const pad=48, head=74, W=Math.ceil(x1-x0+pad*2), H=Math.ceil(y1-y0+pad*2+head), S=2;
   const cv=document.createElement("canvas"); cv.width=W*S; cv.height=H*S;
   const c=cv.getContext("2d"); c.scale(S,S);
@@ -3048,6 +3471,9 @@ function exportMapPNG(){
   c.fillStyle=m.color; c.fillRect(pad,pad+40,36,3);
   c.translate(pad-x0, pad+head-y0);
   const colorOf=n=>n.color||m.color;
+  // Áreas
+  dibujarZonas(c,zonas,{zoom:1, font, ink});
+  c.globalAlpha=1;
   // Hilos
   c.lineWidth=1.2; c.strokeStyle=line; c.globalAlpha=.9;
   for(const l of links){ const a=state.mnodes[l.a], b=state.mnodes[l.b]; c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke(); }
@@ -3086,6 +3512,7 @@ bvBody.addEventListener("click",e=>{
   if((el=q("[data-delmap]"))){ armDelete(el,()=>deleteMap(curMapId()),"Pulsa otra vez para eliminar el mapa"); return; }
   if((el=q("[data-mtool]"))){ const k=el.dataset.mtool;
     if(k==="new"){ const c=cam(); createNode((MG.W/2-c.ox)/c.z+(Math.random()-.5)*60, (MG.H/2-c.oy)/c.z+(Math.random()-.5)*60, mSel); }
+    else if(k==="area"){ const g=document.getElementById("mv-graph").getBoundingClientRect(), r=el.getBoundingClientRect(); menuFormas(r.left-g.left, r.top-g.top); }
     else if(k==="in") zoomAt(MG.W/2,MG.H/2,1.2); else if(k==="out") zoomAt(MG.W/2,MG.H/2,1/1.2); else mgFit(false);
     return; }
   if((el=q("[data-mcolor]"))){ mRemember(); for(const id of selIds()) state.mnodes[id].color=el.dataset.mcolor; save(); mgDraw(); return; }
@@ -3161,10 +3588,13 @@ document.addEventListener("keydown",e=>{
   if(typing) return;
   if(k==="?" ){ e.preventDefault(); toggleHelp(); return; }
   if(k==="Escape"){ const mv=document.querySelector(".mv-move");
-    if(mHelpOpen) toggleHelp(false); else if(mv) mv.remove(); else if(MG&&MG.wire){ MG.wire=null; mgDraw(); } else if(MG&&MG.menu) closeMgMenu(); else if(selIds().length||mSelLink){ clearSel(); selectionChanged(); } return; }
+    if(mHelpOpen) toggleHelp(false); else if(mv) mv.remove(); else if(MG&&MG.wire){ MG.wire=null; mgDraw(); } else if(MG&&MG.menu) closeMgMenu(); else if(selIds().length||mSelLink||mZona){ clearSel(); selectionChanged(); } return; }
   if(mod && (k==="a"||k==="A")){ e.preventDefault(); const all=levelNodes(curMapId(),mapLevel).map(([i])=>i); mMulti=new Set(all); mSel=all[0]||null; selectionChanged(); return; }
   if(k==="Tab" && mSel && selIds().length===1){ e.preventDefault(); createNear(mSel,mSel); return; }
+  if(k==="F2" && mZona && state.mzones[mZona]){ e.preventDefault(); renombrarZona(mZona); return; }
   if(k==="F2" && (mSel||mapLevel)){ e.preventDefault(); focusTitle(); return; }
+  if((k==="Delete" || (e.metaKey && k==="Backspace")) && mZona && state.mzones[mZona] && !selIds().length){
+    e.preventDefault(); mRemember(); delete state.mzones[mZona]; mZona=null; save(); mgDraw(); mvToast("Área eliminada (los nodos siguen ahí)"); return; }
   if(k==="Delete" || (e.metaKey && k==="Backspace")){ e.preventDefault(); const ids=selIds(); if(ids.length) askDeleteNodes(ids); else if(mSelLink){ mRemember(); delete state.mlinks[mSelLink]; mSelLink=null; save(); mgDraw(); } return; }
   if(k==="Enter" && mSel){ e.preventDefault(); goLevel(mSel); return; }
   if(k==="Backspace" || (e.altKey && k==="ArrowLeft") || (e.metaKey && (k==="[" || k==="ArrowUp"))){ if(mapLevel){ e.preventDefault(); goUp(); } }
@@ -3479,20 +3909,60 @@ document.getElementById("imp").addEventListener("change",async e=>{
   e.target.value="";
 });
 document.getElementById("thr").addEventListener("change",e=>{ state.thr=+e.target.value; save(); render(); });
-// ---- Tipos de entreno: cada uno con el nombre que quieras (el color y su función no cambian) ----
+// ---- Tipos de entreno: añadir, poner nombre y color, y quitar ----
+let tcQuitando=null;
 function renderTypeCfg(){
   const box=document.getElementById("typecfg"); if(!box) return;
-  if(box.contains(document.activeElement)) return;          // no se repinta mientras escribes
-  box.innerHTML=Object.entries(TYPES).map(([id,t])=>`<label class="tc-row"><b class="${t.cls}"></b>
-      <input type="text" maxlength="30" data-tipo="${id}" value="${esc(state.tipos[id]||"")}" placeholder="${esc(t.short||t.name)}" aria-label="Nombre de «${esc(t.short||t.name)}»"></label>`).join("");
+  if(box.contains(document.activeElement)&&document.activeElement.type==="text") return;     // no se repinta mientras escribes
+  const vis=tiposVisibles();
+  box.innerHTML=vis.map(t=>{
+    const base=TIPOS_BASE.find(b=>b.id===t.id), usado=tipoUsado(t.id);
+    const quitar=tcQuitando===t.id?`<div class="tc-quitar">${usado
+        ?`<label>Desde esta semana, los días con «${esc(t.name)}» pasan a <select data-sustituto>${vis.filter(x=>x.id!==t.id).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label>
+          <p>Los días de semanas pasadas lo conservan.</p>`
+        :`<p>¿Quitar «${esc(t.name)}»? Ningún día lo usa.</p>`}
+        <div class="row"><button type="button" class="add" data-tc-si="${t.id}">Quitar</button><button type="button" class="add alt" data-tc-no>Cancelar</button></div></div>`:"";
+    return `<div class="tc-tipo"><div class="tc-row"><input type="color" data-tc-color="${t.id}" value="${t.color.toLowerCase()}" aria-label="Color de «${esc(t.name)}»">
+      <input type="text" maxlength="30" data-tipo="${t.id}" value="${esc(t.name)}" placeholder="${esc(base?base.name:"Nombre")}" aria-label="Nombre del tipo">
+      <button type="button" class="tc-del" data-tc-del="${t.id}"${vis.length<2?" disabled":""} aria-label="Quitar «${esc(t.name)}»">Quitar</button></div>${quitar}</div>`;
+  }).join("");
+  const nuevo=document.getElementById("typeadd"); if(nuevo) nuevo.disabled=state.tipos.length>=MAX_TIPOS;
 }
-document.getElementById("typecfg")?.addEventListener("input",e=>{
-  const i=e.target.closest("[data-tipo]"); if(!i) return;
-  const v=i.value.trim().slice(0,30);
-  if(v) state.tipos[i.dataset.tipo]=v; else delete state.tipos[i.dataset.tipo];   // vacío: vuelve al nombre de siempre
-  save(); renderWeek(); renderDay();
+function tiposCambiados(){ save(); renderWeek(); renderDay(); }
+const typecfg=document.getElementById("typecfg");
+typecfg?.addEventListener("input",e=>{
+  const i=e.target.closest("[data-tipo]"); if(i){
+    const t=tipoDe(i.dataset.tipo), base=TIPOS_BASE.find(b=>b.id===t.id), v=i.value.trim().slice(0,30);
+    if(v) t.name=v; else if(base) t.name=base.name; else return;            // vacío: el de siempre (o se deja como estaba)
+    tiposCambiados(); return;
+  }
+  const c=e.target.closest("[data-tc-color]");
+  if(c&&/^#[0-9a-f]{6}$/i.test(c.value)){ tipoDe(c.dataset.tcColor).color=c.value.toUpperCase(); tiposCambiados(); }
 });
-document.getElementById("typereset")?.addEventListener("click",()=>{ state.tipos={}; save(); const b=document.getElementById("typecfg"); if(b) b.innerHTML=""; renderTypeCfg(); render(); });
+typecfg?.addEventListener("focusout",e=>{ const i=e.target.closest("[data-tipo]"); if(i&&!i.value.trim()) i.value=tipoDe(i.dataset.tipo).name; });
+typecfg?.addEventListener("click",e=>{
+  const d=e.target.closest("[data-tc-del]"); if(d){ tcQuitando=tcQuitando===d.dataset.tcDel?null:d.dataset.tcDel; renderTypeCfg(); return; }
+  if(e.target.closest("[data-tc-no]")){ tcQuitando=null; renderTypeCfg(); return; }
+  const si=e.target.closest("[data-tc-si]");
+  if(si){
+    if(tiposVisibles().length<2) return;
+    const s=typecfg.querySelector("[data-sustituto]");
+    quitarTipo(si.dataset.tcSi, s?s.value:null); tcQuitando=null;
+    save(); renderTypeCfg(); render();
+  }
+});
+document.getElementById("typeadd")?.addEventListener("click",()=>{
+  if(state.tipos.length>=MAX_TIPOS) return;
+  const usados=new Set(state.tipos.map(t=>t.color)), color=COLORES_TIPO.find(c=>!usados.has(c))||COLORES_TIPO[state.tipos.length%COLORES_TIPO.length];
+  const id=newId("k"); state.tipos.push({id, name:"Nuevo tipo", color, oculto:false});
+  save(); renderTypeCfg(); renderWeek(); renderDay();
+  const i=typecfg.querySelector(`[data-tipo="${id}"]`); if(i){ i.focus(); i.select(); }
+});
+// Los cuatro de siempre vuelven a su nombre y color (los tipos añadidos no se tocan)
+document.getElementById("typereset")?.addEventListener("click",()=>{
+  for(const b of TIPOS_BASE){ const t=state.tipos.find(x=>x.id===b.id); if(t){ t.name=b.name; t.color=b.color; } }
+  save(); if(typecfg) typecfg.innerHTML=""; renderTypeCfg(); render();
+});
 
 // ---------- Tareas: pintar y editar ----------
 // Texto oscuro o claro según lo clara que sea la etiqueta
@@ -3882,7 +4352,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=13;
+const VERSION_NECESARIA=14;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){
@@ -3894,8 +4364,8 @@ function saveLocal(){
     localStorage.setItem(STORE,j); return true;
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
-  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks})); }
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
+  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks,mzones:state.mzones})); }
 async function api(method,path,body){
   if(LOCAL) return AscensoLocal.api(method,path,body);
   const opt={method, headers:{"X-Ascenso":"1"}};
@@ -3944,15 +4414,15 @@ async function sync(){
   const enviar=async(metodo,ruta,datos)=>{ try{ await api(metodo,ruta,datos); return true; }catch(e){ errores.push(e); return false; } };
   try{
     const now=snapshot();
-    if(JSON.stringify([now.plan,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.thr,synced.tipos])){
-      if(await enviar("PUT","config",{plan:now.plan,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.thr=now.thr; synced.tipos=now.tipos; }
+    if(JSON.stringify([now.plan,now.planes,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.planes,synced.thr,synced.tipos])){
+      if(await enviar("PUT","config",{plan:now.plan,planes:now.planes,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.planes=now.planes; synced.thr=now.thr; synced.tipos=now.tipos; }
     }
     if(JSON.stringify(now.habits)!==JSON.stringify(synced.habits)){
       if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;
     }
     // Colecciones con identificador: primero se crean o actualizan (en orden de dependencia) y luego se borran (al revés)
     const COLS=[["tags","etiquetas"],["tasks","tareas"],["boards","tableros"],["blabels","etiquetas-tablero"],["blists","listas"],["cards","tarjetas"],["events","eventos"],
-                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"]];
+                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"],["mzones","zonas"]];
     // Los nodos se envían de los de primer nivel hacia dentro (un padre siempre antes que sus hijos)
     const depth=(coll,id)=>{ let d=0, p=coll[id]&&coll[id].parent; while(p&&coll[p]&&d<500){ d++; p=coll[p].parent; } return d; };
     const ordered=(k,coll)=>k==="mnodes"?Object.entries(coll).sort((a,b)=>depth(coll,a[0])-depth(coll,b[0])):Object.entries(coll);
