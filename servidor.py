@@ -44,7 +44,9 @@ PAGINA = "ascenso.html"
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 FECHA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
-TIPOS = {"climb", "strength", "active", "rest"}
+TIPOS_BASE = {"climb", "strength", "active", "rest"}     # los de siempre (formato antiguo de «tipos»)
+MAX_TIPOS = 20
+MAX_PLANES = 400
 UMBRALES = {0.5, 0.66, 0.75, 1.0}
 PRIORIDADES = {"urgente", "alta", "media", "baja"}
 LISTAS = {"pendiente", "proceso", "hecha"}
@@ -270,7 +272,7 @@ CREATE TABLE IF NOT EXISTS adjuntos (
 """
 VERSION_BD = 11
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 13
+VERSION_APP = 14
 
 
 class ErrorDatos(Exception):
@@ -405,6 +407,7 @@ def leer_estado(con):
              and not tareas and not notas and not eventos and not tableros and not mapas)
     return {
         "plan": config.get("plan"),
+        "planes": config.get("planes"),
         "thr": config.get("thr"),
         "tipos": config.get("tipos"),
         "habits": habitos,
@@ -428,16 +431,50 @@ def leer_estado(con):
 
 
 def validar_plan(plan):
-    if not isinstance(plan, list) or len(plan) != 7 or any(p not in TIPOS for p in plan):
+    if not isinstance(plan, list) or len(plan) != 7 or any(not isinstance(p, str) or not ID_RE.match(p) for p in plan):
         raise ErrorDatos("plan semanal no válido")
-    return plan
+    return list(plan)
 
 
 def validar_tipos(tipos):
-    """Nombres propios de los tipos de entreno (Escalada, Fuerza…): solo los cuatro tipos, con texto breve."""
-    if not isinstance(tipos, dict):
-        raise ErrorDatos("nombres de los tipos no válidos")
-    return {k: str(v).strip()[:30] for k, v in tipos.items() if k in TIPOS and str(v).strip()}
+    """Tipos de entreno: lista de {id, name, color, oculto}. (Formato antiguo: nombres de los cuatro de siempre.)"""
+    if isinstance(tipos, dict):
+        return {k: str(v).strip()[:30] for k, v in tipos.items() if k in TIPOS_BASE and str(v).strip()}
+    if not isinstance(tipos, list) or not tipos or len(tipos) > MAX_TIPOS:
+        raise ErrorDatos("tipos de entreno no válidos")
+    vistos, salida = set(), []
+    for t in tipos:
+        if not isinstance(t, dict) or not isinstance(t.get("id"), str) or not ID_RE.match(t["id"]) or t["id"] in vistos:
+            raise ErrorDatos("tipos de entreno no válidos")
+        nombre = str(t.get("name") or "").strip()[:30]
+        color = str(t.get("color") or "")
+        if not nombre or not COLOR_RE.match(color):
+            raise ErrorDatos("tipos de entreno no válidos")
+        vistos.add(t["id"])
+        salida.append({"id": t["id"], "name": nombre, "color": color.upper(), "oculto": t.get("oculto") is True})
+    if all(t["oculto"] for t in salida):
+        raise ErrorDatos("tipos de entreno no válidos")
+    return salida
+
+
+def validar_planes(planes):
+    """Versiones del plan semanal por fechas: [{desde, plan}], ordenadas y sin fechas repetidas."""
+    if not isinstance(planes, list) or len(planes) > MAX_PLANES:
+        raise ErrorDatos("planes no válidos")
+    salida, vistas = [], set()
+    for v in planes:
+        if not isinstance(v, dict):
+            raise ErrorDatos("planes no válidos")
+        desde = str(v.get("desde") or "")
+        try:
+            date.fromisoformat(desde)
+        except ValueError:
+            raise ErrorDatos("planes no válidos")
+        if not FECHA_RE.match(desde) or desde in vistas:
+            raise ErrorDatos("planes no válidos")
+        vistas.add(desde)
+        salida.append({"desde": desde, "plan": validar_plan(v.get("plan"))})
+    return sorted(salida, key=lambda v: v["desde"])
 
 
 def validar_umbral(thr):
@@ -487,7 +524,7 @@ def validar_dia(d):
         if not 20 <= peso <= 400:
             raise ErrorDatos("peso fuera de rango")
     tipo = d.get("type")
-    if tipo is not None and tipo not in TIPOS:
+    if tipo is not None and (not isinstance(tipo, str) or not ID_RE.match(tipo)):
         raise ErrorDatos("tipo de entreno no válido")
     marcas = d.get("c") or {}
     if not isinstance(marcas, dict):
@@ -503,6 +540,8 @@ def guardar_config(con, datos):
         con.execute("INSERT OR REPLACE INTO config VALUES ('thr', ?)", (json.dumps(validar_umbral(datos["thr"])),))
     if "tipos" in datos:
         con.execute("INSERT OR REPLACE INTO config VALUES ('tipos', ?)", (json.dumps(validar_tipos(datos["tipos"])),))
+    if "planes" in datos:
+        con.execute("INSERT OR REPLACE INTO config VALUES ('planes', ?)", (json.dumps(validar_planes(datos["planes"])),))
 
 
 def guardar_habitos(con, lista):
@@ -1002,7 +1041,7 @@ def importar(con, estado):
     con.execute("DELETE FROM dias")
     con.execute("DELETE FROM habitos")
     con.execute("DELETE FROM config")
-    guardar_config(con, {k: estado[k] for k in ("plan", "thr", "tipos") if estado.get(k) is not None})
+    guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos") if estado.get(k) is not None})
     guardar_habitos(con, estado.get("habits") or [])
     for fecha, d in estado["days"].items():
         guardar_dia(con, str(fecha), d)

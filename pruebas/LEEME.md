@@ -36,6 +36,7 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 | `pwa.test.mjs` | Lo que se publica en GitHub Pages: solo la aplicación, rutas relativas, política de seguridad, funcionamiento sin conexión y aviso de versión nueva. |
 | `cifrado.test.mjs` | Derivación de claves, cifrado de ida y vuelta, claves equivocadas y contenido manipulado. |
 | `sync.test.mjs` | Dos dispositivos con la misma cuenta: altas, cambios, borrados (también en cascada), edición sin conexión, conflictos, imágenes, dos pestañas, sesión recordada. Y que el servidor no recibe nada sin cifrar. |
+| `entreno.test.mjs` | Tipos de entreno propios (añadir, color, quitar con sustituto o archivar) y cambios de entreno de un día: hacia las semanas siguientes, nunca hacia las pasadas. |
 | `sin-conexion.test.mjs` | Con cuenta y sin red: Ascenso abre con la sesión y todo lo de la cuenta (tareas, imágenes de las libretas y libros, bajados antes sin abrirlos); lo hecho sin conexión se envía al volver; si la sesión se pierde, volver a entrar continúa sin subir todo otra vez. |
 | `sesion.test.mjs` | La sesión guardada: sigue ahí al reabrir, y no se pierde con Ascenso abierto en varias ventanas, con una pestaña dormida o por un fallo pasajero del servidor. |
 | `cuenta.test.mjs` | El panel: crear cuenta, fusionar o reemplazar, cambiar la contraseña, recuperarla con la clave de recuperación, sesión caducada, servidor caído y cerrar sesión. |

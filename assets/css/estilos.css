@@ -6320,3 +6320,73 @@ body.leyendo .barra {
     margin: -6px 0 -8px;
   }
 }
+
+/* ---------- Tipos de entreno: color, nombre y quitar ---------- */
+.typecfg {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.tc-row input[type="color"] {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.tc-del {
+  flex: none;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: #b5452b;
+  font-size: 0.86rem;
+}
+.tc-del:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.tc-quitar {
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 0.9rem;
+}
+.tc-quitar label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tc-quitar select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+.tc-quitar p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.tc-quitar .row {
+  margin-top: 8px;
+}
+.tc-quitar .add {
+  margin: 0;
+}
+.plan button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .tc-del,
+  .tc-quitar select {
+    min-height: 40px;
+  }
+  .tc-quitar select {
+    font-size: 16px;
+  }
+}

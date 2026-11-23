@@ -15,7 +15,11 @@ En los dos casos, sin dependencias: ni frameworks, ni paquetes que instalar para
 ## Qué incluye
 
 - **Hábitos** diarios configurables (en qué días aplican, si cuentan para la racha o el porcentaje semanal), racha y progreso semanal, registro de peso.
-- **Plan semanal** de entrenamiento (escalada, fuerza, descanso activo, descanso).
+- **Plan semanal** de entrenamiento: escalada, fuerza, descanso activo, descanso y los tipos que añadas, cada uno
+  con su nombre y su color (en «Tipos de entreno»). Cambiar el entreno de un día de esta semana o de una siguiente lo
+  cambia para ese día y los mismos días de las semanas que vienen; en una semana pasada, solo para ese día. Las
+  semanas pasadas no cambian nunca por lo que se haga después. Al quitar un tipo ya usado, eliges a cuál pasan sus
+  días desde esta semana; las semanas pasadas lo conservan.
 - **Tareas** por día al estilo de Trello: tres listas (Pendientes, En proceso, Hechas), arrastrar y soltar, prioridades (urgente, alta, media, baja), etiquetas con color y una checklist en la ficha de cada tarea.
 - **Frase del día** y **imagen del día**, sin repetirse hasta agotar todas, con historial guardado.
 - **Copia de seguridad**: exportar e importar todos los datos en JSON.

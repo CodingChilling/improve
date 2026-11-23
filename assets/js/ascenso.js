@@ -1,13 +1,51 @@
 // Ascenso: lógica de la página
-const TYPES = {
-  climb:   {name:"Escalada", cls:"k-climb"},
-  strength:{name:"Fuerza (pierna + empuje)", short:"Fuerza", cls:"k-strength"},
-  active:  {name:"Descanso activo", cls:"k-active"},
-  rest:    {name:"Descanso", cls:"k-rest"}
-};
-// Nombre de cada tipo: el que elijas en «Tipos de entreno» o, si no, el de siempre
-const typeName=id=>(state.tipos&&state.tipos[id])||TYPES[id].short||TYPES[id].name;
-const typeLong=id=>(state.tipos&&state.tipos[id])||TYPES[id].name;
+// ---------- Tipos de entreno ----------
+// Los cuatro de siempre más los que añadas en «Tipos de entreno». Cada uno: {id, name, color, oculto}.
+// Un tipo «oculto» está archivado: ya no se puede elegir, pero los días pasados que lo tenían lo conservan.
+const TIPOS_BASE = [
+  {id:"climb",    name:"Escalada", color:"#D39B2A", cls:"k-climb"},
+  {id:"strength", name:"Fuerza", largo:"Fuerza (pierna + empuje)", color:"#4A72C2", cls:"k-strength"},
+  {id:"active",   name:"Descanso activo", color:"#3D9468", cls:"k-active"},
+  {id:"rest",     name:"Descanso", color:"#8E989B", cls:"k-rest"}
+];
+const MAX_TIPOS=20;
+const COLORES_TIPO=["#C0392B","#D9822B","#8E44AD","#16A085","#2E86AB","#B03A70","#6D8F3A","#7F6A4F","#2C3E50","#D35400"];
+const tipoDe=id=>(state.tipos.find(t=>t.id===id))||{id, name:"Sin tipo", color:"#8E989B", oculto:true};
+const typeName=id=>tipoDe(id).name;
+const typeLong=id=>{ const t=tipoDe(id), b=TIPOS_BASE.find(x=>x.id===id); return b&&b.largo&&t.name===b.name?b.largo:t.name; };
+const tiposVisibles=()=>state.tipos.filter(t=>!t.oculto);
+// La marca de color de un tipo. Los de siempre con su color de siempre usan su clase (que cambia en modo oscuro)
+function marcaTipo(id,clase=""){
+  const t=tipoDe(id), b=TIPOS_BASE.find(x=>x.id===id);
+  return b&&t.color===b.color?`class="${clase} ${b.cls}"`:`class="${clase}" style="background:${t.color}"`;
+}
+function cleanTipos(t){
+  const HEX=/^#[0-9A-Fa-f]{6}$/;
+  if(Array.isArray(t)){
+    const out=[], vistos=new Set();
+    for(const x of t){
+      if(!x||!ID_OK.test(x.id||"")||vistos.has(x.id)) continue;
+      const name=String(x.name||"").trim().slice(0,30); if(!name) continue;
+      vistos.add(x.id); out.push({id:x.id, name, color:HEX.test(x.color||"")?x.color.toUpperCase():"#8E989B", oculto:!!x.oculto});
+      if(out.length>=MAX_TIPOS) break;
+    }
+    if(out.some(x=>!x.oculto)) return out;
+  }
+  // Formato anterior (o nada): los cuatro de siempre, con los nombres que se les hubieran puesto
+  const nombres=t&&typeof t==="object"&&!Array.isArray(t)?t:{};
+  return TIPOS_BASE.map(b=>({id:b.id, name:String(nombres[b.id]??"").trim().slice(0,30)||b.name, color:b.color, oculto:false}));
+}
+// Plan semanal por fechas: «plan» es el de siempre y cada versión de «planes» manda desde su fecha en adelante.
+// Así, cambiar el entreno de esta semana o de las siguientes no toca las semanas que ya pasaron.
+function cleanPlanes(p){
+  const F=/^\d{4}-\d{2}-\d{2}$/, out=[];
+  if(Array.isArray(p)) for(const v of p){
+    if(!v||!F.test(v.desde||"")||!Array.isArray(v.plan)||v.plan.length!==7||!v.plan.every(t=>typeof t==="string"&&ID_OK.test(t))) continue;
+    if(out.some(x=>x.desde===v.desde)) continue;
+    out.push({desde:v.desde, plan:v.plan.slice()});
+  }
+  return out.sort((a,b)=>a.desde<b.desde?-1:1).slice(-400);
+}
 const ALL7=[true,true,true,true,true,true,true];
 const DEFAULT_HABITS = [
   {id:"train",   t:"Entreno del día hecho", s:"Lo que toque según el plan"},
@@ -21,11 +59,12 @@ const cleanHabits = arr => Array.isArray(arr) ? arr.filter(h=>h&&h.id).map(h=>({
   id:String(h.id), t:String(h.t||"Hábito"), s:String(h.s||""), streak:h.streak!==false, week:h.week!==false,
   days:Array.isArray(h.days)&&h.days.length===7?h.days.map(Boolean):ALL7.slice()})) : DEFAULT_HABITS.map(h=>({...h,days:h.days.slice()}));
 const cleanState = (x,fallbackDays) => ({
-  plan:Array.isArray(x.plan)&&x.plan.length===7&&x.plan.every(t=>t in TYPES)?x.plan.slice():DEFAULT_PLAN.slice(),
+  plan:Array.isArray(x.plan)&&x.plan.length===7&&x.plan.every(t=>typeof t==="string"&&ID_OK.test(t))?x.plan.slice():DEFAULT_PLAN.slice(),
+  planes:cleanPlanes(x.planes),
   days:Object.assign({}, fallbackDays||{}, x.days||{}),
   habits:cleanHabits(x.habits),
   thr:[0.5,0.66,0.75,1].includes(+x.thr)?+x.thr:0.66,
-  tipos:(()=>{ const o={}, t=x.tipos&&typeof x.tipos==="object"?x.tipos:{}; for(const k of Object.keys(TYPES)){ const v=String(t[k]??"").trim().slice(0,30); if(v) o[k]=v; } return o; })(),
+  tipos:cleanTipos(x.tipos),
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
@@ -196,7 +235,54 @@ const monday = d => { const m=new Date(d); m.setDate(m.getDate()-dowIdx(m)); m.s
 const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const today = () => { const t=new Date(); t.setHours(0,0,0,0); return t; };
 const dayData = d => state.days[key(d)] || {};
-const typeFor = d => dayData(d).type || state.plan[dowIdx(d)];
+const deKey = k => { const [a,m,d]=k.split("-").map(Number); return new Date(a,m-1,d); };
+// El plan semanal que vale para un día
+const planAt = d => { const k=key(d); let p=state.plan; for(const v of state.planes){ if(v.desde<=k) p=v.plan; else break; } return p; };
+const typeFor = d => dayData(d).type || planAt(d)[dowIdx(d)];
+// Quita las versiones del plan que no cambian nada respecto a la anterior
+function compactarPlanes(){
+  let prev=state.plan.join(); const out=[];
+  for(const v of state.planes){ const j=v.plan.join(); if(j!==prev){ out.push(v); prev=j; } }
+  state.planes=out.slice(-400);
+}
+// Cambiar el entreno de un día. En una semana pasada, solo ese día. Desde la semana actual en adelante, ese día
+// y los mismos días de la semana que vengan después (aunque tuvieran otro), sin tocar las semanas anteriores.
+function cambiarTipo(d,id){
+  const k=key(d), w=dowIdx(d);
+  if(d<monday(today())){
+    if(id===planAt(d)[w]){ if(state.days[k]) delete state.days[k].type; }
+    else (state.days[k]=state.days[k]||{}).type=id;
+    return;
+  }
+  const p=planAt(d).slice(); p[w]=id;
+  state.planes=state.planes.filter(v=>v.desde!==k);
+  for(const v of state.planes) if(v.desde>k) v.plan=v.plan.map((x,i)=>i===w?id:x);
+  state.planes.push({desde:k, plan:p}); state.planes.sort((a,b)=>a.desde<b.desde?-1:1);
+  for(const [f,x] of Object.entries(state.days)) if(f>=k&&x&&x.type!==undefined&&dowIdx(deKey(f))===w) delete x.type;
+  compactarPlanes();
+}
+// ¿Lo usa algún día entre dos fechas (desde incluida, hasta excluida)? El plan de siempre vale hasta la primera versión
+function tipoUsado(id,{desde="0000",hasta="9999"}={}){
+  const tramos=[{desde:"0000",plan:state.plan},...state.planes];
+  for(let i=0;i<tramos.length;i++){
+    const ini=tramos[i].desde, fin=(tramos[i+1]||{desde:"9999"}).desde;
+    if(ini<hasta&&fin>desde&&tramos[i].plan.includes(id)) return true;
+  }
+  return Object.entries(state.days).some(([f,x])=>x&&x.type===id&&f>=desde&&f<hasta);
+}
+// Quitar un tipo: lo que lo tenía desde esta semana en adelante pasa al sustituto; si queda en semanas pasadas,
+// se archiva (deja de poder elegirse, pero esos días lo conservan); si no, se borra del todo
+function quitarTipo(id,sustituto){
+  const lunes=key(monday(today()));
+  if(sustituto&&sustituto!==id){
+    if(!state.planes.some(v=>v.desde===lunes)){ state.planes.push({desde:lunes, plan:planAt(monday(today())).slice()}); state.planes.sort((a,b)=>a.desde<b.desde?-1:1); }
+    for(const v of state.planes) if(v.desde>=lunes) v.plan=v.plan.map(x=>x===id?sustituto:x);
+    for(const [f,x] of Object.entries(state.days)) if(f>=lunes&&x&&x.type===id){ if(planAt(deKey(f))[dowIdx(deKey(f))]===sustituto) delete x.type; else x.type=sustituto; }
+    compactarPlanes();
+  }
+  if(tipoUsado(id)) tipoDe(id).oculto=true;
+  else state.tipos=state.tipos.filter(t=>t.id!==id);
+}
 const applies = (h,d) => h.days[dowIdx(d)];
 const counts = (d,flag) => { const c=dayData(d).c||{}; const hs=state.habits.filter(h=>h[flag]&&applies(h,d)); return {done:hs.filter(h=>c[h.id]).length,total:hs.length}; };
 const ratio = d => { const x=counts(d,"week"); return x.total?x.done/x.total:0; };
@@ -208,11 +294,14 @@ function renderWeek(){
     const d=addDays(m,i), b=document.createElement("button");
     b.className="day"+(key(d)===key(sel)?" sel":"");
     b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+typeLong(typeFor(d)));
-    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span class="hold ${TYPES[typeFor(d)].cls}"></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
+    b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span ${marcaTipo(typeFor(d),"hold")}></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
     b.onclick=()=>{sel=d;render();};
     w.appendChild(b);
   }
-  document.getElementById("legend").innerHTML=Object.entries(TYPES).map(([id,t])=>`<span><b class="${t.cls}"></b>${esc(typeName(id))}</span>`).join("");
+  // Leyenda: los tipos que se pueden elegir y, si salen en esta semana, los archivados
+  const enSemana=new Set(Array.from({length:7},(_,i)=>typeFor(addDays(m,i))));
+  document.getElementById("legend").innerHTML=state.tipos.filter(t=>!t.oculto||enSemana.has(t.id))
+    .map(t=>`<span><b ${marcaTipo(t.id)}></b>${esc(t.name)}</span>`).join("");
 }
 
 // ---- Eventos del día, al lado de la racha ----
@@ -278,16 +367,13 @@ function renderDay(){
     sel.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}).replace(/^./,c=>c.toUpperCase());
   const p=document.getElementById("plan"); p.innerHTML="";
   const cur=typeFor(sel);
-  for(const [id,t] of Object.entries(TYPES)){
+  // Los tipos que se pueden elegir (y el del día, si está archivado)
+  for(const t of state.tipos.filter(t=>!t.oculto||t.id===cur)){
     const b=document.createElement("button");
-    b.setAttribute("aria-pressed", id===cur);
-    b.innerHTML=`<b class="${t.cls}"></b>${esc(typeName(id))}`;
-    b.onclick=()=>{
-      // Cambia el plan fijo de ese día de la semana
-      state.plan[dowIdx(sel)]=id;
-      const dd=state.days[key(sel)]; if(dd) delete dd.type;
-      save(); render();
-    };
+    b.setAttribute("aria-pressed", t.id===cur);
+    b.innerHTML=`<b ${marcaTipo(t.id)}></b>${esc(t.name)}`;
+    if(t.oculto) b.disabled=true;
+    b.onclick=()=>{ if(t.id===cur) return; cambiarTipo(sel,t.id); save(); render(); };
     p.appendChild(b);
   }
   const ul=document.getElementById("checks"); ul.innerHTML="";
@@ -3479,20 +3565,60 @@ document.getElementById("imp").addEventListener("change",async e=>{
   e.target.value="";
 });
 document.getElementById("thr").addEventListener("change",e=>{ state.thr=+e.target.value; save(); render(); });
-// ---- Tipos de entreno: cada uno con el nombre que quieras (el color y su función no cambian) ----
+// ---- Tipos de entreno: añadir, poner nombre y color, y quitar ----
+let tcQuitando=null;
 function renderTypeCfg(){
   const box=document.getElementById("typecfg"); if(!box) return;
-  if(box.contains(document.activeElement)) return;          // no se repinta mientras escribes
-  box.innerHTML=Object.entries(TYPES).map(([id,t])=>`<label class="tc-row"><b class="${t.cls}"></b>
-      <input type="text" maxlength="30" data-tipo="${id}" value="${esc(state.tipos[id]||"")}" placeholder="${esc(t.short||t.name)}" aria-label="Nombre de «${esc(t.short||t.name)}»"></label>`).join("");
+  if(box.contains(document.activeElement)&&document.activeElement.type==="text") return;     // no se repinta mientras escribes
+  const vis=tiposVisibles();
+  box.innerHTML=vis.map(t=>{
+    const base=TIPOS_BASE.find(b=>b.id===t.id), usado=tipoUsado(t.id);
+    const quitar=tcQuitando===t.id?`<div class="tc-quitar">${usado
+        ?`<label>Desde esta semana, los días con «${esc(t.name)}» pasan a <select data-sustituto>${vis.filter(x=>x.id!==t.id).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label>
+          <p>Los días de semanas pasadas lo conservan.</p>`
+        :`<p>¿Quitar «${esc(t.name)}»? Ningún día lo usa.</p>`}
+        <div class="row"><button type="button" class="add" data-tc-si="${t.id}">Quitar</button><button type="button" class="add alt" data-tc-no>Cancelar</button></div></div>`:"";
+    return `<div class="tc-tipo"><div class="tc-row"><input type="color" data-tc-color="${t.id}" value="${t.color.toLowerCase()}" aria-label="Color de «${esc(t.name)}»">
+      <input type="text" maxlength="30" data-tipo="${t.id}" value="${esc(t.name)}" placeholder="${esc(base?base.name:"Nombre")}" aria-label="Nombre del tipo">
+      <button type="button" class="tc-del" data-tc-del="${t.id}"${vis.length<2?" disabled":""} aria-label="Quitar «${esc(t.name)}»">Quitar</button></div>${quitar}</div>`;
+  }).join("");
+  const nuevo=document.getElementById("typeadd"); if(nuevo) nuevo.disabled=state.tipos.length>=MAX_TIPOS;
 }
-document.getElementById("typecfg")?.addEventListener("input",e=>{
-  const i=e.target.closest("[data-tipo]"); if(!i) return;
-  const v=i.value.trim().slice(0,30);
-  if(v) state.tipos[i.dataset.tipo]=v; else delete state.tipos[i.dataset.tipo];   // vacío: vuelve al nombre de siempre
-  save(); renderWeek(); renderDay();
+function tiposCambiados(){ save(); renderWeek(); renderDay(); }
+const typecfg=document.getElementById("typecfg");
+typecfg?.addEventListener("input",e=>{
+  const i=e.target.closest("[data-tipo]"); if(i){
+    const t=tipoDe(i.dataset.tipo), base=TIPOS_BASE.find(b=>b.id===t.id), v=i.value.trim().slice(0,30);
+    if(v) t.name=v; else if(base) t.name=base.name; else return;            // vacío: el de siempre (o se deja como estaba)
+    tiposCambiados(); return;
+  }
+  const c=e.target.closest("[data-tc-color]");
+  if(c&&/^#[0-9a-f]{6}$/i.test(c.value)){ tipoDe(c.dataset.tcColor).color=c.value.toUpperCase(); tiposCambiados(); }
 });
-document.getElementById("typereset")?.addEventListener("click",()=>{ state.tipos={}; save(); const b=document.getElementById("typecfg"); if(b) b.innerHTML=""; renderTypeCfg(); render(); });
+typecfg?.addEventListener("focusout",e=>{ const i=e.target.closest("[data-tipo]"); if(i&&!i.value.trim()) i.value=tipoDe(i.dataset.tipo).name; });
+typecfg?.addEventListener("click",e=>{
+  const d=e.target.closest("[data-tc-del]"); if(d){ tcQuitando=tcQuitando===d.dataset.tcDel?null:d.dataset.tcDel; renderTypeCfg(); return; }
+  if(e.target.closest("[data-tc-no]")){ tcQuitando=null; renderTypeCfg(); return; }
+  const si=e.target.closest("[data-tc-si]");
+  if(si){
+    if(tiposVisibles().length<2) return;
+    const s=typecfg.querySelector("[data-sustituto]");
+    quitarTipo(si.dataset.tcSi, s?s.value:null); tcQuitando=null;
+    save(); renderTypeCfg(); render();
+  }
+});
+document.getElementById("typeadd")?.addEventListener("click",()=>{
+  if(state.tipos.length>=MAX_TIPOS) return;
+  const usados=new Set(state.tipos.map(t=>t.color)), color=COLORES_TIPO.find(c=>!usados.has(c))||COLORES_TIPO[state.tipos.length%COLORES_TIPO.length];
+  const id=newId("k"); state.tipos.push({id, name:"Nuevo tipo", color, oculto:false});
+  save(); renderTypeCfg(); renderWeek(); renderDay();
+  const i=typecfg.querySelector(`[data-tipo="${id}"]`); if(i){ i.focus(); i.select(); }
+});
+// Los cuatro de siempre vuelven a su nombre y color (los tipos añadidos no se tocan)
+document.getElementById("typereset")?.addEventListener("click",()=>{
+  for(const b of TIPOS_BASE){ const t=state.tipos.find(x=>x.id===b.id); if(t){ t.name=b.name; t.color=b.color; } }
+  save(); if(typecfg) typecfg.innerHTML=""; renderTypeCfg(); render();
+});
 
 // ---------- Tareas: pintar y editar ----------
 // Texto oscuro o claro según lo clara que sea la etiqueta
@@ -3882,7 +4008,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=13;
+const VERSION_NECESARIA=14;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){
@@ -3894,7 +4020,7 @@ function saveLocal(){
     localStorage.setItem(STORE,j); return true;
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
   boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks})); }
 async function api(method,path,body){
   if(LOCAL) return AscensoLocal.api(method,path,body);
@@ -3944,8 +4070,8 @@ async function sync(){
   const enviar=async(metodo,ruta,datos)=>{ try{ await api(metodo,ruta,datos); return true; }catch(e){ errores.push(e); return false; } };
   try{
     const now=snapshot();
-    if(JSON.stringify([now.plan,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.thr,synced.tipos])){
-      if(await enviar("PUT","config",{plan:now.plan,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.thr=now.thr; synced.tipos=now.tipos; }
+    if(JSON.stringify([now.plan,now.planes,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.planes,synced.thr,synced.tipos])){
+      if(await enviar("PUT","config",{plan:now.plan,planes:now.planes,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.planes=now.planes; synced.thr=now.thr; synced.tipos=now.tipos; }
     }
     if(JSON.stringify(now.habits)!==JSON.stringify(synced.habits)){
       if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;
