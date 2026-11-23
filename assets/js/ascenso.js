@@ -497,7 +497,69 @@ const QUOTES = [
   ["Quien vence a otros es fuerte; quien se vence a sí mismo es poderoso.","Lao Tse","Tao Te Ching, 33","f65"],
   ["Lo que hay que aprender a hacer, lo aprendemos haciéndolo.","Aristóteles","Ética a Nicómaco, II 1","f66"],
   ["No estropees lo que tienes deseando lo que no tienes.","Epicuro","Sentencias vaticanas, 35","f67"],
-  ["Las montañas me llaman y debo ir.","John Muir","Carta a su hermana, 1873","f68"]
+  ["Las montañas me llaman y debo ir.","John Muir","Carta a su hermana, 1873","f68"],
+  ["Apresúrate a vivir bien y piensa que cada día es, por sí solo, una vida.", "Séneca", "Cartas a Lucilio, 101", "f69"],
+  ["Mientras vivamos, mientras estemos entre los hombres, cultivemos la humanidad.", "Séneca", "Sobre la ira, III 43", "f70"],
+  ["Dondequiera que haya un ser humano, hay ocasión de hacer un bien.", "Séneca", "Sobre la vida feliz, 24", "f71"],
+  ["Gran parte de la vida se nos va haciendo el mal, buena parte sin hacer nada y toda ella haciendo otra cosa.", "Séneca", "Cartas a Lucilio, 1", "f72"],
+  ["Lo que no es útil para la colmena tampoco lo es para la abeja.", "Marco Aurelio", "Meditaciones, VI 54", "f73"],
+  ["Recibir sin orgullo; desprenderse sin apego.", "Marco Aurelio", "Meditaciones, VIII 33", "f74"],
+  ["Cuando más te irrites, recuerda que la vida humana dura un instante.", "Marco Aurelio", "Meditaciones, XI 18", "f75"],
+  ["Si quieres ser buen lector, lee; si quieres escribir, escribe.", "Epicteto", "Disertaciones, II 18", "f76"],
+  ["No hables de tus principios entre la gente: obra conforme a ellos.", "Epicteto", "Enquiridión, 46", "f77"],
+  ["De todo lo que la sabiduría procura para una vida feliz, lo más grande con mucho es la amistad.", "Epicuro", "Máximas capitales, 27", "f78"],
+  ["Nada es suficiente para quien lo suficiente es poco.", "Epicuro", "Fragmentos, según Estobeo", "f79"],
+  ["Una golondrina no hace verano, ni tampoco un solo día.", "Aristóteles", "Ética a Nicómaco, I 7", "f80"],
+  ["La amistad es un alma que habita en dos cuerpos.", "Aristóteles", "Según Diógenes Laercio, V 20", "f81"],
+  ["La primera y mejor de las victorias es vencerse a uno mismo.", "Platón", "Leyes, I 626e", "f82"],
+  ["El comienzo es la parte más importante de cualquier obra.", "Platón", "República, II 377a", "f83"],
+  ["El sol es nuevo cada día.", "Heráclito", "Fragmento 6", "f84"],
+  ["La valentía empequeñece los reveses.", "Demócrito", "Fragmento 213", "f85"],
+  ["La mente no es un vaso que haya que llenar, sino un fuego que hay que encender.", "Plutarco", "Sobre cómo se debe escuchar, 18", "f86"],
+  ["Si tienes un jardín y una biblioteca, no te falta de nada.", "Cicerón", "Cartas a los familiares, IX 4", "f87"],
+  ["La gota horada la piedra.", "Ovidio", "Cartas desde el Ponto, IV 10", "f88"],
+  ["Atrévete a saber.", "Horacio", "Epístolas, I 2", "f89"],
+  ["Aprovecha el día y fíate lo menos posible del mañana.", "Horacio", "Odas, I 11", "f90"],
+  ["Pueden, porque creen que pueden.", "Virgilio", "Eneida, V 231", "f91"],
+  ["Mala decisión es la que no puede cambiarse.", "Publilio Siro", "Sentencias", "f92"],
+  ["Aprender sin pensar es inútil; pensar sin aprender es peligroso.", "Confucio", "Analectas, II 15", "f93"],
+  ["Saber que sabes lo que sabes y que no sabes lo que no sabes: ese es el verdadero saber.", "Confucio", "Analectas, II 17", "f94"],
+  ["Conocer a los demás es inteligencia; conocerse a uno mismo es sabiduría.", "Lao Tse", "Tao Te Ching, 33", "f95"],
+  ["Lo blando y débil vence a lo duro y fuerte.", "Lao Tse", "Tao Te Ching, 36", "f96"],
+  ["Todo lo que somos es fruto de lo que hemos pensado.", "Buda", "Dhammapada, 1", "f97"],
+  ["Más grande que vencer mil veces a mil hombres en la batalla es vencerse a uno mismo.", "Buda", "Dhammapada, 103", "f98"],
+  ["No hagas nada que no sirva para nada.", "Miyamoto Musashi", "El libro de los cinco anillos, Libro de la tierra", "f99"],
+  ["Mi oficio y mi arte es vivir.", "Michel de Montaigne", "Ensayos, II 6", "f100"],
+  ["Quien teme sufrir ya sufre lo que teme.", "Michel de Montaigne", "Ensayos, III 13", "f101"],
+  ["El corazón tiene razones que la razón no conoce.", "Blaise Pascal", "Pensamientos, 277", "f102"],
+  ["El hombre no es más que una caña, la más débil de la naturaleza, pero es una caña que piensa.", "Blaise Pascal", "Pensamientos, 347", "f103"],
+  ["No reír, no llorar ni detestar, sino comprender.", "Baruch Spinoza", "Tratado político, I 4", "f104"],
+  ["No basta con tener un buen ingenio; lo principal es aplicarlo bien.", "René Descartes", "Discurso del método, I", "f105"],
+  ["Obra de tal modo que trates a la humanidad, en tu persona y en la de cualquier otro, siempre como un fin y nunca solo como un medio.", "Immanuel Kant", "Fundamentación de la metafísica de las costumbres, II", "f106"],
+  ["¡Ten el valor de servirte de tu propio entendimiento!", "Immanuel Kant", "¿Qué es la Ilustración?, 1784", "f107"],
+  ["Lo que heredaste de tus padres, gánalo para poseerlo.", "Johann Wolfgang von Goethe", "Fausto, I", "f108"],
+  ["Cada día es una pequeña vida.", "Arthur Schopenhauer", "Aforismos sobre el arte de saber vivir, V", "f109"],
+  ["Hay que llevar aún caos dentro de uno para poder dar a luz una estrella danzarina.", "Friedrich Nietzsche", "Así habló Zaratustra, prólogo 5", "f110"],
+  ["Llega a ser el que eres.", "Friedrich Nietzsche", "La gaya ciencia, 270", "f111"],
+  ["Sin música, la vida sería un error.", "Friedrich Nietzsche", "Crepúsculo de los ídolos, Sentencias y flechas, 33", "f112"],
+  ["La vida solo puede comprenderse mirando hacia atrás, pero ha de vivirse mirando hacia delante.", "Søren Kierkegaard", "Diarios, 1843", "f113"],
+  ["Nunca se ha logrado nada grande sin entusiasmo.", "Ralph Waldo Emerson", "Círculos, 1841", "f114"],
+  ["La mayoría de los hombres llevan vidas de callada desesperación.", "Henry David Thoreau", "Walden", "f115"],
+  ["¡Simplicidad, simplicidad, simplicidad!", "Henry David Thoreau", "Walden", "f116"],
+  ["Lo bueno, si breve, dos veces bueno.", "Baltasar Gracián", "Oráculo manual y arte de prudencia, 105", "f117"],
+  ["No hay cosa que requiera más tiento que la verdad.", "Baltasar Gracián", "Oráculo manual y arte de prudencia, 181", "f118"],
+  ["El que lee mucho y anda mucho, ve mucho y sabe mucho.", "Miguel de Cervantes", "Don Quijote, II 25", "f119"],
+  ["La diligencia es madre de la buena ventura.", "Miguel de Cervantes", "Don Quijote", "f120"],
+  ["Caminante, no hay camino: se hace camino al andar.", "Antonio Machado", "Campos de Castilla, Proverbios y cantares XXIX", "f121"],
+  ["La paciencia todo lo alcanza.", "Teresa de Jesús", "Nada te turbe", "f122"],
+  ["Ama y haz lo que quieras.", "San Agustín", "Comentario a la primera carta de san Juan, VII 8", "f123"],
+  ["Así como un día bien empleado da un dulce sueño, una vida bien empleada da una dulce muerte.", "Leonardo da Vinci", "Códice Trivulziano", "f124"],
+  ["Bien hecho es mejor que bien dicho.", "Benjamin Franklin", "Almanaque del pobre Richard, 1737", "f125"],
+  ["Haz lo que puedas, con lo que tengas, donde estés.", "Theodore Roosevelt", "Autobiografía, 1913, recogiendo un dicho de Bill Widener", "f126"],
+  ["Con resistencia, venceremos.", "Ernest Shackleton", "Lema de su familia, que dio nombre a su barco, el Endurance", "f127"],
+  ["Todos piensan en cambiar el mundo, pero nadie piensa en cambiarse a sí mismo.", "León Tolstói", "Tres métodos de reforma, 1900", "f128"],
+  ["Ten paciencia con todo lo que está sin resolver en tu corazón.", "Rainer Maria Rilke", "Cartas a un joven poeta, 4", "f129"],
+  ["En cada paseo por la naturaleza uno recibe mucho más de lo que busca.", "John Muir", "Senderos escarpados, 1918", "f130"]
 ];
 // ---------- Imágenes: siempre de ./assets/images ----------
 const IMG_DIR="assets/images/";
@@ -505,7 +567,12 @@ const AUTHOR_KEYS={"Marco Aurelio":"marco-aurelio","Séneca":"seneca","Epicteto"
   "Miyamoto Musashi":"musashi","Theodore Roosevelt":"roosevelt","Lao Tse":"lao-tse","Aristóteles":"aristoteles","Heráclito":"heraclito",
   "Miguel de Cervantes":"cervantes","Confucio":"confucio","Sun Tzu":"sun-tzu","Musonio Rufo":"musonio","Zenón de Citio":"zenon",
   "Cleantes":"cleantes","Cicerón":"ciceron","Sócrates":"socrates","Michel de Montaigne":"montaigne","Baruch Spinoza":"spinoza",
-  "Blaise Pascal":"pascal","Henry David Thoreau":"thoreau","Ralph Waldo Emerson":"emerson","Buda":"buda","Epicuro":"epicuro","John Muir":"muir"};
+  "Blaise Pascal":"pascal","Henry David Thoreau":"thoreau","Ralph Waldo Emerson":"emerson","Buda":"buda","Epicuro":"epicuro","John Muir":"muir",
+  "Platón":"platon","Demócrito":"democrito","Plutarco":"plutarco","Ovidio":"ovidio","Horacio":"horacio","Virgilio":"virgilio",
+  "Publilio Siro":"publilio","René Descartes":"descartes","Immanuel Kant":"kant","Johann Wolfgang von Goethe":"goethe",
+  "Arthur Schopenhauer":"schopenhauer","Søren Kierkegaard":"kierkegaard","Baltasar Gracián":"gracian","Antonio Machado":"machado",
+  "Teresa de Jesús":"teresa-de-jesus","San Agustín":"agustin","Leonardo da Vinci":"leonardo","Benjamin Franklin":"franklin",
+  "Ernest Shackleton":"shackleton","León Tolstói":"tolstoi","Rainer Maria Rilke":"rilke"};
 const KEY_NAMES=Object.fromEntries(Object.entries(AUTHOR_KEYS).map(([n,k])=>[k,n]));
 const IMG_RE=/\.(jpe?g|png|webp|gif|avif)$/i;
 let IMAGES=[], imagesReady=false, frameSrc=null, frameArgs=["",""];
@@ -751,6 +818,63 @@ document.addEventListener("pointerdown",e=>{ if(!pad.hidden && !pad.contains(e.t
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !pad.hidden){ closePad(); qmark.focus(); } });
 window.addEventListener("pagehide",persistPadNow);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) persistPadNow(); });
+
+// ---------- Diario: todas las reflexiones y notas escritas, con la frase de cada día ----------
+// Se abre desde el bloc de notas («Todas tus notas»). Se puede buscar y saltar a cualquier día para seguir escribiendo.
+let diario=null, diarioQ="", diarioVer="todo", diarioN=40;
+const fmtDiaLargo=k=>cap(parseKey(k).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"}));
+function abrirDiario(){
+  flushPad(); closePad();
+  if(!diario){
+    diario=document.createElement("dialog"); diario.className="tdlg diario"; diario.id="diariodlg"; diario.setAttribute("aria-label","Tus reflexiones y notas");
+    document.body.appendChild(diario);
+    diario.addEventListener("mousedown",e=>{ diario._fondo=e.target===diario; });
+    diario.addEventListener("click",e=>{
+      if(e.target===diario&&diario._fondo){ diario.close(); return; }
+      if(e.target.closest(".dlg-x")){ diario.close(); return; }
+      const v=e.target.closest("[data-ver]"); if(v){ diarioVer=v.dataset.ver; diarioN=40; pintarDiario(); return; }
+      if(e.target.closest("[data-mas]")){ diarioN+=40; pintarDiario(); return; }
+      const ir=e.target.closest("[data-ir-dia]");
+      if(ir){ diario.close(); sel=parseKey(ir.dataset.irDia); render(); window.scrollTo(0,0); openPad(); }
+    });
+    diario.addEventListener("input",e=>{ if(e.target.matches(".di-q")){ diarioQ=e.target.value; diarioN=40; pintarLista(); } });
+  }
+  diarioQ=""; diarioVer="todo"; diarioN=40;
+  pintarDiario();
+  if(!diario.open) diario.showModal();
+}
+function entradasDiario(){
+  const q=fold(diarioQ.trim());
+  return Object.entries(state.notes).filter(([,n])=>n&&((n.r||"").trim()||(n.n||"").trim()))
+    .map(([k,n])=>{ const h=state.hist[k], fr=h&&QUOTES.find(x=>x[3]===h.q); return {k, r:(n.r||"").trim(), n:(n.n||"").trim(), fr}; })
+    .filter(e=>diarioVer==="todo"||(diarioVer==="r"?e.r:e.n))
+    .filter(e=>!q||fold([e.r,e.n,e.fr?e.fr[0]+" "+e.fr[1]:"",fmtDiaLargo(e.k)].join(" ")).includes(q))
+    .sort((a,b)=>a.k<b.k?1:-1);
+}
+function pintarDiario(){
+  const total=Object.values(state.notes).filter(n=>n&&((n.r||"").trim()||(n.n||"").trim())).length;
+  const op=(v,t)=>`<button type="button" role="tab" data-ver="${v}" aria-selected="${diarioVer===v}">${t}</button>`;
+  diario.innerHTML=`<div class="dlg-head"><h3 class="di-titulo">Tus reflexiones y notas</h3><button type="button" class="dlg-x" aria-label="Cerrar">×</button></div>
+    <div class="di-cuerpo">
+      <p class="di-resumen">${total?total+(total===1?" día con algo escrito.":" días con algo escrito."):"Aún no has escrito nada."} Escribe pulsando las comillas de la frase del día.</p>
+      ${total?`<input type="search" class="di-q" placeholder="Buscar en tus notas y en las frases…" aria-label="Buscar en tus notas" value="${esc(diarioQ)}" autocomplete="off">
+      <div class="di-ver" role="tablist" aria-label="Qué mostrar">${op("todo","Todo")}${op("r","Reflexiones")}${op("n","Notas")}</div>`:""}
+      <div class="di-lista" id="di-lista"></div>
+    </div>`;
+  pintarLista();
+}
+function pintarLista(){
+  const caja=diario&&diario.querySelector("#di-lista"); if(!caja) return;
+  const l=entradasDiario(), vista=l.slice(0,diarioN);
+  if(!l.length){ caja.innerHTML=Object.keys(state.notes).length?`<p class="di-vacio">Nada coincide con la búsqueda.</p>`:""; return; }
+  caja.innerHTML=vista.map(e=>`<article class="di-dia">
+      <header><h4>${esc(fmtDiaLargo(e.k))}</h4><button type="button" class="linklike" data-ir-dia="${e.k}">Ir a este día</button></header>
+      ${e.fr?`<blockquote class="di-frase">«${esc(e.fr[0])}» <cite>${esc(e.fr[1])}</cite></blockquote>`:""}
+      ${e.r&&diarioVer!=="n"?`<div class="di-texto"><span>Reflexión</span><p>${esc(e.r)}</p></div>`:""}
+      ${e.n&&diarioVer!=="r"?`<div class="di-texto"><span>Notas</span><p>${esc(e.n)}</p></div>`:""}
+    </article>`).join("")+(l.length>vista.length?`<button type="button" class="add alt di-mas" data-mas>Mostrar más (${l.length-vista.length})</button>`:"");
+}
+document.getElementById("np-todas").addEventListener("click",abrirDiario);
 // ---------- Calendario (oculto: se abre pulsando la fecha) y eventos ----------
 const EV_COLORS=TAG_COLORS;
 const hdateBtn=document.getElementById("hdate"), calpop=document.getElementById("calpop");

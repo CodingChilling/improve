@@ -35,7 +35,7 @@ elementos que ya están en la página y que, a primera vista, parecen solo decor
 |---|---|
 | El título **«Ascenso»** | Los tableros |
 | La **fecha** bajo el título | El calendario con los eventos |
-| Las **comillas** de la frase del día | La reflexión y las notas del día |
+| Las **comillas** de la frase del día | La reflexión y las notas del día (y, desde ahí, «Todas tus notas») |
 | El **marco** de la imagen del día | Otra imagen para ese día |
 | El **texto de estado** («Guardado…», al pie de la página y en la cabecera de los tableros) | La cuenta y la sincronización |
 | El **nombre del autor** de la frase del día | La librería (solo en la aplicación instalable) |
@@ -73,6 +73,10 @@ salta a ese día. Los eventos solo aparecen dentro del calendario.
 
 Una ventanita con dos pestañas, **Reflexión** y **Notas**, ligada al día seleccionado. Se guarda sola
 mientras escribes, sin botones. Los días en que hay algo escrito, las comillas se ven un poco más intensas.
+
+En el pie del bloc, **«Todas tus notas»** abre el diario: todas tus reflexiones y notas, de la más reciente a la más
+antigua, cada una con la frase de ese día. Se puede buscar (también en las frases), ver solo reflexiones o solo
+notas, e ir a cualquier día para seguir escribiendo.
 
 ### Imagen del día (el marco)
 
