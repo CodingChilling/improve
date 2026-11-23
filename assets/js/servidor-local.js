@@ -23,7 +23,7 @@ window.AscensoLocal=(()=>{
   const MAX_IMAGEN=15*1024*1024;         // bytes por imagen
   const DIAS_HUERFANAS=30;               // días que se conserva una imagen que ya no está en ninguna libreta
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
-  const VERSION_APP=16;
+  const VERSION_APP=17;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
                 "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","zonas","adjuntos",
                 "libros","lecturas","subrayados","archivos"];
@@ -171,6 +171,7 @@ window.AscensoLocal=(()=>{
       const d={};
       if(v.w!==null&&v.w!==undefined) d.w=v.w;
       if(v.type) d.type=v.type;
+      if(v.a) d.a=v.a;
       for(const hid of Object.keys(v.c||{})) if(habitosT.has(hid)) (d.c=d.c||{})[hid]=true;
       if(Object.keys(d).length) dias[fecha]=d;
     }
@@ -180,7 +181,7 @@ window.AscensoLocal=(()=>{
     for(const [id,v] of etiquetasT) etiquetas[id]={name:v.name,color:v.color};
     const tareas={};
     for(const [id,v] of vivos("tareas")) tareas[id]={date:v.date,title:v.title,notes:v.notes,prio:v.prio,list:v.list,created:v.created,
-      tags:(v.tags||[]).filter(e=>etiquetasT.has(e)),check:(v.check||[]).map(p=>({id:p.id,t:p.t,d:!!p.d})),archived:v.archived||null};
+      tags:(v.tags||[]).filter(e=>etiquetasT.has(e)),check:(v.check||[]).map(p=>({id:p.id,t:p.t,d:!!p.d})),done:v.done||null,archived:v.archived||null};
     const notas={}; for(const [f,v] of vivos("notas")) notas[f]={r:v.r,n:v.n};
     const eventos={};
     for(const [id,v] of vivos("eventos")) eventos[id]={start:v.start,end:v.end,time:v.time||"",title:v.title,color:v.color,created:v.created};
@@ -318,11 +319,15 @@ window.AscensoLocal=(()=>{
     } else peso=null;
     const tipo=d.type===undefined?null:d.type;
     if(tipo!==null&&(typeof tipo!=="string"||!ID_RE.test(tipo))) mal("tipo de entreno no válido");
+    // Ánimo del día: de 1 (muy mal) a 5 (muy bien)
+    const animo=d.a===undefined?null:d.a;
+    if(animo!==null&&!(typeof animo==="number"&&Number.isInteger(animo)&&animo>=1&&animo<=5)) mal("ánimo no válido");
     const marcas=d.c||{};
     if(!esDic(marcas)) mal("marcas no válidas");
     const v={}, c={};
     if(peso!==null) v.w=peso;
     if(tipo!==null) v.type=tipo;
+    if(animo!==null) v.a=animo;
     // Solo se guardan marcas de hábitos que existen
     for(const [k,val] of Object.entries(marcas)) if(val===true&&ID_RE.test(k)&&op.leer("habitos",k)) c[k]=true;
     if(Object.keys(c).length) v.c=c;
@@ -376,7 +381,7 @@ window.AscensoLocal=(()=>{
     // Solo se asocian etiquetas que existen
     for(const e of etiquetas){ const s=String(e); if(ID_RE.test(s)&&op.leer("etiquetas",s)&&!tags.includes(s)) tags.push(s); }
     op.poner("tareas",tid,{date:fecha,title:titulo,notes:cortar(texto(d.notes),2000),prio:d.prio,list:d.list,
-      created:prev?prev.created:(cortar(texto(d.created),40)||fecha),tags,check,archived:d.archived?cortar(String(d.archived),40):null});
+      created:prev?prev.created:(cortar(texto(d.created),40)||fecha),tags,check,done:d.done?cortar(String(d.done),40):null,archived:d.archived?cortar(String(d.archived),40):null});
   }
   function guardarNotas(op,fecha,d){
     if(!FECHA_RE.test(fecha)) mal("fecha no válida");

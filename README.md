@@ -140,7 +140,20 @@ Presidido por un **Hombre o una Mujer de Vitruvio** (a elegir), dibujado como un
   sumando. El círculo de la figura marca lo que falta para el siguiente nivel.
 - **La lámina se completa con los años**: cada etapa añade una capa de detalle al dibujo (rostro, marcas de
   proporción, músculos, sombreados, notas en escritura especular…), que se va trazando a medida que avanzas en ella.
-- **Ajustes**: tu figura, tu nombre (para saludarte) y «mi porqué»; el tema (automático, claro u oscuro, de cada
+- **Estadísticas** por periodo (semana, mes, año o siempre; se recuerda el último elegido), comparadas con el
+  periodo anterior:
+  - **Resumen**: hábitos cumplidos, tareas terminadas, ánimo medio y una gráfica del ánimo de cada día.
+  - **Cuerpo**: cada zona de la figura (cabeza, pecho, brazos, manos, abdomen, piernas) brilla según lo cumplido
+    de lo que reúne; al tocarla se ve el detalle. Qué reúne cada zona se elige en Ajustes › Zonas del cuerpo;
+    mientras no se elija, Ascenso propone un reparto por el nombre (dormir → cabeza, proteína → abdomen…).
+  - **Hábitos**: % por hábito y por día de la semana, rachas de cada hábito y el calendario del último año.
+  - **Productividad**: tareas terminadas en el tiempo, por prioridad y por etiqueta, cuánto se tarda en terminarlas,
+    atrasadas, tarjetas y checklists.
+  - **Descubrimientos**: relaciones en tus datos (hábitos que van juntos, cómo influyen en el ánimo o en las tareas,
+    tu mejor día de la semana, lo que falla primero cuando se rompe la racha, tendencias…). Solo aparecen con al
+    menos dos semanas de datos en cada caso y diferencias claras, y se presentan como coincidencias, no como causas.
+- **Ánimo**: bajo los hábitos del día, cinco caras para decir cómo te sientes (tocar la misma otra vez lo quita).
+- **Ajustes**: tu figura, tu nombre (para saludarte) y «mi porqué»; las zonas del cuerpo; el tema (automático, claro u oscuro, de cada
   dispositivo); la **Cuenta**; y la configuración que antes estaba al final de la página del día: hábitos, tipos de
   entreno, imágenes y copia de seguridad.
 
@@ -281,6 +294,7 @@ assets/
   js/movil.js             Barra de accesos (abajo en el móvil, a la izquierda en el ordenador) y botón «atrás»
   js/perfil.js            El perfil: resumen con la figura y el nivel, y Ajustes
   js/niveles.js           Experiencia, rachas y los 120 niveles con nombre
+  js/estadisticas.js      Estadísticas del perfil, zonas del cuerpo y descubrimientos
   js/figura.js            El Hombre y la Mujer de Vitruvio (SVG propio) y sus capas de detalle
   js/tema.js              Tema claro, oscuro o automático
   js/libreria.js          La librería: estantería y lector de EPUB y PDF, subrayados y notas

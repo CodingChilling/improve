@@ -92,3 +92,66 @@ test("perfil: acceso, nivel, Ajustes, tema y configuración movida", async () =>
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
 });
+
+test("perfil: ánimo, tareas fechadas, estadísticas, zonas y descubrimientos", async () => {
+  const app = await servirApp(), nav = await chromium.launch();
+  try {
+    const { pagina: p } = await abrirConDatos(nav, app, { viewport: { width: 1280, height: 900 } });
+    const errores = []; p.on("pageerror", e => errores.push(String(e)));
+    // ---- Ánimo del día: un toque lo pone, otro en la misma cara lo quita
+    await p.click('#animo [data-animo="4"]');
+    assert.equal(await p.locator('#animo [aria-checked="true"]').getAttribute("aria-label"), "Bien");
+    await esperar(p, () => window.AscensoLocal.api("GET", "estado").then(e => e.days[key(today())] && e.days[key(today())].a === 4), null, { que: "el ánimo se guarda" });
+    await p.click('#animo [data-animo="4"]');
+    assert.equal(await p.locator('#animo [aria-checked="true"]').count(), 0);
+    await p.click('#animo [data-animo="5"]');
+    // ---- Una tarea que pasa a «Hechas» guarda cuándo; si vuelve a otra lista, se quita
+    await p.fill("#tnew", "Para fechar"); await p.click("#taddbtn");
+    const id = await p.evaluate(() => Object.entries(state.tasks).find(([, t]) => t.title === "Para fechar")[0]);
+    await p.evaluate(i => { state.tasks[i].list = "hecha"; save(); render(); }, id);
+    await esperar(p, i => window.AscensoLocal.api("GET", "estado").then(e => !!(e.tasks[i] && e.tasks[i].done) && Date.now() - new Date(e.tasks[i].done) < 60000), id, { que: "se apunta cuándo se terminó" });
+    await p.evaluate(i => { state.tasks[i].list = "pendiente"; save(); render(); }, id);
+    await esperar(p, i => window.AscensoLocal.api("GET", "estado").then(e => !!e.tasks[i] && e.tasks[i].done === null), id, { que: "y se quita al volver a pendientes" });
+    // ---- Seis semanas de datos para las estadísticas
+    await p.evaluate(() => {
+      const h = state.habits.map(x => x.id);
+      for (let i = 42; i >= 1; i--) { const d = addDays(today(), -i), k = key(d), A = i % 2 === 0, c = {};
+        if (A) { c[h[0]] = true; c[h[1]] = true; } if (i % 3 === 0) c[h[2]] = true;
+        state.days[k] = { c, a: A ? 5 : 2 };
+        state.tasks["x" + i] = { date: k, title: "T" + i, notes: "", prio: "media", list: "hecha", tags: [], created: d.toISOString(), done: d.toISOString(), check: [], archived: null }; }
+      save(); render(); });
+    await p.click(".summit");
+    // Resumen: el bloque del periodo y los descubrimientos
+    assert.match(await p.locator("#pf-resumen .pf-tiles").innerText(), /hábitos cumplidos[\s\S]*tareas terminadas[\s\S]*ánimo medio/);
+    assert.ok(await p.locator("#pf-resumen .pf-descubre li").count() >= 1, "hay descubrimientos en el resumen");
+    // Cambiar de periodo se recuerda
+    await p.click('[data-per="siempre"]');
+    assert.equal(await p.evaluate(() => localStorage.getItem("ascenso-periodo")), "siempre");
+    // Cuerpo: tocar una zona en la figura muestra su detalle
+    await p.click('.pf-tabs [data-pf="cuerpo"]');
+    await p.click('.pf-lista-zonas [data-zona="abdomen"]');
+    assert.equal(await p.locator(".pf-detalle h3").innerText(), "Abdomen");
+    assert.match(await p.locator(".pf-detalle").innerText(), /Dentro de mis calorías|Proteína/);
+    await p.locator('#pf-pcuerpo .vitruvio [data-zona="cabeza"] rect').click({ force: true });
+    assert.equal(await p.locator(".pf-detalle h3").innerText(), "Cabeza");
+    // Hábitos y productividad
+    await p.click('.pf-tabs [data-pf="habitos"]');
+    assert.equal(await p.locator(".pf-cal i").count(), 53 * 7);
+    assert.equal(await p.locator(".pf-habitos li").count(), await p.evaluate(() => state.habits.length));
+    await p.click('.pf-tabs [data-pf="productividad"]');
+    assert.ok(+(await p.locator("#pf-productividad .pf-tile b").first().innerText()) >= 42, "cuenta las tareas terminadas");
+    // Descubrimientos: con su advertencia de que son coincidencias
+    await p.click('.pf-tabs [data-pf="descubrir"]');
+    assert.match(await p.locator("#pf-descubrir").innerText(), /coincidencias, no causas/);
+    assert.ok(await p.locator("#pf-descubrir li").count() >= 2);
+    // ---- Ajustes › Zonas del cuerpo: cambiar el reparto y volver al propuesto
+    await p.click('.pf-tabs [data-pf="ajustes"]');
+    const sueno = await p.evaluate(() => "h:" + state.habits.find(h => /dormir/i.test(h.t)).id);
+    assert.equal(await p.locator(`[data-zref="${sueno}"]`).inputValue(), "cabeza", "reparto propuesto por el nombre");
+    await p.selectOption(`[data-zref="${sueno}"]`, "pecho");
+    await esperar(p, r => window.AscensoLocal.api("GET", "estado").then(e => e.perfil.zonas && e.perfil.zonas.pecho.includes(r) && !e.perfil.zonas.cabeza.includes(r)), sueno, { que: "el reparto se guarda" });
+    await p.click('[data-zaccion="proponer"]');
+    assert.equal(await p.evaluate(() => state.perfil.zonas), null);
+    assert.deepEqual(errores, []);
+  } finally { await nav.close(); await app.cerrar(); }
+});
