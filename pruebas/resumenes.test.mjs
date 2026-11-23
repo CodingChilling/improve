@@ -65,7 +65,7 @@ test("resúmenes en el perfil: aviso del lunes, navegar y guardar la imagen", as
     await aviso.locator("[data-aviso-ver]").click();
     await p.locator("#pf-informe:not([hidden])").waitFor();
     assert.equal(await p.locator(".pf-inf-cab h3").innerText(), "Semana del 9 de noviembre");
-    assert.ok(await p.locator("#pf-periodos").isHidden());
+    assert.equal(await p.locator("#pf-informe [data-per]").count(), 0, "el informe no usa el selector de periodo");
     assert.equal(await p.locator('.pf-inf-mover[data-inf-mover="-1"]').isDisabled(), true, "no hay semana siguiente cerrada");
     // Navegar a la semana anterior y volver
     await p.click('.pf-inf-mover[data-inf-mover="1"]');

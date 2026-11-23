@@ -20,17 +20,24 @@ window.AscensoPerfil=(()=>{
   vista.innerHTML=`<header class="bv-top pf-top">
       <button type="button" class="bv-brand" id="pf-volver" aria-label="Ascenso. Volver al día">Ascenso</button>
       <h2 class="lb-nombre">Perfil</h2>
+      <button type="button" class="pf-engranaje" id="pf-engranaje" data-pf="ajustes" aria-label="Ajustes" title="Ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <div class="pf-tabs" role="tablist" aria-label="Secciones del perfil">
-        <button type="button" role="tab" data-pf="resumen">Resumen</button><button type="button" role="tab" data-pf="cuerpo">Cuerpo</button><button type="button" role="tab" data-pf="habitos">Hábitos</button><button type="button" role="tab" data-pf="productividad">Productividad</button><button type="button" role="tab" data-pf="objetivos">Objetivos</button><button type="button" role="tab" data-pf="descubrir">Descubrimientos</button><button type="button" role="tab" data-pf="ajustes">Ajustes</button>
+        <button type="button" role="tab" data-pf="resumen">Resumen</button><button type="button" role="tab" data-pf="progreso">Progreso</button><button type="button" role="tab" data-pf="descubrir">Descubrimientos</button>
       </div>
     </header>
     <div class="bv-body"><div class="bh pf-cuerpo">
-      <div class="pf-periodos" id="pf-periodos" role="radiogroup" aria-label="Periodo"><button type="button" role="radio" data-per="semana">Semana</button><button type="button" role="radio" data-per="mes">Mes</button><button type="button" role="radio" data-per="año">Año</button><button type="button" role="radio" data-per="siempre">Siempre</button></div>
+      <div class="pf-sub-cab" id="pf-sub" hidden><button type="button" class="linklike" data-pf-volver>‹ Volver</button><h3 id="pf-sub-titulo"></h3></div>
       <section id="pf-resumen" class="pf-resumen"></section><section id="pf-pcuerpo" hidden></section><section id="pf-habitos" hidden></section>
       <section id="pf-productividad" hidden></section><section id="pf-objetivos" hidden></section><section id="pf-descubrir" hidden></section><section id="pf-ajustes" class="pf-ajustes" hidden></section><section id="pf-informe" class="pf-informe" hidden></section></div></div>`;
   const barra=$("barra"); document.body.insertBefore(vista,barra||null);
   const resumen=$("pf-resumen"), ajustes=$("pf-ajustes");
   const SECCIONES={resumen, cuerpo:$("pf-pcuerpo"), habitos:$("pf-habitos"), productividad:$("pf-productividad"), objetivos:$("pf-objetivos"), descubrir:$("pf-descubrir"), ajustes};
+  // Las pestañas son Resumen, Progreso (Hábitos | Tareas) y Descubrimientos; Cuerpo, Objetivos y Ajustes son vistas a
+  // las que se entra (desde la figura, la tarjeta de objetivos y el engranaje) y de las que se vuelve con «‹ Volver».
+  const SUBVISTAS={cuerpo:"Zonas del cuerpo", objetivos:"Objetivos", ajustes:"Ajustes"};
+  const PROGRESO=["habitos","productividad"];
+  let base="resumen";          // la pestaña a la que vuelve una subvista (null: se entró directamente, desde fuera)
+  let progSel=(()=>{ try{ return localStorage.getItem("ascenso-progreso")==="productividad"?"productividad":"habitos"; }catch(err){ return "habitos"; } })();
   let pestana="resumen", libreria=null, libreriaLeida=false, zonaSel=null, animarFigura=false, xpPintada=null;
   // El último nivel visto en este dispositivo, para celebrar cuando se sube (no es un dato sensible)
   const leerVisto=()=>{ try{ const v=parseInt(localStorage.getItem("ascenso-nivel-visto"),10); return Number.isFinite(v)?v:null; }catch(err){ return null; } };
@@ -38,6 +45,8 @@ window.AscensoPerfil=(()=>{
   // El periodo elegido se recuerda en el dispositivo (Mes, si no se ha elegido otro)
   let perClave=(()=>{ try{ const v=localStorage.getItem("ascenso-periodo"); return ["semana","mes","año","siempre"].includes(v)?v:"mes"; }catch(err){ return "mes"; } })();
   const per=()=>Est.periodo(perClave,undefined,state);
+  const selectorPeriodo=()=>`<div class="pf-periodos" role="radiogroup" aria-label="Periodo">${[["semana","Semana"],["mes","Mes"],["año","Año"],["siempre","Siempre"]].map(([k,n])=>`<button type="button" role="radio" data-per="${k}" aria-checked="${k===perClave}">${n}</button>`).join("")}</div>`;
+  const barraProgreso=()=>`<div class="pf-barra-sec"><div class="pf-seg" role="radiogroup" aria-label="Progreso de">${[["habitos","Hábitos"],["productividad","Tareas"]].map(([k,n])=>`<button type="button" role="radio" data-prog="${k}" aria-checked="${k===pestana}">${n}</button>`).join("")}</div>${selectorPeriodo()}</div>`;
   const tipoDe=d=>typeof typeFor==="function"?typeFor(d):null;
   const brillos=p=>{ const z=Est.zonas(state,p,tipoDe), o={}; for(const k in z) o[k]=z[k].pct||0; return {z,o}; };
 
@@ -122,8 +131,9 @@ window.AscensoPerfil=(()=>{
       if(visto!==nv.nivel) guardarVisto(nv.nivel);
     }
     resumen.innerHTML=`${celebra?`<p class="pf-celebra" role="status">${celebra}</p>`:""}<div class="pf-portada">
-      <div class="pf-figura">${Figura.svg({figura:p.figura, etapa:nv.etapa, avance:nv.nivel>=120?0:avance, nivel:nv.progreso, objetivos:Obj?Obj.progresoMedio(objs):null, brillo:brillos(per()).o, animar, celebrar:!!celebra, titulo:`${p.figura==="mujer"?"Mujer":"Hombre"} de Vitruvio, nivel ${nv.nivel}`})}</div>
+      <div class="pf-figura pf-ir-cuerpo" data-pf="cuerpo" role="button" tabindex="0" aria-label="Ver tu progreso por zonas del cuerpo">${Figura.svg({figura:p.figura, etapa:nv.etapa, avance:nv.nivel>=120?0:avance, nivel:nv.progreso, objetivos:Obj?Obj.progresoMedio(objs):null, brillo:brillos(per()).o, animar, celebrar:!!celebra, titulo:`${p.figura==="mujer"?"Mujer":"Hombre"} de Vitruvio, nivel ${nv.nivel}`})}</div>
       <div class="pf-datos">
+        <button type="button" class="linklike pf-zonas-enlace" data-pf="cuerpo">Ver por zonas del cuerpo ›</button>
         <p class="pf-saludo">${e(saludo())}${p.nombre?", "+e(p.nombre):""}</p>
         ${p.porque?`<blockquote class="pf-porque">${e(p.porque)}</blockquote>`:""}
         <div class="pf-nivel"><span class="pf-num">${nv.nivel}</span><div><strong>${e(nombreNivel)}</strong>
@@ -168,7 +178,7 @@ window.AscensoPerfil=(()=>{
   function nivelActual(){ const xp=Niveles.experiencia(state,libreria), nv=Niveles.nivelDe(xp.total); return {xp,nv,avance:nv.nivel>=120?0:((nv.nivel-1)%10+nv.progreso)/10}; }
   function bloquePeriodo(){
     const P=per(), h=Est.habitos(state,P), t=Est.productividad(state,P), a=Est.animo(state,P);
-    return `<section class="pf-caja"><h3>${e(P.nombre)}</h3>
+    return `<section class="pf-caja"><div class="pf-caja-cab"><h3>${e(P.nombre)}</h3>${selectorPeriodo()}</div>
       <div class="pf-tiles">${tile(pc(h.pct),"hábitos cumplidos",cambio(h.pct,h.anterior))}${tile(t.hechas,t.hechas===1?"tarea terminada":"tareas terminadas",cambio(t.hechas,t.anterior,{puntos:false}))}
         ${tile(a.media==null?"—":n1(a.media)+"<small>/5</small>","ánimo medio",cambio(a.media,a.anterior,{puntos:false}))}${tile(a.n,a.n===1?"día con ánimo":"días con ánimo")}</div>
       ${graficaAnimo(a)}
@@ -196,7 +206,7 @@ window.AscensoPerfil=(()=>{
     const P=per(), {nv,avance}=nivelActual(), {z,o}=brillos(P), auto=!state.perfil.zonas;
     if(!zonaSel) zonaSel="cabeza";
     const zs=z[zonaSel];
-    SECCIONES.cuerpo.innerHTML=`<div class="pf-portada">
+    SECCIONES.cuerpo.innerHTML=`<div class="pf-barra-sec">${selectorPeriodo()}</div><div class="pf-portada">
       <div class="pf-figura pf-zonas-fig">${Figura.svg({figura:state.perfil.figura, etapa:nv.etapa, avance, nivel:nv.progreso, brillo:o, zonaActiva:zonaSel, titulo:"Zonas del cuerpo"})}</div>
       <div>
         <p class="pf-nota">Cada zona brilla según lo cumplido de lo que reúne (${e(P.nombre.toLowerCase())}). Toca una zona para ver el detalle.
@@ -210,7 +220,7 @@ window.AscensoPerfil=(()=>{
   }
   function pintarHabitos(){
     const P=per(), h=Est.habitos(state,P), r=Niveles.rachas(state), cal=Est.calendario(state), L=["L","M","X","J","V","S","D"];
-    SECCIONES.habitos.innerHTML=`<div class="pf-tiles">${tile(pc(h.pct),"hábitos cumplidos · "+e(P.nombre.toLowerCase()),cambio(h.pct,h.anterior))}${tile(r.actual,"días de racha")}${tile(r.mejor,"mejor racha")}</div>
+    SECCIONES.habitos.innerHTML=`${barraProgreso()}<div class="pf-tiles">${tile(pc(h.pct),"hábitos cumplidos · "+e(P.nombre.toLowerCase()),cambio(h.pct,h.anterior))}${tile(r.actual,"días de racha")}${tile(r.mejor,"mejor racha")}</div>
       <section class="pf-caja"><h3>Por día de la semana</h3>
         <div class="pf-columnas">${h.porDia.map((x,i)=>`<div title="${Est.DIAS[i]}: ${pc(x)}"><i><b style="height:${(x||0)*100}%"></b></i><span>${L[i]}</span><em>${pc(x)}</em></div>`).join("")}</div></section>
       <section class="pf-caja"><h3>El último año</h3>
@@ -225,7 +235,7 @@ window.AscensoPerfil=(()=>{
   function pintarProductividad(){
     const P=per(), t=Est.productividad(state,P), max=Math.max(1,...t.serie.map(x=>x.n));
     const colorPrio=k=>`var(--p-${k})`;
-    SECCIONES.productividad.innerHTML=`<div class="pf-tiles">${tile(t.hechas,"tareas terminadas · "+e(P.nombre.toLowerCase()),cambio(t.hechas,t.anterior,{puntos:false}))}${tile(t.creadas,"tareas creadas")}${tile(t.atrasadas,"atrasadas, sin terminar")}${tile(t.tarjetasHechas,"tarjetas terminadas")}${tile(t.checklist,"elementos de checklist hechos")}</div>
+    SECCIONES.productividad.innerHTML=`${barraProgreso()}<div class="pf-tiles">${tile(t.hechas,"tareas terminadas · "+e(P.nombre.toLowerCase()),cambio(t.hechas,t.anterior,{puntos:false}))}${tile(t.creadas,"tareas creadas")}${tile(t.atrasadas,"atrasadas, sin terminar")}${tile(t.tarjetasHechas,"tarjetas terminadas")}${tile(t.checklist,"elementos de checklist hechos")}</div>
       <section class="pf-caja"><h3>Tareas terminadas</h3>
         <div class="pf-columnas pf-serie">${t.serie.map(x=>`<div title="${e(x.etiqueta)}: ${x.n}"><i><b style="height:${x.n/max*100}%"></b></i><span>${e(x.etiqueta)}</span><em>${x.n||""}</em></div>`).join("")}</div></section>
       <section class="pf-caja"><h3>Por prioridad</h3><p class="pf-nota">De las tareas de los días del periodo, cuántas se terminaron.</p>
@@ -370,7 +380,7 @@ window.AscensoPerfil=(()=>{
   function abrirInforme(tipo,atras=0){
     informe={tipo,atras};
     for(const [k,el] of Object.entries(SECCIONES)) el.hidden=true;
-    $("pf-periodos").hidden=true; $("pf-informe").hidden=false;
+    $("pf-sub").hidden=true; $("pf-informe").hidden=false;
     pintarInforme(); scrollTo(0,0);
   }
   function cerrarInforme(){
@@ -463,21 +473,32 @@ window.AscensoPerfil=(()=>{
   const PINTAR={resumen:()=>pintarResumen(), cuerpo:pintarCuerpo, habitos:pintarHabitos, productividad:pintarProductividad, objetivos:pintarObjetivos, descubrir:pintarDescubrir};
   function pintarPestana(){
     if(informe){ pintarInforme(); return; }
-    for(const b of $("pf-periodos").querySelectorAll("[data-per]")) b.setAttribute("aria-checked",String(b.dataset.per===perClave));
-    $("pf-periodos").hidden=pestana==="ajustes"||pestana==="descubrir"||pestana==="objetivos";
     if(PINTAR[pestana]) PINTAR[pestana]();
   }
   function ponerPestana(t){
+    if(t==="progreso") t=progSel;
+    if(!SECCIONES[t]) t="resumen";
     if(pestana==="ajustes"&&t!=="ajustes"&&cuentaDisponible&&Cuenta.retiene()) return false;
     if(pestana==="ajustes"&&t!=="ajustes"&&cuentaDisponible) Cuenta.desmontar();
     pestana=t;
+    if(PROGRESO.includes(t)){ progSel=t; try{ localStorage.setItem("ascenso-progreso",t); }catch(err){} }
+    const sub=SUBVISTAS[t];
+    if(!sub) base=PROGRESO.includes(t)?"progreso":t;
+    $("pf-sub").hidden=!sub; $("pf-sub-titulo").textContent=sub||"";
     if(informe){ informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML=""; }
-    for(const b of vista.querySelectorAll(".pf-tabs [data-pf]")) b.setAttribute("aria-selected",String(b.dataset.pf===t));
+    const tabActiva=sub?"":PROGRESO.includes(t)?"progreso":t;
+    for(const b of vista.querySelectorAll(".pf-tabs [data-pf]")) b.setAttribute("aria-selected",String(b.dataset.pf===tabActiva));
+    $("pf-engranaje").setAttribute("aria-pressed",String(t==="ajustes"));
     for(const [k,el] of Object.entries(SECCIONES)) el.hidden=k!==t;
     if(t==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); if(window.AscensoBloqueo&&window.AscensoBloqueo.disponible) window.AscensoBloqueo.pintarAjustes($("pf-bloqueo-sitio")); if(cuentaDisponible) Cuenta.montarEn($("pf-cuenta-sitio")); if(typeof renderCfg==="function") try{ renderCfg(); renderTypeCfg(); }catch(err){} }
     pintarPestana();
-    const tab=vista.querySelector(`.pf-tabs [data-pf="${t}"]`); if(tab&&tab.scrollIntoView) tab.scrollIntoView({block:"nearest",inline:"nearest"});
     return true;
+  }
+  // Volver de una subvista (Cuerpo, Objetivos, Ajustes) a la pestaña de la que se vino
+  function volverSub(){
+    if(vista.hidden||!SUBVISTAS[pestana]||!base) return false;
+    if(!ponerPestana(base)) return true;
+    scrollTo(0,0); return true;
   }
   async function cargarLibreria(){
     if(!window.AscensoLocal||(window.ASCENSO_CONFIG||{}).clasico){ libreriaLeida=true; return; }
@@ -492,6 +513,8 @@ window.AscensoPerfil=(()=>{
     if(!estaba) animarFigura=true;      // al entrar, el dibujo se traza (no al cambiar de periodo o de pestaña)
     $("boardsview").hidden=true; document.querySelector("main").hidden=true; vista.hidden=false;
     ponerPestana(t);
+    // Si se entra directamente a Ajustes, Cuerpo u Objetivos (p. ej. desde el texto de estado), «atrás» vuelve al día
+    if(!estaba&&SUBVISTAS[pestana]) base=null;
     if(!estaba) scrollTo(0,0);
     if(donde){ const el=$("pf-"+donde); if(el) el.scrollIntoView({block:"start"}); }
     // La lectura suma experiencia: cuando llega, se vuelve a pintar (si no cambia nada, no se repinta para no cortar
@@ -514,7 +537,9 @@ window.AscensoPerfil=(()=>{
   }
   vista.addEventListener("click",ev=>{
     if(ev.target.closest("#pf-volver")){ cerrar(); return; }
-    const t=ev.target.closest("[data-pf]"); if(t){ ponerPestana(t.dataset.pf); if(!t.closest(".pf-tabs")) scrollTo(0,0); return; }
+    if(ev.target.closest("[data-pf-volver]")){ if(!volverSub()&&ponerPestana("resumen")) scrollTo(0,0); return; }
+    const g=ev.target.closest("[data-prog]"); if(g){ ponerPestana(g.dataset.prog); return; }
+    const t=ev.target.closest("[data-pf]"); if(t){ if(ponerPestana(t.dataset.pf)&&!t.closest(".pf-tabs")) scrollTo(0,0); return; }
     const p=ev.target.closest("[data-per]");
     if(p){ perClave=p.dataset.per; try{ localStorage.setItem("ascenso-periodo",perClave); }catch(err){} pintarPestana(); return; }
     const z=ev.target.closest("[data-zona]");
@@ -526,7 +551,12 @@ window.AscensoPerfil=(()=>{
     if(vista.hidden||ev.key!=="Escape") return;
     const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)){ a.blur(); return; }
     if(document.querySelector("dialog[open]")) return;
-    if(!cerrarInforme()) cerrar();
+    if(!cerrarInforme()&&!volverSub()) cerrar();
+  });
+  // La figura del Resumen funciona como botón con el teclado
+  vista.addEventListener("keydown",ev=>{
+    const f=ev.target.closest&&ev.target.closest(".pf-ir-cuerpo");
+    if(f&&(ev.key==="Enter"||ev.key===" ")){ ev.preventDefault(); ponerPestana("cuerpo"); scrollTo(0,0); }
   });
 
   // La puerta escondida: el recuadro de la racha
@@ -545,7 +575,7 @@ window.AscensoPerfil=(()=>{
   return {
     disponible:true, abrir, cerrar,
     abierta:()=>!vista.hidden,
-    nivel:()=>vista.hidden?0:informe?2:1,
-    atras(){ if(vista.hidden) return false; if(!cerrarInforme()) cerrar(); return true; },
+    nivel:()=>vista.hidden?0:informe||SUBVISTAS[pestana]?2:1,
+    atras(){ if(vista.hidden) return false; if(!cerrarInforme()&&!volverSub()) cerrar(); return true; },
   };
 })();

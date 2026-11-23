@@ -87,7 +87,7 @@ test("la versión clásica (servidor.py) sigue guardando en ascenso.db", async (
     assert.match(await pagina.locator("#pf-bloqueo").innerText(), /aplicación nueva/);
     assert.equal(await pagina.locator("#bloqueo").count(), 0);
     // Los objetivos se guardan en ascenso.db; el de libros no se ofrece (la librería es de la aplicación nueva)
-    await pagina.click('.pf-tabs [data-pf="objetivos"]');
+    await pagina.click('[data-pf-volver]'); await pagina.click('#pf-resumen .pf-objs-res [data-pf="objetivos"]');
     assert.equal(await pagina.locator('[data-otipo="libros"]').count(), 0);
     await pagina.click('[data-otipo="reflexiones"]'); await pagina.fill("#pf-obj-meta", "5"); await pagina.click("#pf-obj-form [type=submit]");
     await pagina.locator("#pf-objetivos .pf-obj").waitFor();

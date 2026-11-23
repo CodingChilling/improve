@@ -188,7 +188,9 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     assert.equal(await actual(), "perfil");
     await pagina.tap('[data-pf="ajustes"]'); await pagina.locator("#cuentadlg").waitFor({ state: "visible" });
     await atras();
-    assert.ok(!(await visible("#perfil")) && await visible("main"), "atrás cierra el perfil");
+    assert.ok(await visible("#perfil") && await visible("#pf-resumen"), "atrás vuelve de Ajustes al Resumen");
+    await atras();
+    assert.ok(!(await visible("#perfil")) && await visible("main"), "y otra vez cierra el perfil");
     assert.deepEqual(errores, []);
 
     // ---- En pantallas anchas no hay barra
