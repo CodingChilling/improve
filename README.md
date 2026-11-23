@@ -133,13 +133,18 @@ a la izquierda.
 
 ### Perfil (la racha o el botón Perfil)
 
-Presidido por un **Hombre o una Mujer de Vitruvio** (a elegir), dibujado como un boceto a lo Leonardo.
+Presidido por un **Hombre o una Mujer de Vitruvio** (a elegir): un dibujo propio con el canon clásico (ocho cabezas de
+alto, tanto de brazos abiertos como de altura, el ombligo en el centro del círculo) y la segunda postura tocando el
+círculo, con acabado de lámina de cuaderno: papel con grano, tinta sepia con temblor de pluma, aguada de sanguina y
+sombreado a plumilla. En el tema oscuro, tinta clara sobre papel oscuro.
 - **Nivel**: la experiencia se calcula con todo lo que haces (hábitos cumplidos, rachas, semanas completas, tareas y
   tarjetas hechas, checklists, reflexiones y notas, lectura). Desmarcar un hábito o borrar una tarea hecha la resta;
   archivar no. Hay **120 niveles con nombre**, en 12 etapas de 10 (del Valle al Cielo); a partir del 120 se sigue
   sumando. El círculo de la figura marca lo que falta para el siguiente nivel.
-- **La lámina se completa con los años**: cada etapa añade una capa de detalle al dibujo (rostro, marcas de
-  proporción, músculos, sombreados, notas en escritura especular…), que se va trazando a medida que avanzas en ella.
+- **La lámina se completa con los años**: cada etapa añade una capa al dibujo (la segunda postura, rostro y cabello,
+  las proporciones en cabezas, la anatomía, manos y pies, el sombreado a plumilla, notas en escritura especular, líneas
+  guía, el compás, el sombreado cruzado y el acabado final con firma y sello), que se va trazando a medida que avanzas
+  en ella.
 - **Estadísticas** por periodo (semana, mes, año o siempre; se recuerda el último elegido), comparadas con el
   periodo anterior:
   - **Resumen**: hábitos cumplidos, tareas terminadas, ánimo medio y una gráfica del ánimo de cada día.

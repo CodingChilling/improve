@@ -336,7 +336,7 @@ window.AscensoPerfil=(()=>{
   vista.addEventListener("toggle",ev=>{ if(ev.target.id==="pf-obj-nuevo") formAbierto=ev.target.open; },true);
   vista.addEventListener("click",ev=>{
     let el;
-    if((el=ev.target.closest("[data-otipo]"))){ tipoObj=el.dataset.otipo; const t=$("pf-obj-titulo").value, h=$("pf-obj-hasta").value; SECCIONES.objetivos.querySelector("#pf-obj-nuevo").outerHTML=formularioObj(); $("pf-obj-titulo").value=t; if(h) $("pf-obj-hasta").value=h; const b=SECCIONES.objetivos.querySelector(`[data-otipo="${tipoObj}"]`); if(b) b.focus(); return; }
+    if((el=ev.target.closest("[data-otipo]"))){ tipoObj=el.dataset.otipo; formAbierto=$("pf-obj-nuevo").open;   /* el evento «toggle» llega después del clic: se lee del elemento */ const t=$("pf-obj-titulo").value, h=$("pf-obj-hasta").value; SECCIONES.objetivos.querySelector("#pf-obj-nuevo").outerHTML=formularioObj(); $("pf-obj-titulo").value=t; if(h) $("pf-obj-hasta").value=h; const b=SECCIONES.objetivos.querySelector(`[data-otipo="${tipoObj}"]`); if(b) b.focus(); return; }
     if((el=ev.target.closest("[data-ohasta]"))){ $("pf-obj-hasta").value=finDe(el.dataset.ohasta); errorObj(""); return; }
     if((el=ev.target.closest("[data-oarch]"))){ const g=state.objetivos[el.dataset.oarch]; if(g){ g.archivado=el.dataset.v==="1"; save(); pintarListaObj(); } return; }
     if((el=ev.target.closest("[data-odel]"))){ const id=el.dataset.odel; armDelete(el,()=>{ delete state.objetivos[id]; save(); pintarListaObj(); },"Pulsa otra vez para eliminar"); return; }

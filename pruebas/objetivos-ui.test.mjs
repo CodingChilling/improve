@@ -40,6 +40,7 @@ test("objetivos: crear, progreso, cuadrado de la figura, archivar y eliminar", a
     // Un objetivo de hábito con título propio
     await p.click('.pf-tabs [data-pf="objetivos"]');
     await p.click("#pf-obj-nuevo summary");
+    await p.locator("#pf-obj-nuevo[open]").waitFor();
     await p.click('[data-otipo="habito"]');
     assert.equal(await p.locator("#pf-obj-ref option").count(), await p.evaluate(() => state.habits.length));
     await p.fill("#pf-obj-meta", "150"); await p.click('#pf-obj-form [type=submit]');

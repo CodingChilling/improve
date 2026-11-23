@@ -7101,63 +7101,35 @@ dialog.tdlg.diario {
   }
 }
 
-/* La figura: boceto en sepia sobre papel; en oscuro, trazo claro sobre papel oscuro */
-.vitruvio {
-  --vf-linea: #6b4a2b;
-  --vf-papel: #f3ead7;
-  --vf-oro: #b8862f;
-  --vf-zona: 196, 104, 52;
-}
+/* La figura (figura.js lleva sus estilos, con los colores del papel claro): aquí solo el tema oscuro, tinta clara sobre
+   papel oscuro, como un dibujo a la sanguina sobre papel preparado */
 :root[data-theme="dark"] .vitruvio {
-  --vf-linea: #e3d3b5;
-  --vf-papel: #25221d;
-  --vf-oro: #d9ad62;
-  --vf-zona: 232, 150, 84;
+  --vf-papel: #26211b;
+  --vf-tinta: #ead9bb;
+  --vf-guia: #8f7a5e;
+  --vf-grano: #000000;
+  --vf-vineta: #000000;
+  --vf-carne: 214, 170, 120;
+  --vf-carne-o: 0.16;
+  --vf-zona: 232, 128, 86;
+  --vf-zona-o: 0.38;
+  --vf-tono-pelo: 236, 214, 176;
+  --vf-oro: #dcae5c;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .vitruvio {
-    --vf-linea: #e3d3b5;
-    --vf-papel: #25221d;
-    --vf-oro: #d9ad62;
-    --vf-zona: 232, 150, 84;
+    --vf-papel: #26211b;
+    --vf-tinta: #ead9bb;
+    --vf-guia: #8f7a5e;
+    --vf-grano: #000000;
+    --vf-vineta: #000000;
+    --vf-carne: 214, 170, 120;
+    --vf-carne-o: 0.16;
+    --vf-zona: 232, 128, 86;
+    --vf-zona-o: 0.38;
+    --vf-tono-pelo: 236, 214, 176;
+    --vf-oro: #dcae5c;
   }
-}
-.vf-papel {
-  fill: var(--vf-papel);
-}
-.vf-trazo {
-  fill: none;
-  stroke: var(--vf-linea);
-  stroke-width: 1.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.vf-circulo,
-.vf-cuadrado {
-  fill: none;
-  stroke: var(--vf-linea);
-  stroke-width: 0.9;
-  opacity: 0.75;
-}
-.vf-anillo {
-  fill: none;
-  stroke: var(--vf-oro);
-  stroke-width: 3.4;
-  stroke-linecap: round;
-}
-.vf-zona {
-  fill: rgba(var(--vf-zona), calc(var(--b) * 0.6));
-}
-.vf-nota text,
-.vf-firma {
-  fill: var(--vf-linea);
-  stroke: none;
-  font-family: var(--serif);
-  font-style: italic;
-}
-.vf-guia {
-  stroke-dasharray: 3 3;
-  opacity: 0.55;
 }
 
 /* ---------- Ánimo del día ---------- */
@@ -7512,10 +7484,6 @@ dialog.tdlg.diario {
 }
 .vf-zona {
   cursor: pointer;
-}
-.vf-zona.on {
-  stroke: var(--vf-oro);
-  stroke-width: 2.5;
 }
 .pf-detalle h3 {
   font-size: 1.15rem;
