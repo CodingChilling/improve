@@ -257,6 +257,18 @@ CREATE TABLE IF NOT EXISTS conexiones (
   hasta TEXT NOT NULL REFERENCES nodos(id) ON DELETE CASCADE,
   CHECK (desde <> hasta)
 );
+-- Objetivos con fecha (su progreso se calcula de los datos)
+CREATE TABLE IF NOT EXISTS objetivos (
+  id        TEXT PRIMARY KEY,
+  titulo    TEXT NOT NULL DEFAULT '',
+  tipo      TEXT NOT NULL CHECK (tipo IN ('racha', 'habito', 'tareas', 'reflexiones', 'libros', 'nivel')),
+  ref       TEXT,
+  meta      INTEGER NOT NULL,
+  desde     TEXT NOT NULL,
+  hasta     TEXT NOT NULL,
+  archivado INTEGER NOT NULL DEFAULT 0,
+  creado    TEXT NOT NULL DEFAULT ''
+);
 -- Áreas de color de los mapas (rectángulo, cuadrado, óvalo o círculo), en un nivel: el del mapa (padre vacío)
 -- o el de dentro de un nodo
 CREATE TABLE IF NOT EXISTS zonas (
@@ -288,9 +300,9 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   huerfano_desde TEXT
 );
 """
-VERSION_BD = 13
+VERSION_BD = 14
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 17
+VERSION_APP = 18
 
 
 class ErrorDatos(Exception):
@@ -456,6 +468,9 @@ def leer_estado(con):
         "mnodes": nodos,
         "mlinks": conexiones,
         "mzones": zonas,
+        "objetivos": {r["id"]: {"titulo": r["titulo"], "tipo": r["tipo"], "ref": r["ref"], "meta": r["meta"], "desde": r["desde"],
+                                "hasta": r["hasta"], "archivado": bool(r["archivado"]), "creado": r["creado"]}
+                      for r in con.execute("SELECT * FROM objetivos")},
         "att": adjuntos,
         "vacia": vacia,
         "version": VERSION_APP,
@@ -996,6 +1011,44 @@ def guardar_nodo(con, nid, datos):
 
 
 FORMAS_ZONA = {"rect", "cuadrado", "ovalo", "circulo"}
+TIPOS_OBJETIVO = {"racha", "habito", "tareas", "reflexiones", "libros", "nivel"}
+
+
+def guardar_objetivo(con, oid, datos):
+    """Objetivo con fecha: racha, % de un hábito, tareas, reflexiones, libros o nivel."""
+    oid = comprobar_id(oid, "objetivo")
+    if not isinstance(datos, dict):
+        raise ErrorDatos("objetivo no válido")
+    tipo = str(datos.get("tipo") or "")
+    if tipo not in TIPOS_OBJETIVO:
+        raise ErrorDatos("tipo de objetivo no válido")
+    ref = datos.get("ref")
+    ref = None if ref is None or ref == "" else ref
+    if ref is not None and (not isinstance(ref, str) or not ID_RE.match(ref)):
+        raise ErrorDatos("objetivo no válido")
+    if tipo == "habito" and not ref:
+        raise ErrorDatos("el objetivo necesita un hábito")
+    meta = datos.get("meta")
+    if not (isinstance(meta, int) and not isinstance(meta, bool) and 1 <= meta <= (100 if tipo == "habito" else 100000)):
+        raise ErrorDatos("meta no válida")
+    desde, hasta = str(datos.get("desde") or ""), str(datos.get("hasta") or "")
+    if not FECHA_RE.match(desde) or not FECHA_RE.match(hasta):
+        raise ErrorDatos("fechas del objetivo no válidas")
+    try:
+        a, b = date.fromisoformat(desde), date.fromisoformat(hasta)
+    except ValueError:
+        raise ErrorDatos("fechas del objetivo no válidas")
+    if (b - a).days < 0:
+        raise ErrorDatos("el objetivo termina antes de empezar")
+    if (b - a).days > 1830:
+        raise ErrorDatos("el objetivo dura demasiado")
+    con.execute(
+        """INSERT INTO objetivos (id, titulo, tipo, ref, meta, desde, hasta, archivado, creado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET titulo=excluded.titulo, tipo=excluded.tipo, ref=excluded.ref, meta=excluded.meta,
+             desde=excluded.desde, hasta=excluded.hasta, archivado=excluded.archivado""",
+        (oid, str(datos.get("titulo") or "").strip()[:80], tipo, ref, meta, desde, hasta, int(datos.get("archivado") is True),
+         str(datos.get("creado") or "")[:40]),
+    )
 
 
 def _numero(valor):
@@ -1134,6 +1187,7 @@ borrar_mapa = borrar_de("mapas", "mapa")
 borrar_nodo = borrar_de("nodos", "nodo")
 borrar_conexion = borrar_de("conexiones", "conexión")
 borrar_zona = borrar_de("zonas", "área")
+borrar_objetivo = borrar_de("objetivos", "objetivo")
 
 
 def nodos_por_profundidad(nodos):
@@ -1153,6 +1207,7 @@ RUTAS_TABLEROS = {
     "/api/nodos/": (guardar_nodo, borrar_nodo),
     "/api/conexiones/": (guardar_conexion, borrar_conexion),
     "/api/zonas/": (guardar_zona, borrar_zona),
+    "/api/objetivos/": (guardar_objetivo, borrar_objetivo),
 }
 
 
@@ -1171,6 +1226,7 @@ def importar(con, estado):
     con.execute("DELETE FROM dias")
     con.execute("DELETE FROM habitos")
     con.execute("DELETE FROM config")
+    con.execute("DELETE FROM objetivos")
     guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos", "perfil") if estado.get(k) is not None})
     guardar_habitos(con, estado.get("habits") or [])
     for fecha, d in estado["days"].items():
@@ -1213,6 +1269,10 @@ def importar(con, estado):
     if isinstance(conexiones, dict):
         for ident, datos in conexiones.items():
             guardar_conexion(con, ident, datos)
+    objetivos = estado.get("objetivos") or {}
+    if isinstance(objetivos, dict):
+        for ident, datos in objetivos.items():
+            guardar_objetivo(con, ident, datos)
     zonas = estado.get("mzones") or {}
     if isinstance(zonas, dict):
         for ident, datos in zonas.items():

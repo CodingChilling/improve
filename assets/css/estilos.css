@@ -6846,6 +6846,9 @@ dialog.tdlg.diario {
 .pf-cuerpo section[hidden] {
   display: none;
 }
+.pf-cuerpo > section {
+  margin-top: 0;
+}
 .pf-portada {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -7592,4 +7595,440 @@ dialog.tdlg.diario {
   .pf-periodos button {
     min-height: 40px;
   }
+}
+/* Perfil · Objetivos */
+.pf-objs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-obj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.pf-obj:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+.pf-obj-cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.pf-obj-cab strong {
+  font-size: 1rem;
+}
+.pf-obj-cab small,
+.pf-obj-cifra {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+.pf-obj-marca {
+  margin-right: 6px;
+  color: var(--gold);
+}
+.pf-obj.no .pf-b b {
+  background: var(--muted);
+}
+.pf-obj-acc {
+  display: flex;
+  gap: 16px;
+}
+.pf-obj-acc .linklike {
+  font-size: 0.84rem;
+}
+.pf-obj-acc .pf-borrar[data-armed] {
+  color: var(--p-urgente);
+  font-weight: 600;
+}
+.pf-objs-res .add.alt {
+  margin-top: 10px;
+}
+.pf-obj-nuevo summary,
+.pf-obj-arch summary {
+  cursor: pointer;
+  list-style: none;
+}
+.pf-obj-nuevo summary::-webkit-details-marker,
+.pf-obj-arch summary::-webkit-details-marker {
+  display: none;
+}
+.pf-obj-nuevo summary h3,
+.pf-obj-arch summary h3 {
+  display: inline;
+  margin: 0;
+}
+.pf-obj-nuevo summary::after,
+.pf-obj-arch summary::after {
+  content: "+";
+  float: right;
+  font-size: 1.3rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+.pf-obj-nuevo[open] summary::after,
+.pf-obj-arch[open] summary::after {
+  content: "–";
+}
+.pf-obj-nuevo[open] summary,
+.pf-obj-arch[open] summary {
+  margin-bottom: 12px;
+}
+.pf-obj-tipos {
+  display: flex;
+  flex-wrap: wrap;
+}
+.pf-obj-tipos button:disabled {
+  opacity: 0.45;
+}
+.pf-obj-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0 12px;
+  margin-top: 12px;
+}
+.pf-campo select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.pf-obj-atajos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.pf-obj-atajos button {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pf-error {
+  margin: 0 0 10px;
+  color: var(--p-urgente);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .pf-campo select {
+    font-size: 16px;
+    min-height: 42px;
+  }
+  .pf-obj-atajos button,
+  .pf-obj-acc .linklike {
+    min-height: 36px;
+  }
+}
+/* Perfil · Resúmenes */
+.pf-res-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.pf-res-lista button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--ink);
+  text-align: left;
+}
+.pf-res-lista button:hover {
+  border-color: var(--gold);
+}
+.pf-res-lista small {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.pf-res-lista strong {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+}
+.pf-res-lista span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.pf-informe .pf-inf-volver {
+  display: inline-block;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+}
+.pf-inf-tipos {
+  display: flex;
+  width: max-content;
+  margin: 0 0 14px;
+}
+.pf-inf-cab {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.pf-inf-cab small {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.pf-inf-cab h3 {
+  margin: 2px 0;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+.pf-inf-cab p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.pf-inf-mover {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.pf-inf-mover:disabled {
+  opacity: 0.35;
+}
+.pf-inf-frase {
+  margin: 0 0 16px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+.pf-inf-portada .add {
+  margin-top: 16px;
+}
+.pf-inf-objs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-inf-objs li {
+  padding: 6px 0;
+}
+.pf-inf-objs span {
+  color: var(--gold);
+}
+.pf-inf-objs small {
+  margin-left: 6px;
+  color: var(--muted);
+}
+/* El aviso del resumen en la página del día */
+.aviso-resumen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 0.92rem;
+}
+.aviso-resumen[hidden] {
+  display: none;
+}
+.aviso-resumen span {
+  flex: 1 1 auto;
+}
+.aviso-cerrar {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+}
+/* Bloqueo con PIN o huella (bloqueo.js): mientras está bloqueada no se ve nada más */
+html.bloqueada {
+  overflow: hidden;
+}
+html.bloqueada body > :not(#bloqueo) {
+  visibility: hidden !important;
+}
+.bloqueo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--ink);
+  overflow-y: auto;
+}
+.bloqueo[hidden] {
+  display: none;
+}
+/* Centrada con márgenes automáticos: si no cabe (el panel del olvido abierto), se desplaza sin cortarse por arriba */
+.bq-caja {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: auto;
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+.bq-marca {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.bq-caja h2 {
+  margin: 0 0 18px;
+  font-size: 1.6rem;
+}
+.bq-puntos {
+  display: flex;
+  gap: 14px;
+  min-height: 16px;
+}
+.bq-puntos i {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+}
+.bq-puntos i.on {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+.bq-puntos.mal {
+  animation: bq-mal 0.35s ease-in-out;
+}
+@keyframes bq-mal {
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bq-puntos.mal {
+    animation: none;
+  }
+}
+.bq-msg {
+  min-height: 2.6em;
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.bq-teclado {
+  display: grid;
+  grid-template-columns: repeat(3, 72px);
+  gap: 14px 22px;
+  justify-content: center;
+}
+.bq-teclado button {
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+.bq-teclado button:active:not(:disabled) {
+  background: var(--line);
+}
+.bq-teclado button:disabled {
+  opacity: 0.4;
+}
+.bq-teclado [data-tecla="borrar"] {
+  border-color: transparent;
+  background: none;
+  font-size: 1.3rem;
+}
+.bq-teclado .bq-huella {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: transparent;
+  background: none;
+}
+.bq-teclado .bq-huella[hidden] {
+  visibility: hidden;
+  display: flex;
+}
+.bq-huella svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.bq-entrar {
+  margin-top: 20px;
+  min-width: 160px;
+}
+.bq-olvido {
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+.bq-olvido-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 0.88rem;
+  text-align: left;
+}
+.bq-olvido-panel p {
+  margin: 0 0 10px;
+}
+.bq-borrar[data-armed] {
+  border-color: var(--p-urgente);
+  color: var(--p-urgente);
+}
+.bq-sub {
+  margin: 14px 0 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bq-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.bq-form .pf-campo input {
+  max-width: 220px;
+  letter-spacing: 0.3em;
 }

@@ -83,6 +83,20 @@ test("la versión clásica (servidor.py) sigue guardando en ascenso.db", async (
     await pagina.waitForTimeout(800);
     const conPerfil = await (await fetch(base + "api/estado")).json();
     assert.deepEqual([conPerfil.perfil.nombre, conPerfil.perfil.figura], ["Clásico", "mujer"]);
+    // El bloqueo con PIN no se ofrece (se explica por qué) y no toca IndexedDB
+    assert.match(await pagina.locator("#pf-bloqueo").innerText(), /aplicación nueva/);
+    assert.equal(await pagina.locator("#bloqueo").count(), 0);
+    // Los objetivos se guardan en ascenso.db; el de libros no se ofrece (la librería es de la aplicación nueva)
+    await pagina.click('.pf-tabs [data-pf="objetivos"]');
+    assert.equal(await pagina.locator('[data-otipo="libros"]').count(), 0);
+    await pagina.click('[data-otipo="reflexiones"]'); await pagina.fill("#pf-obj-meta", "5"); await pagina.click("#pf-obj-form [type=submit]");
+    await pagina.locator("#pf-objetivos .pf-obj").waitFor();
+    let objs = {};
+    for (let i = 0; i < 50 && !Object.keys(objs).length; i++) { await pagina.waitForTimeout(100); objs = (await (await fetch(base + "api/estado")).json()).objetivos; }
+    assert.deepEqual(Object.values(objs).map(g => [g.tipo, g.meta]), [["reflexiones", 5]]);
+    // Los resúmenes también están en la clásica
+    assert.equal(await pagina.evaluate(() => !!window.AscensoResumenes), true);
+    assert.equal((await pagina.evaluate(() => indexedDB.databases())).length, 0, "sigue sin usar IndexedDB");
   } finally { await nav.close(); proc.kill(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

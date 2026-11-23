@@ -45,6 +45,16 @@ function cleanPerfil(p){
   if(p.zonas&&typeof p.zonas==="object"){ zonas={}; for(const z of ZONAS_CUERPO) zonas[z]=Array.isArray(p.zonas[z])?[...new Set(p.zonas[z].filter(r=>typeof r==="string"&&/^[hte]:[A-Za-z0-9_-]{1,40}$/.test(r)))].slice(0,60):[]; }
   return {figura:p.figura==="mujer"?"mujer":"hombre", nombre:String(p.nombre||"").trim().slice(0,40), porque:String(p.porque||"").trim().slice(0,300), zonas};
 }
+// Objetivos con fecha: {id: {titulo, tipo, ref, meta, desde, hasta, archivado, creado}}
+function cleanObjetivos(x){
+  const o={}, F=/^\d{4}-\d{2}-\d{2}$/, TIPOS=["racha","habito","tareas","reflexiones","libros","nivel"];
+  if(x&&typeof x==="object") for(const [id,g] of Object.entries(x)){
+    if(!ID_OK.test(id)||!g||!TIPOS.includes(g.tipo)||!F.test(g.desde||"")||!F.test(g.hasta||"")||!(Number.isInteger(+g.meta)&&+g.meta>=1)) continue;
+    o[id]={titulo:String(g.titulo||"").trim().slice(0,80), tipo:g.tipo, ref:typeof g.ref==="string"&&g.ref?g.ref:null, meta:+g.meta,
+      desde:g.desde, hasta:g.hasta, archivado:!!g.archivado, creado:String(g.creado||"").slice(0,40)};
+  }
+  return o;
+}
 function cleanPlanes(p){
   const F=/^\d{4}-\d{2}-\d{2}$/, out=[];
   if(Array.isArray(p)) for(const v of p){
@@ -80,7 +90,8 @@ const cleanState = (x,fallbackDays) => ({
   notes:cleanNotes(x.notes),
   events:cleanEvents(x.events),
   ...cleanBoardData(x),
-  ...cleanMapData(x)
+  ...cleanMapData(x),
+  objetivos:cleanObjetivos(x.objetivos)
 });
 // Eventos del calendario: {id: {start, end, time, title, color, created}}
 function cleanEvents(x){
@@ -3942,7 +3953,8 @@ cdlg.addEventListener("focusout",e=>{
   if(v && v!==c.title){ c.title=v.slice(0,200); cardChanged(); } else e.target.value=c.title;
 });
 function render(){ if(!boardsView.hidden){ renderBoards(); return; } renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); renderCal(); }
-function renderAll(){ render(); renderCfg(); renderTagMgr(); }
+// Tras pintar el día (al cargar, al cambiar de día o al importar) se avisa a los módulos que dependen de él (el aviso del resumen)
+function renderAll(){ render(); renderCfg(); renderTagMgr(); document.dispatchEvent(new Event("ascenso:pintado")); }
 // Si la app queda abierta y cambia el día, salta al nuevo día y su frase
 let openDay=key(today());
 function checkNewDay(){ const k=key(today()); if(k!==openDay){ openDay=k; sel=today(); renderAll(); } }
@@ -4444,7 +4456,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=17;
+const VERSION_NECESARIA=18;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){
@@ -4457,7 +4469,7 @@ function saveLocal(){
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
 function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,perfil:state.perfil,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
-  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks,mzones:state.mzones})); }
+  boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks,mzones:state.mzones,objetivos:state.objetivos})); }
 async function api(method,path,body){
   if(LOCAL) return AscensoLocal.api(method,path,body);
   const opt={method, headers:{"X-Ascenso":"1"}};
@@ -4522,7 +4534,7 @@ async function sync(){
     }
     // Colecciones con identificador: primero se crean o actualizan (en orden de dependencia) y luego se borran (al revés)
     const COLS=[["tags","etiquetas"],["tasks","tareas"],["boards","tableros"],["blabels","etiquetas-tablero"],["blists","listas"],["cards","tarjetas"],["events","eventos"],
-                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"],["mzones","zonas"]];
+                ["maps","mapas"],["mnodes","nodos"],["mlinks","conexiones"],["mzones","zonas"],["objetivos","objetivos"]];
     // Los nodos se envían de los de primer nivel hacia dentro (un padre siempre antes que sus hijos)
     const depth=(coll,id)=>{ let d=0, p=coll[id]&&coll[id].parent; while(p&&coll[p]&&d<500){ d++; p=coll[p].parent; } return d; };
     const ordered=(k,coll)=>k==="mnodes"?Object.entries(coll).sort((a,b)=>depth(coll,a[0])-depth(coll,b[0])):Object.entries(coll);

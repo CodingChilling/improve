@@ -188,9 +188,10 @@ window.AscensoEstadisticas=(()=>{
   // suele…»: son coincidencias en tus datos, no causas.
   const MIN=14, DIF=0.15, DIF_ANIMO=0.5;
   const media=l=>l.length?l.reduce((a,b)=>a+b,0)/l.length:null;
-  function prepararDias(state,tipoDe){
+  // hasta: el último día que se mira (por defecto, ayer)
+  function prepararDias(state,tipoDe,hasta){
     const inicio=primerDia(state); if(!inicio) return [];
-    const thr=(state.thr||0.66)-1e-9, fin=mas(hoy(),-1), out=[];
+    const thr=(state.thr||0.66)-1e-9, fin=hasta||mas(hoy(),-1), out=[];
     const tareasPorDia={};
     for(const t of Object.values(state.tasks||{})) if(t.list==="hecha"){ const k=diaDe(t.done); if(k) tareasPorDia[k]=(tareasPorDia[k]||0)+1; }
     let racha=0;
@@ -206,8 +207,8 @@ window.AscensoEstadisticas=(()=>{
     return out;
   }
   const nombreH=(state,id)=>{ const h=state.habits.find(x=>x.id===id); return h?h.t:id; };
-  function descubrimientos(state,tipoDe){
-    const D=prepararDias(state,tipoDe), out=[], add=(id,texto,base,fuerza,unidad="días")=>out.push({id,texto,base,fuerza,unidad});
+  function descubrimientos(state,tipoDe,{hasta}={}){
+    const D=prepararDias(state,tipoDe,hasta), fin=hasta||hoy(), out=[], add=(id,texto,base,fuerza,unidad="días")=>out.push({id,texto,base,fuerza,unidad});
     if(D.length<MIN) return out;
     const habs=state.habits;
     // 1 · Hábitos que van juntos
@@ -288,12 +289,12 @@ window.AscensoEstadisticas=(()=>{
       if(tot>=20&&D.length>=28){ const g=Array.from({length:7},(_,w)=>{ const l=D.filter(x=>x.w===w); return {w,m:media(l.map(x=>x.tareas))||0}; }).sort((a,b)=>b.m-a.m), prom=tot/D.length;
         if(g[0].m>=1.4*prom) add("tareas-dia",`Los ${DIAS_PL[g[0].w]} son tu día más productivo: terminas ${num(g[0].m)} tareas de media, frente a ${num(prom)} en un día cualquiera.`,tot,Math.min(1,g[0].m/prom-1),"tareas"); } }
     // 13 · Cuánto tardas en terminar según la prioridad
-    { const per={cual:"siempre",desde:D[0].d,hasta:hoy()}, p=productividad(state,per).tiempo;
+    { const per={cual:"siempre",desde:D[0].d,hasta:fin}, p=productividad(state,per).tiempo;
       const l=["urgente","alta","media","baja"].map(k=>p[k]&&p[k].n>=5?{k,...p[k]}:null).filter(Boolean);
       if(l.length>=2){ const [r,s]=[l[0],l[l.length-1]];
         if(Math.abs(s.dias-r.dias)>=1) add("tiempo-prioridad",`Las tareas de prioridad ${r.k} las terminas en ${num(r.dias)} días de media; las de prioridad ${s.k}, en ${num(s.dias)}.`,r.n+s.n,Math.min(1,Math.abs(s.dias-r.dias)/7),"tareas"); } }
     // 14 · Etiquetas que se quedan atrás
-    { const per={cual:"siempre",desde:D[0].d,hasta:hoy()}, e=productividad(state,per).porEtiqueta.filter(x=>x.total>=10);
+    { const per={cual:"siempre",desde:D[0].d,hasta:fin}, e=productividad(state,per).porEtiqueta.filter(x=>x.total>=10);
       if(e.length>=2){ const r=e.map(x=>({...x,p:x.hechas/x.total})).sort((a,b)=>a.p-b.p), peor=r[0], resto=r.slice(1), m=resto.reduce((s,x)=>s+x.hechas,0)/resto.reduce((s,x)=>s+x.total,0);
         if(m-peor.p>=0.2) add("etiqueta:"+peor.id,`Las tareas de «${peor.nombre}» se terminan menos (${pc(peor.p)}) que las del resto de etiquetas (${pc(m)}).`,peor.total,m-peor.p,"tareas"); } }
     // 15 · Racha y ánimo

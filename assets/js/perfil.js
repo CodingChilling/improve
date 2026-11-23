@@ -6,7 +6,7 @@
 // Existe en las dos versiones; la cuenta, solo en la aplicación nueva.
 "use strict";
 window.AscensoPerfil=(()=>{
-  const Niveles=window.AscensoNiveles, Figura=window.AscensoFigura, Cuenta=window.AscensoCuenta, Tema=window.AscensoTema, Est=window.AscensoEstadisticas;
+  const Niveles=window.AscensoNiveles, Obj=window.AscensoObjetivos, Res=window.AscensoResumenes, Figura=window.AscensoFigura, Cuenta=window.AscensoCuenta, Tema=window.AscensoTema, Est=window.AscensoEstadisticas;
   const nada={disponible:false, abierta:()=>false, nivel:()=>0, atras:()=>false, abrir(){}, cerrar(){}};
   if(!Niveles||!Figura||!Est) return nada;
   const $=id=>document.getElementById(id);
@@ -21,16 +21,16 @@ window.AscensoPerfil=(()=>{
       <button type="button" class="bv-brand" id="pf-volver" aria-label="Ascenso. Volver al día">Ascenso</button>
       <h2 class="lb-nombre">Perfil</h2>
       <div class="pf-tabs" role="tablist" aria-label="Secciones del perfil">
-        <button type="button" role="tab" data-pf="resumen">Resumen</button><button type="button" role="tab" data-pf="cuerpo">Cuerpo</button><button type="button" role="tab" data-pf="habitos">Hábitos</button><button type="button" role="tab" data-pf="productividad">Productividad</button><button type="button" role="tab" data-pf="descubrir">Descubrimientos</button><button type="button" role="tab" data-pf="ajustes">Ajustes</button>
+        <button type="button" role="tab" data-pf="resumen">Resumen</button><button type="button" role="tab" data-pf="cuerpo">Cuerpo</button><button type="button" role="tab" data-pf="habitos">Hábitos</button><button type="button" role="tab" data-pf="productividad">Productividad</button><button type="button" role="tab" data-pf="objetivos">Objetivos</button><button type="button" role="tab" data-pf="descubrir">Descubrimientos</button><button type="button" role="tab" data-pf="ajustes">Ajustes</button>
       </div>
     </header>
     <div class="bv-body"><div class="bh pf-cuerpo">
       <div class="pf-periodos" id="pf-periodos" role="radiogroup" aria-label="Periodo"><button type="button" role="radio" data-per="semana">Semana</button><button type="button" role="radio" data-per="mes">Mes</button><button type="button" role="radio" data-per="año">Año</button><button type="button" role="radio" data-per="siempre">Siempre</button></div>
       <section id="pf-resumen" class="pf-resumen"></section><section id="pf-pcuerpo" hidden></section><section id="pf-habitos" hidden></section>
-      <section id="pf-productividad" hidden></section><section id="pf-descubrir" hidden></section><section id="pf-ajustes" class="pf-ajustes" hidden></section></div></div>`;
+      <section id="pf-productividad" hidden></section><section id="pf-objetivos" hidden></section><section id="pf-descubrir" hidden></section><section id="pf-ajustes" class="pf-ajustes" hidden></section><section id="pf-informe" class="pf-informe" hidden></section></div></div>`;
   const barra=$("barra"); document.body.insertBefore(vista,barra||null);
   const resumen=$("pf-resumen"), ajustes=$("pf-ajustes");
-  const SECCIONES={resumen, cuerpo:$("pf-pcuerpo"), habitos:$("pf-habitos"), productividad:$("pf-productividad"), descubrir:$("pf-descubrir"), ajustes};
+  const SECCIONES={resumen, cuerpo:$("pf-pcuerpo"), habitos:$("pf-habitos"), productividad:$("pf-productividad"), objetivos:$("pf-objetivos"), descubrir:$("pf-descubrir"), ajustes};
   let pestana="resumen", libreria=null, zonaSel=null;
   // El periodo elegido se recuerda en el dispositivo (Mes, si no se ha elegido otro)
   let perClave=(()=>{ try{ const v=localStorage.getItem("ascenso-periodo"); return ["semana","mes","año","siempre"].includes(v)?v:"mes"; }catch(err){ return "mes"; } })();
@@ -59,6 +59,8 @@ window.AscensoPerfil=(()=>{
       </div>
       <p class="pf-nota">«Automático» sigue el modo claro u oscuro del dispositivo. La elección es de este dispositivo.</p>
     </section>
+    <section class="pf-caja" id="pf-bloqueo"><h3>Bloqueo</h3><div id="pf-bloqueo-sitio">${(window.AscensoBloqueo||{}).disponible?"":
+      `<p class="pf-nota">${(window.ASCENSO_CONFIG||{}).clasico?"El bloqueo con PIN o con la huella está en la aplicación nueva (la que se instala en el móvil). Esta versión clásica guarda los datos en ascenso.db, en tu ordenador: los protege la sesión de tu ordenador.":"Este navegador no permite el bloqueo con PIN."}</p>`}</div></section>
     ${cuentaDisponible?`<section class="pf-caja" id="pf-cuenta"><h3>Cuenta</h3><div id="pf-cuenta-sitio"></div></section>`:""}
     <div id="pf-config"></div>`;
   for(const id of ["cfg","typecfgbox","imgcfgbox","backupbox"]){ const d=$(id); if(d) $("pf-config").appendChild(d); }
@@ -103,9 +105,9 @@ window.AscensoPerfil=(()=>{
     const p=state.perfil, xp=Niveles.experiencia(state,libreria), nv=Niveles.nivelDe(xp.total), et=Niveles.etapa(nv.nivel), r=Niveles.rachas(state);
     const avance=((nv.nivel-1)%10+nv.progreso)/10, sig=Niveles.etapa(Math.min(nv.nivel+10-((nv.nivel-1)%10),120));
     const nombreNivel=Niveles.nombre(nv.nivel,p.figura), max=Math.max(1,...FUENTES.map(([k])=>xp.partes[k]||0));
-    const quedan=nv.hasta-xp.total, finEtapa=Math.min(120,Math.ceil(nv.nivel/10)*10);
+    const quedan=nv.hasta-xp.total, finEtapa=Math.min(120,Math.ceil(nv.nivel/10)*10), objs=evaluarObjetivos(xp);
     resumen.innerHTML=`<div class="pf-portada">
-      <div class="pf-figura">${Figura.svg({figura:p.figura, etapa:nv.etapa, avance:nv.nivel>=120?0:avance, nivel:nv.progreso, objetivos:null, brillo:brillos(per()).o, titulo:`${p.figura==="mujer"?"Mujer":"Hombre"} de Vitruvio, nivel ${nv.nivel}`})}</div>
+      <div class="pf-figura">${Figura.svg({figura:p.figura, etapa:nv.etapa, avance:nv.nivel>=120?0:avance, nivel:nv.progreso, objetivos:Obj?Obj.progresoMedio(objs):null, brillo:brillos(per()).o, titulo:`${p.figura==="mujer"?"Mujer":"Hombre"} de Vitruvio, nivel ${nv.nivel}`})}</div>
       <div class="pf-datos">
         <p class="pf-saludo">${e(saludo())}${p.nombre?", "+e(p.nombre):""}</p>
         ${p.porque?`<blockquote class="pf-porque">${e(p.porque)}</blockquote>`:""}
@@ -122,6 +124,8 @@ window.AscensoPerfil=(()=>{
           `La lámina se completa con cada etapa. En el nivel ${finEtapa+1} empieza la etapa «${e(sig.nombre)}»: ${e(sig.lema.toLowerCase())}.`}</p>
       </div>
     </div>
+    ${bloqueObjetivosResumen(objs)}
+    ${bloqueResumenes()}
     ${bloquePeriodo()}
     ${bloqueDescubrimientos(3)}
     <section class="pf-caja"><h3>De dónde viene tu experiencia</h3>
@@ -214,6 +218,220 @@ window.AscensoPerfil=(()=>{
         ${PRIOS.some(([k])=>t.tiempo[k])?`<p class="pf-nota">Tiempo medio desde que se crean hasta que se terminan: ${PRIOS.filter(([k])=>t.tiempo[k]).map(([k,n])=>`${n.toLowerCase()}, ${n1(t.tiempo[k].dias)} días`).join(" · ")}.</p>`:""}</section>
       ${t.porEtiqueta.length?`<section class="pf-caja"><h3>Por etiqueta</h3><ul class="pf-filas">${t.porEtiqueta.map(x=>`<li><span class="pf-punto" style="background:${x.color}"></span><span class="pf-n">${e(x.nombre)}</span>${barraH(x.hechas/x.total,x.nombre+": "+x.hechas+" de "+x.total)}<em>${x.hechas} de ${x.total}</em></li>`).join("")}</ul></section>`:""}`;
   }
+  // ---------------------------------------------------------------- objetivos
+  const clasico=!!(window.ASCENSO_CONFIG||{}).clasico;
+  const TIPOS_OBJ=Obj?Obj.TIPOS.filter(([k])=>k!=="libros"||!clasico):[];
+  const EXPLICA={
+    racha:"Llegar a esa racha de días seguidos cumpliendo tus hábitos de racha, contando desde hoy.",
+    habito:"Cumplir un hábito al menos ese porcentaje de los días que le tocan, desde hoy hasta la fecha. Se decide al terminar el plazo.",
+    tareas:"Terminar ese número de tareas desde hoy hasta la fecha.",
+    reflexiones:"Escribir la reflexión del día ese número de días.",
+    libros:"Terminar de leer ese número de libros de tu librería.",
+    nivel:"Llegar a ese nivel antes de la fecha."};
+  const META={racha:["Días seguidos",7,1,100000],habito:["Porcentaje de los días",80,1,100],tareas:["Tareas",10,1,100000],reflexiones:["Días con reflexión",10,1,100000],libros:["Libros",1,1,100000],nivel:["Nivel",2,1,100000]};
+  let tipoObj="racha", formAbierto=null;
+  const claveDe=d=>Est.clave(d);
+  const hoyK=()=>{ const d=new Date(); d.setHours(0,0,0,0); return claveDe(d); };
+  const fechaObj=k=>{ const d=Est.deClave(k); return d.toLocaleDateString("es-ES",d.getFullYear()===new Date().getFullYear()?{day:"numeric",month:"short"}:{day:"numeric",month:"short",year:"numeric"}); };
+  function finDe(cual){
+    const d=new Date(); d.setHours(0,0,0,0);
+    if(cual==="semana") d.setDate(d.getDate()+(7-(d.getDay()||7)));
+    else if(cual==="mes") d.setMonth(d.getMonth()+1,0);
+    else d.setMonth(12,0);
+    return claveDe(d);
+  }
+  // El nivel con el que se miden los objetivos de nivel: sin contar lo que dan los propios objetivos (como en niveles.js)
+  function evaluarObjetivos(xp){
+    if(!Obj) return [];
+    xp=xp||Niveles.experiencia(state,libreria);
+    return Obj.evaluar(state,{libreria,nivel:Niveles.nivelDe(xp.total-(xp.partes.objetivos||0)).nivel});
+  }
+  function cifraObj(g){
+    const m=g.m;
+    if(!m.medible) return g.tipo==="habito"?"El hábito de este objetivo ya no existe.":clasico?"La lectura solo se mide en la aplicación nueva.":"Cargando la librería…";
+    if(g.tipo==="habito") return `${m.valor} % de los días · meta ${m.meta} %`;
+    if(g.tipo==="nivel") return `Nivel ${m.valor} de ${m.meta}`;
+    const falta=m.meta-m.valor;
+    return `${miles(m.valor)} de ${miles(m.meta)} ${m.unidad}${m.estado==="en-curso"&&falta>0?` · faltan ${miles(falta)}`:""}`;
+  }
+  function plazoObj(g){
+    const m=g.m;
+    if(m.estado==="cumplido") return `Cumplido el ${fechaObj(m.cumplidoEl)}`;
+    if(m.estado==="no-alcanzado") return `Terminó el ${fechaObj(g.hasta)}`;
+    if(m.estado==="pendiente") return `Empieza el ${fechaObj(g.desde)}`;
+    const q=m.quedanDias;
+    return q<=0?"Termina hoy":q===1?"Queda 1 día · mañana":`Quedan ${q} días · hasta el ${fechaObj(g.hasta)}`;
+  }
+  function tarjetaObj(g,{acciones=true,pequena=false}={}){
+    const m=g.m, cl=m.estado==="cumplido"?" ok":m.estado==="no-alcanzado"?" no":"";
+    return `<li class="pf-obj${cl}" data-obj="${e(g.id)}">
+      <div class="pf-obj-cab"><strong>${m.estado==="cumplido"?'<span class="pf-obj-marca" aria-hidden="true">✓</span>':""}${e(g.titulo)}</strong><small>${e(plazoObj(g))}</small></div>
+      ${barraH(m.progreso,g.titulo+": "+Math.round(m.progreso*100)+" %")}
+      <p class="pf-obj-cifra">${e(cifraObj(g))}</p>
+      ${acciones&&!pequena?`<div class="pf-obj-acc">${g.archivado?`<button type="button" class="linklike" data-oarch="${e(g.id)}" data-v="0">Recuperar</button>`:`<button type="button" class="linklike" data-oarch="${e(g.id)}" data-v="1">Archivar</button>`}
+        <button type="button" class="linklike pf-borrar" data-odel="${e(g.id)}">Eliminar</button></div>`:""}
+    </li>`;
+  }
+  function bloqueObjetivosResumen(l){
+    const curso=l.filter(g=>!g.archivado&&g.m.estado==="en-curso");
+    if(!Obj) return "";
+    if(!curso.length) return `<section class="pf-caja pf-objs-res"><h3>Objetivos</h3><p class="pf-nota">Ponte un objetivo con fecha: una racha, un hábito, tareas, reflexiones${clasico?"":", libros"} o un nivel. El cuadrado de la figura se completa con su progreso. <button type="button" class="linklike" data-pf="objetivos">Crear un objetivo</button></p></section>`;
+    return `<section class="pf-caja pf-objs-res"><h3>Objetivos en curso</h3><ul class="pf-objs">${curso.slice(0,3).map(g=>tarjetaObj(g,{pequena:true})).join("")}</ul>
+      <button type="button" class="add alt" data-pf="objetivos">${curso.length>3?`Ver los ${curso.length} objetivos`:"Ver los objetivos"}</button></section>`;
+  }
+  function formularioObj(){
+    const hs=state.habits, nv=nivelActual().nv.nivel;
+    if(tipoObj==="habito"&&!hs.length) tipoObj="racha";
+    const [nombre,def,min,max]=META[tipoObj], metaDef=tipoObj==="nivel"?nv+1:def;
+    return `<details class="pf-caja pf-obj-nuevo" id="pf-obj-nuevo"${formAbierto?" open":""}><summary><h3>Nuevo objetivo</h3></summary>
+      <form id="pf-obj-form" autocomplete="off" novalidate>
+        <div class="pf-seg pf-obj-tipos" role="radiogroup" aria-label="Tipo de objetivo">${TIPOS_OBJ.map(([k,n])=>`<button type="button" role="radio" data-otipo="${k}" aria-checked="${k===tipoObj}"${k==="habito"&&!hs.length?' disabled title="Aún no tienes hábitos"':""}>${n}</button>`).join("")}</div>
+        <p class="pf-nota">${e(EXPLICA[tipoObj])}${tipoObj==="nivel"?` Ahora estás en el nivel ${nv}.`:""}</p>
+        <div class="pf-obj-campos">
+          ${tipoObj==="habito"?`<label class="pf-campo"><span>Hábito</span><select id="pf-obj-ref">${hs.map(h=>`<option value="${e(h.id)}">${e(h.t)}</option>`).join("")}</select></label>`:""}
+          <label class="pf-campo"><span>${nombre}</span><input type="number" id="pf-obj-meta" inputmode="numeric" min="${tipoObj==="nivel"?nv+1:min}" max="${max}" step="1" value="${metaDef}" required></label>
+          <label class="pf-campo"><span>Fecha límite</span><input type="date" id="pf-obj-hasta" min="${hoyK()}" value="${finDe("mes")}" required></label>
+        </div>
+        <div class="pf-obj-atajos" role="group" aria-label="Atajos de fecha"><button type="button" class="chip" data-ohasta="semana">Fin de semana</button><button type="button" class="chip" data-ohasta="mes">Fin de mes</button><button type="button" class="chip" data-ohasta="año">Fin de año</button></div>
+        <label class="pf-campo"><span>Título (opcional)</span><input type="text" id="pf-obj-titulo" maxlength="80" placeholder="Se pone solo si lo dejas vacío"></label>
+        <p class="pf-error" id="pf-obj-error" role="alert" hidden></p>
+        <button type="submit" class="add">Añadir objetivo</button>
+      </form></details>`;
+  }
+  function pintarObjetivos(){
+    const caja=SECCIONES.objetivos;
+    if(!Obj){ caja.innerHTML=""; return; }
+    // Si se está escribiendo en el formulario, no se repinta (llegan cambios de otro dispositivo o la librería)
+    const f=$("pf-obj-form"); if(f&&f.contains(document.activeElement)){ pintarListaObj(); return; }
+    const l=evaluarObjetivos();
+    if(formAbierto===null) formAbierto=!l.length;
+    caja.innerHTML=formularioObj()+`<div id="pf-obj-lista"></div>`;
+    pintarListaObj(l);
+  }
+  function pintarListaObj(l){
+    l=l||evaluarObjetivos();
+    const vivos=l.filter(g=>!g.archivado), grupo=(t,lista,nota="")=>lista.length?`<section class="pf-caja"><h3>${t}</h3>${nota}<ul class="pf-objs">${lista.map(g=>tarjetaObj(g)).join("")}</ul></section>`:"";
+    const curso=vivos.filter(g=>g.m.estado==="en-curso"||g.m.estado==="pendiente"), media=Obj.progresoMedio(l);
+    const arch=l.filter(g=>g.archivado);
+    $("pf-obj-lista").innerHTML=(l.length?"":`<p class="pf-nota pf-obj-vacio">Aún no tienes objetivos. Cada objetivo cumplido suma ${Niveles.PUNTOS.objetivo} puntos de experiencia, y el cuadrado de la figura se completa con el progreso de los que tienes en curso.</p>`)+
+      grupo("En curso",curso,media==null?"":`<p class="pf-nota">Progreso medio: ${Math.round(media*100)} %. Es lo que dibuja el cuadrado de la figura.</p>`)+
+      grupo("Cumplidos",vivos.filter(g=>g.m.estado==="cumplido").sort((a,b)=>b.m.cumplidoEl.localeCompare(a.m.cumplidoEl)),`<p class="pf-nota">Cada uno suma ${Niveles.PUNTOS.objetivo} puntos de experiencia.</p>`)+
+      grupo("No alcanzados",vivos.filter(g=>g.m.estado==="no-alcanzado").reverse())+
+      (arch.length?`<details class="pf-caja pf-obj-arch"><summary><h3>Archivados (${arch.length})</h3></summary><ul class="pf-objs">${arch.map(g=>tarjetaObj(g)).join("")}</ul></details>`:"");
+  }
+  function errorObj(t){ const p=$("pf-obj-error"); p.textContent=t; p.hidden=!t; }
+  function crearObjetivo(){
+    const meta=Number($("pf-obj-meta").value), hasta=$("pf-obj-hasta").value, desde=hoyK(), ref=$("pf-obj-ref")?$("pf-obj-ref").value:null;
+    const [,,min,max]=META[tipoObj];
+    if(!Number.isInteger(meta)||meta<min||meta>max){ errorObj(`Escribe un número entero entre ${min} y ${miles(max)}.`); $("pf-obj-meta").focus(); return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(hasta)||hasta<desde){ errorObj("La fecha límite tiene que ser hoy o más adelante."); $("pf-obj-hasta").focus(); return; }
+    if((Est.deClave(hasta)-Est.deClave(desde))/864e5>1830){ errorObj("El plazo puede ser de cinco años como mucho."); $("pf-obj-hasta").focus(); return; }
+    if(tipoObj==="habito"&&!state.habits.some(h=>h.id===ref)){ errorObj("Elige un hábito."); return; }
+    state.objetivos[newId("o")]={titulo:$("pf-obj-titulo").value.trim().slice(0,80), tipo:tipoObj, ref:tipoObj==="habito"?ref:null, meta, desde, hasta, archivado:false, creado:new Date().toISOString()};
+    save();
+    formAbierto=false; document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+    pintarObjetivos();
+  }
+  vista.addEventListener("submit",ev=>{ if(ev.target.id!=="pf-obj-form") return; ev.preventDefault(); crearObjetivo(); });
+  vista.addEventListener("toggle",ev=>{ if(ev.target.id==="pf-obj-nuevo") formAbierto=ev.target.open; },true);
+  vista.addEventListener("click",ev=>{
+    let el;
+    if((el=ev.target.closest("[data-otipo]"))){ tipoObj=el.dataset.otipo; const t=$("pf-obj-titulo").value, h=$("pf-obj-hasta").value; SECCIONES.objetivos.querySelector("#pf-obj-nuevo").outerHTML=formularioObj(); $("pf-obj-titulo").value=t; if(h) $("pf-obj-hasta").value=h; const b=SECCIONES.objetivos.querySelector(`[data-otipo="${tipoObj}"]`); if(b) b.focus(); return; }
+    if((el=ev.target.closest("[data-ohasta]"))){ $("pf-obj-hasta").value=finDe(el.dataset.ohasta); errorObj(""); return; }
+    if((el=ev.target.closest("[data-oarch]"))){ const g=state.objetivos[el.dataset.oarch]; if(g){ g.archivado=el.dataset.v==="1"; save(); pintarListaObj(); } return; }
+    if((el=ev.target.closest("[data-odel]"))){ const id=el.dataset.odel; armDelete(el,()=>{ delete state.objetivos[id]; save(); pintarListaObj(); },"Pulsa otra vez para eliminar"); return; }
+  });
+
+  // ---------------------------------------------------------------- resúmenes de la semana, el mes y el año
+  const TIPOS_RES=[["semana","Semana"],["mes","Mes"],["año","Año"]];
+  let informe=null;      // {tipo, atras} mientras se ve un resumen
+  function bloqueResumenes(){
+    if(!Res) return "";
+    const l=TIPOS_RES.map(([t])=>Res.periodo(t,0)).filter(x=>Res.hayDatos(state,x));
+    if(!l.length) return "";
+    return `<section class="pf-caja pf-resumenes"><h3>Tus resúmenes</h3>
+      <div class="pf-res-lista">${l.map(x=>`<button type="button" data-informe="${x.tipo}"><small>${x.tipo==="semana"?"La semana pasada":x.tipo==="mes"?"El mes pasado":"El año pasado"}</small><strong>${e(x.titulo)}</strong><span>${e(x.rango)}</span></button>`).join("")}</div></section>`;
+  }
+  function abrirInforme(tipo,atras=0){
+    informe={tipo,atras};
+    for(const [k,el] of Object.entries(SECCIONES)) el.hidden=true;
+    $("pf-periodos").hidden=true; $("pf-informe").hidden=false;
+    pintarInforme(); scrollTo(0,0);
+  }
+  function cerrarInforme(){
+    if(!informe) return false;
+    informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML="";
+    ponerPestana(pestana); scrollTo(0,0);
+    return true;
+  }
+  function pintarInforme(){
+    const caja=$("pf-informe"), per=Res.periodo(informe.tipo,informe.atras), hay=Res.hayDatos(state,per);
+    const hayAntes=Res.hayDatos(state,Res.periodo(informe.tipo,informe.atras+1));
+    const cab=`<button type="button" class="linklike pf-inf-volver" data-inf-volver>‹ Volver al perfil</button>
+      <div class="pf-seg pf-inf-tipos" role="radiogroup" aria-label="Resumen de">${TIPOS_RES.map(([t,n])=>`<button type="button" role="radio" data-inf-tipo="${t}" aria-checked="${t===informe.tipo}">${n}</button>`).join("")}</div>
+      <header class="pf-inf-cab">
+        <button type="button" class="pf-inf-mover" data-inf-mover="1" aria-label="${informe.tipo==="semana"?"Semana":informe.tipo==="mes"?"Mes":"Año"} anterior"${hayAntes?"":" disabled"}>‹</button>
+        <div><small>Resumen ${informe.tipo==="semana"?"de la semana":informe.tipo==="mes"?"del mes":"del año"}</small><h3>${e(per.titulo)}</h3><p>${e(per.rango)}</p></div>
+        <button type="button" class="pf-inf-mover" data-inf-mover="-1" aria-label="Siguiente"${informe.atras?"":" disabled"}>›</button>
+      </header>`;
+    if(!hay){ caja.innerHTML=cab+`<p class="pf-nota">No hay nada registrado en este periodo.</p>`; return; }
+    const r=Res.calcular(state,per,{libreria,tipoDe}), n=informe.tipo==="semana"?"la semana":informe.tipo==="mes"?"el mes":"el año";
+    const fig=Figura.svg({figura:state.perfil.figura, etapa:r.xp.etapa, avance:r.xp.nivel>=120?0:((r.xp.nivel-1)%10+r.xp.progreso)/10, nivel:r.xp.progreso, titulo:`Nivel ${r.xp.nivel} al terminar ${n}`});
+    caja.innerHTML=cab+`<div class="pf-portada pf-inf-portada"><div class="pf-figura">${fig}</div>
+        <div><p class="pf-inf-frase">${e(Res.frase(r,per))}</p>
+          <div class="pf-nivel"><span class="pf-num">${r.xp.nivel}</span><div><strong>${e(Niveles.nombre(r.xp.nivel,state.perfil.figura))}</strong>
+            <small>+${miles(r.xp.ganada)} de experiencia${r.xp.subidos>0?` · ${r.xp.subidos===1?"subiste un nivel":"subiste "+r.xp.subidos+" niveles"}`:""}</small></div></div>
+          <button type="button" class="add" data-inf-png>Guardar como imagen</button>
+          <p class="pf-nota" id="pf-inf-estado" role="status"></p></div></div>
+      <div class="pf-tiles">${tile(pc(r.habitos.pct),"hábitos cumplidos",cambio(r.habitos.pct,r.habitos.anterior))}${tile(r.racha,r.racha===1?"día de racha":"días de mejor racha")}
+        ${tile(r.tareas.hechas,r.tareas.hechas===1?"tarea terminada":"tareas terminadas",cambio(r.tareas.hechas,r.tareas.anterior,{puntos:false}))}
+        ${tile(r.animo.media==null?"—":n1(r.animo.media)+"<small>/5</small>","ánimo medio",cambio(r.animo.media,r.animo.anterior,{puntos:false}))}
+        ${tile(r.reflexiones.n,r.reflexiones.n===1?"reflexión":"reflexiones",cambio(r.reflexiones.n,r.reflexiones.anterior,{puntos:false}))}${tile(r.objetivos.length,r.objetivos.length===1?"objetivo cumplido":"objetivos cumplidos")}</div>
+      ${r.mejorHabito?`<section class="pf-caja"><h3>Tu hábito más constante</h3><p><strong>${e(r.mejorHabito.nombre)}</strong>: ${pc(r.mejorHabito.pct)} (${r.mejorHabito.hechos} de ${r.mejorHabito.total} días).</p></section>`:""}
+      ${r.tareas.hechas?`<section class="pf-caja"><h3>Tareas terminadas por prioridad</h3><ul class="pf-filas">${PRIOS.map(([k,nm])=>`<li><span class="pf-punto" style="background:var(--p-${k})"></span><span class="pf-n">${nm}</span>${barraH(r.tareas.porPrioridad[k]/r.tareas.hechas,nm+": "+r.tareas.porPrioridad[k])}<em>${r.tareas.porPrioridad[k]}</em></li>`).join("")}</ul></section>`:""}
+      ${r.objetivos.length?`<section class="pf-caja"><h3>Objetivos cumplidos</h3><ul class="pf-inf-objs">${r.objetivos.map(g=>`<li><span aria-hidden="true">✓</span> ${e(g.titulo)} <small>${e(fechaCorta(g.el))}</small></li>`).join("")}</ul></section>`:""}
+      ${r.descubrimiento?`<section class="pf-caja pf-descubre"><h3>Un descubrimiento</h3><p>${e(r.descubrimiento)}</p><p class="pf-nota">Con tus datos hasta el final de ${n}. Es una coincidencia, no una causa.</p></section>`:""}`;
+    pintarInforme.ultimo={per,r};
+  }
+  async function guardarImagen(btn){
+    const u=pintarInforme.ultimo, est=$("pf-inf-estado"); if(!u) return;
+    btn.disabled=true; est.textContent="Preparando la imagen…";
+    try{ const nombre=await Res.exportar(state,u.per,u.r,{nombreNivel:Niveles.nombre(u.r.xp.nivel,state.perfil.figura)}); est.textContent=`Imagen guardada en Descargas: «${nombre}»`; }
+    catch(err){ est.textContent="No se pudo crear la imagen."; }
+    finally{ btn.disabled=false; }
+  }
+  vista.addEventListener("click",ev=>{
+    let el;
+    if((el=ev.target.closest("[data-informe]"))){ marcarVisto(); abrirInforme(el.dataset.informe,0); return; }
+    if(!informe) return;
+    if(ev.target.closest("[data-inf-volver]")){ cerrarInforme(); return; }
+    if((el=ev.target.closest("[data-inf-tipo]"))){ informe={tipo:el.dataset.infTipo,atras:0}; pintarInforme(); return; }
+    if((el=ev.target.closest("[data-inf-mover]"))){ informe.atras=Math.max(0,informe.atras+Number(el.dataset.infMover)); pintarInforme(); const b=$("pf-informe").querySelector(`[data-inf-mover="${el.dataset.infMover}"]`); if(b&&!b.disabled) b.focus(); return; }
+    if((el=ev.target.closest("[data-inf-png]"))){ guardarImagen(el); return; }
+  });
+
+  // Aviso en la página del día: el lunes, el día 1 y el 1 de enero (lo ya visto se recuerda en este dispositivo)
+  const aviso=document.createElement("div");
+  aviso.className="aviso-resumen"; aviso.id="aviso-resumen"; aviso.hidden=true; aviso.setAttribute("role","status");
+  { const head=$("head"); if(head) head.after(aviso); }
+  const visto=()=>{ try{ return localStorage.getItem("ascenso-resumen-visto")||""; }catch(err){ return ""; } };
+  function marcarVisto(){ const p=Res&&Res.avisoDeHoy(); if(p) try{ localStorage.setItem("ascenso-resumen-visto",p.clave); }catch(err){} aviso.hidden=true; }
+  function pintarAviso(){
+    const p=Res&&Res.avisoDeHoy();
+    if(!p||visto()===p.clave||!Res.hayDatos(state,p)){ aviso.hidden=true; return; }
+    aviso.innerHTML=`<span>Tu resumen ${p.tipo==="semana"?"de la semana":p.tipo==="mes"?"del mes":"del año"} está listo.</span>
+      <button type="button" class="linklike" data-aviso-ver="${p.tipo}">Verlo</button><button type="button" class="aviso-cerrar" data-aviso-cerrar aria-label="Cerrar el aviso">×</button>`;
+    aviso.hidden=false;
+  }
+  aviso.addEventListener("click",ev=>{
+    const v=ev.target.closest("[data-aviso-ver]");
+    if(v){ marcarVisto(); abrir("resumen"); abrirInforme(v.dataset.avisoVer,0); return; }
+    if(ev.target.closest("[data-aviso-cerrar]")) marcarVisto();
+  });
+  pintarAviso();
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) pintarAviso(); });
+  document.addEventListener("ascenso:pintado",pintarAviso);
+
   function pintarDescubrir(){ SECCIONES.descubrir.innerHTML=bloqueDescubrimientos(0); }
   // Ajustes › Zonas del cuerpo: a qué zona va cada hábito, tipo de entreno y etiqueta
   function pintarZonasAjustes(){
@@ -227,19 +445,21 @@ window.AscensoPerfil=(()=>{
     $("pf-zonas-auto").hidden=!state.perfil.zonas;
   }
 
-  const PINTAR={resumen:()=>pintarResumen(), cuerpo:pintarCuerpo, habitos:pintarHabitos, productividad:pintarProductividad, descubrir:pintarDescubrir};
+  const PINTAR={resumen:()=>pintarResumen(), cuerpo:pintarCuerpo, habitos:pintarHabitos, productividad:pintarProductividad, objetivos:pintarObjetivos, descubrir:pintarDescubrir};
   function pintarPestana(){
+    if(informe){ pintarInforme(); return; }
     for(const b of $("pf-periodos").querySelectorAll("[data-per]")) b.setAttribute("aria-checked",String(b.dataset.per===perClave));
-    $("pf-periodos").hidden=pestana==="ajustes"||pestana==="descubrir";
+    $("pf-periodos").hidden=pestana==="ajustes"||pestana==="descubrir"||pestana==="objetivos";
     if(PINTAR[pestana]) PINTAR[pestana]();
   }
   function ponerPestana(t){
     if(pestana==="ajustes"&&t!=="ajustes"&&cuentaDisponible&&Cuenta.retiene()) return false;
     if(pestana==="ajustes"&&t!=="ajustes"&&cuentaDisponible) Cuenta.desmontar();
     pestana=t;
+    if(informe){ informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML=""; }
     for(const b of vista.querySelectorAll(".pf-tabs [data-pf]")) b.setAttribute("aria-selected",String(b.dataset.pf===t));
     for(const [k,el] of Object.entries(SECCIONES)) el.hidden=k!==t;
-    if(t==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); if(cuentaDisponible) Cuenta.montarEn($("pf-cuenta-sitio")); if(typeof renderCfg==="function") try{ renderCfg(); renderTypeCfg(); }catch(err){} }
+    if(t==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); if(window.AscensoBloqueo&&window.AscensoBloqueo.disponible) window.AscensoBloqueo.pintarAjustes($("pf-bloqueo-sitio")); if(cuentaDisponible) Cuenta.montarEn($("pf-cuenta-sitio")); if(typeof renderCfg==="function") try{ renderCfg(); renderTypeCfg(); }catch(err){} }
     pintarPestana();
     const tab=vista.querySelector(`.pf-tabs [data-pf="${t}"]`); if(tab&&tab.scrollIntoView) tab.scrollIntoView({block:"nearest",inline:"nearest"});
     return true;
@@ -264,6 +484,7 @@ window.AscensoPerfil=(()=>{
     if(vista.hidden) return true;
     if(cuentaDisponible&&Cuenta.retiene()) return false;
     if(cuentaDisponible) Cuenta.desmontar();
+    if(informe){ informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML=""; }
     vista.hidden=true;
     if(typeof showDay==="function") showDay(); else document.querySelector("main").hidden=false;
     return true;
@@ -282,7 +503,7 @@ window.AscensoPerfil=(()=>{
     if(vista.hidden||ev.key!=="Escape") return;
     const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)){ a.blur(); return; }
     if(document.querySelector("dialog[open]")) return;
-    cerrar();
+    if(!cerrarInforme()) cerrar();
   });
 
   // La puerta escondida: el recuadro de la racha
@@ -299,7 +520,7 @@ window.AscensoPerfil=(()=>{
   return {
     disponible:true, abrir, cerrar,
     abierta:()=>!vista.hidden,
-    nivel:()=>vista.hidden?0:1,
-    atras(){ if(vista.hidden) return false; cerrar(); return true; },
+    nivel:()=>vista.hidden?0:informe?2:1,
+    atras(){ if(vista.hidden) return false; if(!cerrarInforme()) cerrar(); return true; },
   };
 })();
