@@ -43,7 +43,21 @@ test("áreas de los mapas con ratón", async () => {
       Object.assign(z, { x: n.x - 60, y: n.y - 60, w: 120 + 0, h: 120 }); if (zDentro(z, o.x, o.y)) { o.x = n.x + 400; o.y = n.y + 400; } save(); mgDraw(); }, [id, dentro, fuera]);
     assert.match(await p.evaluate(i => MG.zCajas[i].texto, id), /^Terminados · 1$/, "el rótulo cuenta los nodos de dentro");
 
-    // ---- Mover por el título: el nodo de dentro va con el área; el de fuera no
+    // ---- Panel del área seleccionada: título, forma y bloqueo, a la vista
+    await p.locator(".mz-panel").waitFor();
+    assert.equal(await p.inputValue(".mz-panel .mz-titulo"), "Terminados");
+    await p.fill(".mz-panel .mz-titulo", "Terminados ya"); await p.press(".mz-panel .mz-titulo", "Enter");
+    assert.equal((await zona(p, id)).title, "Terminados ya");
+    await p.click('.mz-panel [data-zforma="ovalo"]'); assert.equal((await zona(p, id)).shape, "ovalo");
+    await p.click('.mz-panel [data-zforma="rect"]'); assert.equal((await zona(p, id)).shape, "rect");
+    await p.click('.mz-panel [data-zaccion="bloquear"]'); assert.equal((await zona(p, id)).locked, true);
+    await p.click('.mz-panel [data-zaccion="bloquear"]'); assert.equal((await zona(p, id)).locked, false);
+    await p.keyboard.press("Control+z");
+    assert.equal((await zona(p, id)).locked, true, "cada cambio del panel se deshace con Ctrl+Z");
+    await p.keyboard.press("Control+y");
+    await p.evaluate(i => { mZona = i; selectionChanged(); }, id);
+    await p.fill(".mz-panel .mz-titulo", "Terminados");
+    // Mover por el título: el nodo de dentro va con el área; el de fuera no
     const z0 = await zona(p, id), dentro0 = await nodo(p, dentro), fuera0 = await nodo(p, fuera), zoom = await p.evaluate(() => cam().z);
     await arrastrar(p, await rotulo(p, id), 100, 50);
     z = await zona(p, id);
@@ -68,12 +82,19 @@ test("áreas de los mapas con ratón", async () => {
     await arrastrar(p, await esquina(p, id, "se"), 90, 10);
     const zz = await zona(p, id); assert.ok(zz.w === zz.h && zz.w > z.w, "y lo sigue siendo al estirarlo");
 
-    // ---- Color, con su muestra en el menú
+    // ---- Color: desde el menú se abre la paleta del panel (amplia: 30 colores) y además se puede elegir cualquiera
     await p.mouse.click(...(await rotulo(p, id)), { button: "right" });
     await p.locator(".mv-menu").getByRole("button", { name: "Color…" }).click();
-    assert.equal(await p.locator(".mv-menu .mm-sw").count(), 8);
-    await p.locator(".mv-menu").getByRole("button", { name: "Lavanda" }).click();
-    assert.equal((await zona(p, id)).color, "#A99BC9");
+    assert.equal(await p.locator(".mz-paleta button").count(), 30);
+    const lavanda = await p.evaluate(() => Z_COLORS.find(c => c[1] === "Lavanda")[0]);
+    await p.locator('.mz-paleta button[aria-label="Lavanda"]').click();
+    assert.equal((await zona(p, id)).color, lavanda);
+    assert.equal(await p.locator('.mz-paleta button[aria-pressed="true"]').getAttribute("aria-label"), "Lavanda");
+    await p.locator(".mz-otro input").evaluate(i => { i.value = "#123456"; i.dispatchEvent(new Event("input", { bubbles: true })); i.dispatchEvent(new Event("change", { bubbles: true })); });
+    assert.equal((await zona(p, id)).color, "#123456", "otro color cualquiera");
+    assert.equal(await p.locator(".mz-otro.on").count(), 1);
+    await p.click(".mz-color");
+    assert.equal(await p.locator(".mz-paleta").count(), 0, "el botón de color abre y cierra la paleta");
 
     // ---- Bloquear: no se mueve ni cambia de tamaño
     await p.mouse.click(...(await rotulo(p, id)), { button: "right" });
@@ -148,6 +169,15 @@ test("áreas de los mapas con el dedo", async () => {
     await gesto.arrastrar(await rotulo(p, id), [tx + 20, ty + 80], { pulsacion: 40 });
     assert.ok((await nodo(p, dentro)).y > n0.y + 15, "ahora el nodo va con ella");
     assert.equal(await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
+    // El panel cabe en el lienzo del móvil y la paleta se puede tocar
+    await p.evaluate(i => { mZona = i; selectionChanged(); }, id);
+    await p.tap(".mz-color");
+    const panel = await p.locator(".mz-panel").boundingBox(), lienzo = await p.locator("#mv-graph").boundingBox();
+    assert.ok(panel.x >= lienzo.x && panel.x + panel.width <= lienzo.x + lienzo.width + 1, "el panel cabe a lo ancho");
+    const muestra = await p.locator(".mz-paleta button").first().boundingBox();
+    assert.ok(muestra.width >= 24 && muestra.height >= 28, "muestras para el dedo");
+    await p.locator('.mz-paleta button[aria-label="Salvia oscuro"]').tap();
+    assert.equal((await zona(p, id)).color, await p.evaluate(() => Z_COLORS.find(c => c[1] === "Salvia oscuro")[0]));
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
 });

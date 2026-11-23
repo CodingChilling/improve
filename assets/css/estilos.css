@@ -6565,3 +6565,157 @@ dialog.tdlg.diario {
     font-size: 16px;
   }
 }
+
+/* ---------- Panel del área seleccionada (arriba del mapa) ---------- */
+.mz-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  box-sizing: border-box;
+  max-width: calc(100% - 20px);
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(var(--surface2), var(--surface2)), var(--bg);
+  box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.55);
+  animation: rise 0.15s both;
+}
+.mz-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.mz-titulo {
+  flex: 1 1 100px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.mz-formas {
+  display: flex;
+  gap: 2px;
+  padding: 0 4px;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.mz-formas button,
+.mz-b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.mz-formas button:hover,
+.mz-b:hover {
+  background: var(--soft);
+}
+.mz-formas button[aria-pressed="true"],
+.mz-b[aria-pressed="true"],
+.mz-b[aria-expanded="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.mz-formas svg,
+.mz-b svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mz-color i {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.mz-color[aria-expanded="true"] {
+  background: var(--soft);
+}
+.mz-cerrar {
+  color: var(--muted);
+}
+.mz-paleta {
+  display: grid;
+  grid-template-columns: repeat(10, 26px);
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--line);
+}
+.mz-paleta button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.mz-paleta button:hover {
+  transform: scale(1.12);
+}
+.mz-paleta button[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--surface2), 0 0 0 4px var(--ink);
+}
+.mz-otro {
+  grid-column: span 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mz-otro input {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.mz-otro.on span {
+  color: var(--ink);
+  font-weight: 600;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .mz-titulo {
+    font-size: 16px;
+    max-width: none;
+  }
+  .mz-formas button,
+  .mz-b {
+    width: 40px;
+    height: 40px;
+  }
+  .mz-paleta {
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .mz-paleta button {
+    width: auto;
+    height: 30px;
+  }
+}
