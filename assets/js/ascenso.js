@@ -3953,7 +3953,8 @@ cdlg.addEventListener("focusout",e=>{
   if(v && v!==c.title){ c.title=v.slice(0,200); cardChanged(); } else e.target.value=c.title;
 });
 function render(){ if(!boardsView.hidden){ renderBoards(); return; } renderQuote(); renderWeek(); renderDay(); renderTasks(); renderProgress(); renderCal(); }
-function renderAll(){ render(); renderCfg(); renderTagMgr(); }
+// Tras pintar el día (al cargar, al cambiar de día o al importar) se avisa a los módulos que dependen de él (el aviso del resumen)
+function renderAll(){ render(); renderCfg(); renderTagMgr(); document.dispatchEvent(new Event("ascenso:pintado")); }
 // Si la app queda abierta y cambia el día, salta al nuevo día y su frase
 let openDay=key(today());
 function checkNewDay(){ const k=key(today()); if(k!==openDay){ openDay=k; sel=today(); renderAll(); } }

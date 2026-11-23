@@ -7734,3 +7734,139 @@ dialog.tdlg.diario {
     min-height: 36px;
   }
 }
+/* Perfil · Resúmenes */
+.pf-res-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.pf-res-lista button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--ink);
+  text-align: left;
+}
+.pf-res-lista button:hover {
+  border-color: var(--gold);
+}
+.pf-res-lista small {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.pf-res-lista strong {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+}
+.pf-res-lista span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.pf-informe .pf-inf-volver {
+  display: inline-block;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+}
+.pf-inf-tipos {
+  display: flex;
+  width: max-content;
+  margin: 0 0 14px;
+}
+.pf-inf-cab {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.pf-inf-cab small {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.pf-inf-cab h3 {
+  margin: 2px 0;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+.pf-inf-cab p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.pf-inf-mover {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.pf-inf-mover:disabled {
+  opacity: 0.35;
+}
+.pf-inf-frase {
+  margin: 0 0 16px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+.pf-inf-portada .add {
+  margin-top: 16px;
+}
+.pf-inf-objs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-inf-objs li {
+  padding: 6px 0;
+}
+.pf-inf-objs span {
+  color: var(--gold);
+}
+.pf-inf-objs small {
+  margin-left: 6px;
+  color: var(--muted);
+}
+/* El aviso del resumen en la página del día */
+.aviso-resumen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 0.92rem;
+}
+.aviso-resumen[hidden] {
+  display: none;
+}
+.aviso-resumen span {
+  flex: 1 1 auto;
+}
+.aviso-cerrar {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+}

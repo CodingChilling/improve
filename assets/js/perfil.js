@@ -6,7 +6,7 @@
 // Existe en las dos versiones; la cuenta, solo en la aplicación nueva.
 "use strict";
 window.AscensoPerfil=(()=>{
-  const Niveles=window.AscensoNiveles, Obj=window.AscensoObjetivos, Figura=window.AscensoFigura, Cuenta=window.AscensoCuenta, Tema=window.AscensoTema, Est=window.AscensoEstadisticas;
+  const Niveles=window.AscensoNiveles, Obj=window.AscensoObjetivos, Res=window.AscensoResumenes, Figura=window.AscensoFigura, Cuenta=window.AscensoCuenta, Tema=window.AscensoTema, Est=window.AscensoEstadisticas;
   const nada={disponible:false, abierta:()=>false, nivel:()=>0, atras:()=>false, abrir(){}, cerrar(){}};
   if(!Niveles||!Figura||!Est) return nada;
   const $=id=>document.getElementById(id);
@@ -27,7 +27,7 @@ window.AscensoPerfil=(()=>{
     <div class="bv-body"><div class="bh pf-cuerpo">
       <div class="pf-periodos" id="pf-periodos" role="radiogroup" aria-label="Periodo"><button type="button" role="radio" data-per="semana">Semana</button><button type="button" role="radio" data-per="mes">Mes</button><button type="button" role="radio" data-per="año">Año</button><button type="button" role="radio" data-per="siempre">Siempre</button></div>
       <section id="pf-resumen" class="pf-resumen"></section><section id="pf-pcuerpo" hidden></section><section id="pf-habitos" hidden></section>
-      <section id="pf-productividad" hidden></section><section id="pf-objetivos" hidden></section><section id="pf-descubrir" hidden></section><section id="pf-ajustes" class="pf-ajustes" hidden></section></div></div>`;
+      <section id="pf-productividad" hidden></section><section id="pf-objetivos" hidden></section><section id="pf-descubrir" hidden></section><section id="pf-ajustes" class="pf-ajustes" hidden></section><section id="pf-informe" class="pf-informe" hidden></section></div></div>`;
   const barra=$("barra"); document.body.insertBefore(vista,barra||null);
   const resumen=$("pf-resumen"), ajustes=$("pf-ajustes");
   const SECCIONES={resumen, cuerpo:$("pf-pcuerpo"), habitos:$("pf-habitos"), productividad:$("pf-productividad"), objetivos:$("pf-objetivos"), descubrir:$("pf-descubrir"), ajustes};
@@ -123,6 +123,7 @@ window.AscensoPerfil=(()=>{
       </div>
     </div>
     ${bloqueObjetivosResumen(objs)}
+    ${bloqueResumenes()}
     ${bloquePeriodo()}
     ${bloqueDescubrimientos(3)}
     <section class="pf-caja"><h3>De dónde viene tu experiencia</h3>
@@ -339,6 +340,96 @@ window.AscensoPerfil=(()=>{
     if((el=ev.target.closest("[data-odel]"))){ const id=el.dataset.odel; armDelete(el,()=>{ delete state.objetivos[id]; save(); pintarListaObj(); },"Pulsa otra vez para eliminar"); return; }
   });
 
+  // ---------------------------------------------------------------- resúmenes de la semana, el mes y el año
+  const TIPOS_RES=[["semana","Semana"],["mes","Mes"],["año","Año"]];
+  let informe=null;      // {tipo, atras} mientras se ve un resumen
+  function bloqueResumenes(){
+    if(!Res) return "";
+    const l=TIPOS_RES.map(([t])=>Res.periodo(t,0)).filter(x=>Res.hayDatos(state,x));
+    if(!l.length) return "";
+    return `<section class="pf-caja pf-resumenes"><h3>Tus resúmenes</h3>
+      <div class="pf-res-lista">${l.map(x=>`<button type="button" data-informe="${x.tipo}"><small>${x.tipo==="semana"?"La semana pasada":x.tipo==="mes"?"El mes pasado":"El año pasado"}</small><strong>${e(x.titulo)}</strong><span>${e(x.rango)}</span></button>`).join("")}</div></section>`;
+  }
+  function abrirInforme(tipo,atras=0){
+    informe={tipo,atras};
+    for(const [k,el] of Object.entries(SECCIONES)) el.hidden=true;
+    $("pf-periodos").hidden=true; $("pf-informe").hidden=false;
+    pintarInforme(); scrollTo(0,0);
+  }
+  function cerrarInforme(){
+    if(!informe) return false;
+    informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML="";
+    ponerPestana(pestana); scrollTo(0,0);
+    return true;
+  }
+  function pintarInforme(){
+    const caja=$("pf-informe"), per=Res.periodo(informe.tipo,informe.atras), hay=Res.hayDatos(state,per);
+    const hayAntes=Res.hayDatos(state,Res.periodo(informe.tipo,informe.atras+1));
+    const cab=`<button type="button" class="linklike pf-inf-volver" data-inf-volver>‹ Volver al perfil</button>
+      <div class="pf-seg pf-inf-tipos" role="radiogroup" aria-label="Resumen de">${TIPOS_RES.map(([t,n])=>`<button type="button" role="radio" data-inf-tipo="${t}" aria-checked="${t===informe.tipo}">${n}</button>`).join("")}</div>
+      <header class="pf-inf-cab">
+        <button type="button" class="pf-inf-mover" data-inf-mover="1" aria-label="${informe.tipo==="semana"?"Semana":informe.tipo==="mes"?"Mes":"Año"} anterior"${hayAntes?"":" disabled"}>‹</button>
+        <div><small>Resumen ${informe.tipo==="semana"?"de la semana":informe.tipo==="mes"?"del mes":"del año"}</small><h3>${e(per.titulo)}</h3><p>${e(per.rango)}</p></div>
+        <button type="button" class="pf-inf-mover" data-inf-mover="-1" aria-label="Siguiente"${informe.atras?"":" disabled"}>›</button>
+      </header>`;
+    if(!hay){ caja.innerHTML=cab+`<p class="pf-nota">No hay nada registrado en este periodo.</p>`; return; }
+    const r=Res.calcular(state,per,{libreria,tipoDe}), n=informe.tipo==="semana"?"la semana":informe.tipo==="mes"?"el mes":"el año";
+    const fig=Figura.svg({figura:state.perfil.figura, etapa:r.xp.etapa, avance:r.xp.nivel>=120?0:((r.xp.nivel-1)%10+r.xp.progreso)/10, nivel:r.xp.progreso, titulo:`Nivel ${r.xp.nivel} al terminar ${n}`});
+    caja.innerHTML=cab+`<div class="pf-portada pf-inf-portada"><div class="pf-figura">${fig}</div>
+        <div><p class="pf-inf-frase">${e(Res.frase(r,per))}</p>
+          <div class="pf-nivel"><span class="pf-num">${r.xp.nivel}</span><div><strong>${e(Niveles.nombre(r.xp.nivel,state.perfil.figura))}</strong>
+            <small>+${miles(r.xp.ganada)} de experiencia${r.xp.subidos>0?` · ${r.xp.subidos===1?"subiste un nivel":"subiste "+r.xp.subidos+" niveles"}`:""}</small></div></div>
+          <button type="button" class="add" data-inf-png>Guardar como imagen</button>
+          <p class="pf-nota" id="pf-inf-estado" role="status"></p></div></div>
+      <div class="pf-tiles">${tile(pc(r.habitos.pct),"hábitos cumplidos",cambio(r.habitos.pct,r.habitos.anterior))}${tile(r.racha,r.racha===1?"día de racha":"días de mejor racha")}
+        ${tile(r.tareas.hechas,r.tareas.hechas===1?"tarea terminada":"tareas terminadas",cambio(r.tareas.hechas,r.tareas.anterior,{puntos:false}))}
+        ${tile(r.animo.media==null?"—":n1(r.animo.media)+"<small>/5</small>","ánimo medio",cambio(r.animo.media,r.animo.anterior,{puntos:false}))}
+        ${tile(r.reflexiones.n,r.reflexiones.n===1?"reflexión":"reflexiones",cambio(r.reflexiones.n,r.reflexiones.anterior,{puntos:false}))}${tile(r.objetivos.length,r.objetivos.length===1?"objetivo cumplido":"objetivos cumplidos")}</div>
+      ${r.mejorHabito?`<section class="pf-caja"><h3>Tu hábito más constante</h3><p><strong>${e(r.mejorHabito.nombre)}</strong>: ${pc(r.mejorHabito.pct)} (${r.mejorHabito.hechos} de ${r.mejorHabito.total} días).</p></section>`:""}
+      ${r.tareas.hechas?`<section class="pf-caja"><h3>Tareas terminadas por prioridad</h3><ul class="pf-filas">${PRIOS.map(([k,nm])=>`<li><span class="pf-punto" style="background:var(--p-${k})"></span><span class="pf-n">${nm}</span>${barraH(r.tareas.porPrioridad[k]/r.tareas.hechas,nm+": "+r.tareas.porPrioridad[k])}<em>${r.tareas.porPrioridad[k]}</em></li>`).join("")}</ul></section>`:""}
+      ${r.objetivos.length?`<section class="pf-caja"><h3>Objetivos cumplidos</h3><ul class="pf-inf-objs">${r.objetivos.map(g=>`<li><span aria-hidden="true">✓</span> ${e(g.titulo)} <small>${e(fechaCorta(g.el))}</small></li>`).join("")}</ul></section>`:""}
+      ${r.descubrimiento?`<section class="pf-caja pf-descubre"><h3>Un descubrimiento</h3><p>${e(r.descubrimiento)}</p><p class="pf-nota">Con tus datos hasta el final de ${n}. Es una coincidencia, no una causa.</p></section>`:""}`;
+    pintarInforme.ultimo={per,r};
+  }
+  async function guardarImagen(btn){
+    const u=pintarInforme.ultimo, est=$("pf-inf-estado"); if(!u) return;
+    btn.disabled=true; est.textContent="Preparando la imagen…";
+    try{ const nombre=await Res.exportar(state,u.per,u.r,{nombreNivel:Niveles.nombre(u.r.xp.nivel,state.perfil.figura)}); est.textContent=`Imagen guardada en Descargas: «${nombre}»`; }
+    catch(err){ est.textContent="No se pudo crear la imagen."; }
+    finally{ btn.disabled=false; }
+  }
+  vista.addEventListener("click",ev=>{
+    let el;
+    if((el=ev.target.closest("[data-informe]"))){ marcarVisto(); abrirInforme(el.dataset.informe,0); return; }
+    if(!informe) return;
+    if(ev.target.closest("[data-inf-volver]")){ cerrarInforme(); return; }
+    if((el=ev.target.closest("[data-inf-tipo]"))){ informe={tipo:el.dataset.infTipo,atras:0}; pintarInforme(); return; }
+    if((el=ev.target.closest("[data-inf-mover]"))){ informe.atras=Math.max(0,informe.atras+Number(el.dataset.infMover)); pintarInforme(); const b=$("pf-informe").querySelector(`[data-inf-mover="${el.dataset.infMover}"]`); if(b&&!b.disabled) b.focus(); return; }
+    if((el=ev.target.closest("[data-inf-png]"))){ guardarImagen(el); return; }
+  });
+
+  // Aviso en la página del día: el lunes, el día 1 y el 1 de enero (lo ya visto se recuerda en este dispositivo)
+  const aviso=document.createElement("div");
+  aviso.className="aviso-resumen"; aviso.id="aviso-resumen"; aviso.hidden=true; aviso.setAttribute("role","status");
+  { const head=$("head"); if(head) head.after(aviso); }
+  const visto=()=>{ try{ return localStorage.getItem("ascenso-resumen-visto")||""; }catch(err){ return ""; } };
+  function marcarVisto(){ const p=Res&&Res.avisoDeHoy(); if(p) try{ localStorage.setItem("ascenso-resumen-visto",p.clave); }catch(err){} aviso.hidden=true; }
+  function pintarAviso(){
+    const p=Res&&Res.avisoDeHoy();
+    if(!p||visto()===p.clave||!Res.hayDatos(state,p)){ aviso.hidden=true; return; }
+    aviso.innerHTML=`<span>Tu resumen ${p.tipo==="semana"?"de la semana":p.tipo==="mes"?"del mes":"del año"} está listo.</span>
+      <button type="button" class="linklike" data-aviso-ver="${p.tipo}">Verlo</button><button type="button" class="aviso-cerrar" data-aviso-cerrar aria-label="Cerrar el aviso">×</button>`;
+    aviso.hidden=false;
+  }
+  aviso.addEventListener("click",ev=>{
+    const v=ev.target.closest("[data-aviso-ver]");
+    if(v){ marcarVisto(); abrir("resumen"); abrirInforme(v.dataset.avisoVer,0); return; }
+    if(ev.target.closest("[data-aviso-cerrar]")) marcarVisto();
+  });
+  pintarAviso();
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) pintarAviso(); });
+  document.addEventListener("ascenso:pintado",pintarAviso);
+
   function pintarDescubrir(){ SECCIONES.descubrir.innerHTML=bloqueDescubrimientos(0); }
   // Ajustes › Zonas del cuerpo: a qué zona va cada hábito, tipo de entreno y etiqueta
   function pintarZonasAjustes(){
@@ -354,6 +445,7 @@ window.AscensoPerfil=(()=>{
 
   const PINTAR={resumen:()=>pintarResumen(), cuerpo:pintarCuerpo, habitos:pintarHabitos, productividad:pintarProductividad, objetivos:pintarObjetivos, descubrir:pintarDescubrir};
   function pintarPestana(){
+    if(informe){ pintarInforme(); return; }
     for(const b of $("pf-periodos").querySelectorAll("[data-per]")) b.setAttribute("aria-checked",String(b.dataset.per===perClave));
     $("pf-periodos").hidden=pestana==="ajustes"||pestana==="descubrir"||pestana==="objetivos";
     if(PINTAR[pestana]) PINTAR[pestana]();
@@ -362,6 +454,7 @@ window.AscensoPerfil=(()=>{
     if(pestana==="ajustes"&&t!=="ajustes"&&cuentaDisponible&&Cuenta.retiene()) return false;
     if(pestana==="ajustes"&&t!=="ajustes"&&cuentaDisponible) Cuenta.desmontar();
     pestana=t;
+    if(informe){ informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML=""; }
     for(const b of vista.querySelectorAll(".pf-tabs [data-pf]")) b.setAttribute("aria-selected",String(b.dataset.pf===t));
     for(const [k,el] of Object.entries(SECCIONES)) el.hidden=k!==t;
     if(t==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); if(cuentaDisponible) Cuenta.montarEn($("pf-cuenta-sitio")); if(typeof renderCfg==="function") try{ renderCfg(); renderTypeCfg(); }catch(err){} }
@@ -389,6 +482,7 @@ window.AscensoPerfil=(()=>{
     if(vista.hidden) return true;
     if(cuentaDisponible&&Cuenta.retiene()) return false;
     if(cuentaDisponible) Cuenta.desmontar();
+    if(informe){ informe=null; $("pf-informe").hidden=true; $("pf-informe").innerHTML=""; }
     vista.hidden=true;
     if(typeof showDay==="function") showDay(); else document.querySelector("main").hidden=false;
     return true;
@@ -407,7 +501,7 @@ window.AscensoPerfil=(()=>{
     if(vista.hidden||ev.key!=="Escape") return;
     const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)){ a.blur(); return; }
     if(document.querySelector("dialog[open]")) return;
-    cerrar();
+    if(!cerrarInforme()) cerrar();
   });
 
   // La puerta escondida: el recuadro de la racha
@@ -424,7 +518,7 @@ window.AscensoPerfil=(()=>{
   return {
     disponible:true, abrir, cerrar,
     abierta:()=>!vista.hidden,
-    nivel:()=>vista.hidden?0:1,
-    atras(){ if(vista.hidden) return false; cerrar(); return true; },
+    nivel:()=>vista.hidden?0:informe?2:1,
+    atras(){ if(vista.hidden) return false; if(!cerrarInforme()) cerrar(); return true; },
   };
 })();
