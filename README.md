@@ -151,14 +151,18 @@ clara sobre papel oscuro.
   las proporciones en cabezas, la anatomía, manos y pies, el sombreado a plumilla, notas en escritura especular, líneas
   guía, el compás, el sombreado cruzado y el acabado final con firma y sello), que se va trazando a medida que avanzas
   en ella.
+- **Cómo se navega**: tres pestañas, **Resumen · Progreso · Descubrimientos**, y el engranaje ⚙ arriba a la derecha
+  para Ajustes. Tocando la figura del Resumen se abren las **zonas del cuerpo**, y desde su tarjeta, los **objetivos**;
+  esas vistas tienen «‹ Volver» (y el botón atrás del móvil vuelve a la pestaña). **Progreso** reúne Hábitos y Tareas
+  con un selector. El periodo (semana, mes, año o siempre) se elige dentro de cada sección que lo usa.
 - **Estadísticas** por periodo (semana, mes, año o siempre; se recuerda el último elegido), comparadas con el
   periodo anterior:
   - **Resumen**: hábitos cumplidos, tareas terminadas, ánimo medio y una gráfica del ánimo de cada día.
   - **Cuerpo**: cada zona de la figura (cabeza, pecho, brazos, manos, abdomen, piernas) brilla según lo cumplido
     de lo que reúne; al tocarla se ve el detalle. Qué reúne cada zona se elige en Ajustes › Zonas del cuerpo;
     mientras no se elija, Ascenso propone un reparto por el nombre (dormir → cabeza, proteína → abdomen…).
-  - **Hábitos**: % por hábito y por día de la semana, rachas de cada hábito y el calendario del último año.
-  - **Productividad**: tareas terminadas en el tiempo, por prioridad y por etiqueta, cuánto se tarda en terminarlas,
+  - **Progreso › Hábitos**: % por hábito y por día de la semana, rachas de cada hábito y el calendario del último año.
+  - **Progreso › Tareas**: tareas terminadas en el tiempo, por prioridad y por etiqueta, cuánto se tarda en terminarlas,
     atrasadas, tarjetas y checklists.
   - **Objetivos**: metas con fecha límite, medidas con tus datos: una racha de N días, un hábito al N % de los días,
     N tareas terminadas, N reflexiones, N libros leídos (aplicación nueva) o llegar a un nivel. Se ve el progreso, lo

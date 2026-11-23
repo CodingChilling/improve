@@ -83,7 +83,7 @@ test("perfil: acceso, nivel, Ajustes, tema y configuración movida", async () =>
     assert.match(await p.locator(".pf-celebra").innerText(), /nivel|etapa/);
     assert.match(await p.locator(".pf-figura svg").getAttribute("class"), /vf-celebra/);
     assert.equal(await p.evaluate(() => localStorage.getItem("ascenso-nivel-visto")), String(await p.evaluate(() => window.AscensoNiveles.nivelDe(window.AscensoNiveles.experiencia(state).total).nivel)));
-    await p.click('.pf-tabs [data-pf="cuerpo"]'); await p.click('.pf-tabs [data-pf="resumen"]');
+    await p.click('.pf-tabs [data-pf="progreso"]'); await p.click('.pf-tabs [data-pf="resumen"]');
     assert.equal(await p.locator(".pf-celebra").count(), 0, "solo una vez");
     assert.doesNotMatch(await p.locator("#pf-resumen .pf-figura svg").getAttribute("class"), /vf-animada/, "cambiar de pestaña no vuelve a trazarlo");
     await p.click("#pf-volver");
@@ -118,7 +118,7 @@ test("perfil: acceso, nivel, Ajustes, tema y configuración movida", async () =>
     // ---- El texto de estado lleva a Ajustes › Cuenta
     await p.click("#pf-volver"); await p.click("#status");
     await p.locator("#cuentadlg").waitFor({ state: "visible" });
-    assert.equal(await p.locator('[data-pf="ajustes"]').getAttribute("aria-selected"), "true");
+    assert.equal(await p.locator("#pf-engranaje").getAttribute("aria-pressed"), "true");
     await p.keyboard.press("Escape"); assert.ok(await p.locator("main").isVisible(), "Esc cierra el perfil");
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
@@ -156,27 +156,35 @@ test("perfil: ánimo, tareas fechadas, estadísticas, zonas y descubrimientos", 
     assert.match(await p.locator("#pf-resumen .pf-tiles").innerText(), /hábitos cumplidos[\s\S]*tareas terminadas[\s\S]*ánimo medio/);
     assert.ok(await p.locator("#pf-resumen .pf-descubre li").count() >= 1, "hay descubrimientos en el resumen");
     // Cambiar de periodo se recuerda
-    await p.click('[data-per="siempre"]');
+    await p.click('#pf-resumen [data-per="siempre"]');
     assert.equal(await p.evaluate(() => localStorage.getItem("ascenso-periodo")), "siempre");
-    // Cuerpo: tocar una zona en la figura muestra su detalle
-    await p.click('.pf-tabs [data-pf="cuerpo"]');
+    // Cuerpo: se entra tocando la figura del Resumen; tocar una zona muestra su detalle
+    await p.click("#pf-resumen .pf-ir-cuerpo");
+    assert.equal(await p.locator("#pf-sub-titulo").innerText(), "Zonas del cuerpo");
+    assert.equal(await p.locator('.pf-tabs [aria-selected="true"]').count(), 0, "en una subvista no hay pestaña marcada");
     await p.click('.pf-lista-zonas [data-zona="abdomen"]');
     assert.equal(await p.locator(".pf-detalle h3").innerText(), "Abdomen");
     assert.match(await p.locator(".pf-detalle").innerText(), /Dentro de mis calorías|Proteína/);
     await p.locator('#pf-pcuerpo .vitruvio [data-zona="cabeza"] ellipse').click({ force: true });
     assert.equal(await p.locator(".pf-detalle h3").innerText(), "Cabeza");
-    // Hábitos y productividad
-    await p.click('.pf-tabs [data-pf="habitos"]');
+    // «‹ Volver» y el botón atrás regresan a la pestaña de la que se vino
+    assert.equal(await p.evaluate(() => window.AscensoPerfil.nivel()), 2);
+    await p.click("[data-pf-volver]");
+    assert.equal(await p.locator('.pf-tabs [aria-selected="true"]').getAttribute("data-pf"), "resumen");
+    // Progreso: Hábitos | Tareas, y se recuerda la elegida
+    await p.click('.pf-tabs [data-pf="progreso"]'); await p.click('[data-prog="habitos"]');
     assert.equal(await p.locator(".pf-cal i").count(), 53 * 7);
     assert.equal(await p.locator(".pf-habitos li").count(), await p.evaluate(() => state.habits.length));
-    await p.click('.pf-tabs [data-pf="productividad"]');
+    await p.click('[data-prog="productividad"]');
+    assert.equal(await p.evaluate(() => localStorage.getItem("ascenso-progreso")), "productividad");
+    assert.equal(await p.locator('.pf-tabs [aria-selected="true"]').getAttribute("data-pf"), "progreso");
     assert.ok(+(await p.locator("#pf-productividad .pf-tile b").first().innerText()) >= 42, "cuenta las tareas terminadas");
     // Descubrimientos: con su advertencia de que son coincidencias
     await p.click('.pf-tabs [data-pf="descubrir"]');
     assert.match(await p.locator("#pf-descubrir").innerText(), /coincidencias, no causas/);
     assert.ok(await p.locator("#pf-descubrir li").count() >= 2);
     // ---- Ajustes › Zonas del cuerpo: cambiar el reparto y volver al propuesto
-    await p.click('.pf-tabs [data-pf="ajustes"]');
+    await p.click("#pf-engranaje");
     const sueno = await p.evaluate(() => "h:" + state.habits.find(h => /dormir/i.test(h.t)).id);
     assert.equal(await p.locator(`[data-zref="${sueno}"]`).inputValue(), "cabeza", "reparto propuesto por el nombre");
     await p.selectOption(`[data-zref="${sueno}"]`, "pecho");

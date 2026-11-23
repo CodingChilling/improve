@@ -17,10 +17,10 @@ for (const [n, o] of [["pc", { viewport: { width: 1280, height: 900 } }], ["movi
   await p.evaluate(() => document.getElementById("animo").scrollIntoView({ block: "center" })); await p.screenshot({ path: `${S}/f2-${n}-0dia.png` });
   await p.click('#barra [data-ir="perfil"]'); await p.waitForTimeout(600);
   for (const t of ["resumen", "cuerpo", "habitos", "productividad", "descubrir"]) {
-    await p.click(`.pf-tabs [data-pf="${t}"]`); await p.waitForTimeout(300);
+    await p.evaluate(t => window.AscensoPerfil.abrir(t), t); await p.waitForTimeout(300);
     await p.screenshot({ path: `${S}/f2-${n}-${t}.png`, fullPage: true });
   }
-  await p.click('.pf-tabs [data-pf="ajustes"]'); await p.locator("#pf-zonas").scrollIntoViewIfNeeded(); await p.waitForTimeout(200);
+  await p.click("#pf-engranaje"); await p.locator("#pf-zonas").scrollIntoViewIfNeeded(); await p.waitForTimeout(200);
   await p.screenshot({ path: `${S}/f2-${n}-zonas.png` });
   console.log(n, "desborde:", await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), "descubrimientos:", await p.evaluate(() => AscensoEstadisticas.descubrimientos(state, typeFor).length));
 }

@@ -13,7 +13,8 @@ test("objetivos: crear, progreso, cuadrado de la figura, archivar y eliminar", a
     assert.equal(await p.locator(".pf-figura .vf-obj").count(), 0);
     await p.click('.pf-objs-res [data-pf="objetivos"]');
     await p.locator("#pf-obj-form").waitFor();
-    assert.ok(await p.locator("#pf-periodos").isHidden(), "los objetivos no dependen del periodo");
+    assert.equal(await p.locator("#pf-objetivos [data-per]").count(), 0, "los objetivos no dependen del periodo");
+    assert.equal(await p.locator("#pf-sub-titulo").innerText(), "Objetivos");
     // Un objetivo de tareas: 3 hasta fin de mes
     await p.click('[data-otipo="tareas"]');
     await p.fill("#pf-obj-meta", "0"); await p.click('#pf-obj-form [type=submit]');
@@ -31,14 +32,14 @@ test("objetivos: crear, progreso, cuadrado de la figura, archivar y eliminar", a
     await esperar(p, async () => Object.keys((await window.AscensoLocal.api("GET", "estado")).objetivos || {}).length === 1, null, { que: "objetivo guardado" });
     // Terminar una tarea hoy hace avanzar el objetivo
     await p.evaluate(() => { state.tasks[newId("t")] = { date: key(today()), title: "Hecha", notes: "", prio: "media", list: "hecha", tags: [], created: new Date().toISOString(), check: [], archived: null, done: new Date().toISOString() }; save(); });
-    await p.click('.pf-tabs [data-pf="resumen"]'); await p.click('.pf-tabs [data-pf="objetivos"]');
+    await p.click('[data-pf-volver]'); await p.click('#pf-resumen .pf-objs-res [data-pf="objetivos"]');
     assert.equal(await p.locator("#pf-objetivos .pf-obj-cifra").first().innerText(), `${n0 + 1} de 3 tareas · faltan ${2 - n0}`);
     // El cuadrado de la figura: lo que lleva del objetivo
-    await p.click('.pf-tabs [data-pf="resumen"]');
+    await p.click('[data-pf-volver]');
     assert.equal(await p.locator(".pf-figura .vf-obj").getAttribute("stroke-dasharray"), ((n0 + 1) / 3).toFixed(4) + " 1");
     assert.equal(await p.locator(".pf-objs-res .pf-obj").count(), 1);
     // Un objetivo de hábito con título propio
-    await p.click('.pf-tabs [data-pf="objetivos"]');
+    await p.click('#pf-resumen .pf-objs-res [data-pf="objetivos"]');
     await p.click("#pf-obj-nuevo summary");
     await p.locator("#pf-obj-nuevo[open]").waitFor();
     await p.click('[data-otipo="habito"]');
