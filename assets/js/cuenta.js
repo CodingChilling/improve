@@ -70,6 +70,14 @@ window.AscensoCuenta=(()=>{
   const nuevaContrasena=()=>campo("clave1","Contraseña nueva (al menos "+MIN_CONTRASENA+" caracteres)","password","new-password")+campo("clave2","Repite la contraseña","password","new-password");
   const fecha=s=>{ const d=new Date(s); return isNaN(d)?"":d.toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"}); };
 
+  // Qué se puede usar sin conexión en este dispositivo
+  function sinConexion(){
+    const g=info.guardado||{}, l=[];
+    if(g.faltan===0) l.push("Sin conexión puedes usar Ascenso con todo lo de tu cuenta: está guardado en este dispositivo.");
+    else if(g.faltan>0) l.push("Sin conexión puedes usar Ascenso con lo que hay en este dispositivo. Aún faltan "+g.faltan+(g.faltan===1?" imagen o libro":" imágenes o libros")+" por guardar: se bajan solos mientras haya conexión (los libros, si hay espacio).");
+    if(g.persistente===false) l.push("El navegador podría borrar los datos de este dispositivo si se queda sin espacio. Instalar Ascenso como aplicación lo evita.");
+    return l.map(t=>`<p class="c-nota">${esc(t)}</p>`).join("");
+  }
   function pintar(){
     const V={
       inicio:()=>cabecera("Cuenta")+`<div class="c-cuerpo">
@@ -128,6 +136,7 @@ window.AscensoCuenta=(()=>{
       cuenta:()=>{ const t=textos()||["","",""]; return cabecera("Cuenta")+`<div class="c-cuerpo">
         <p class="c-quien">${esc(info.email)}</p>
         <p class="c-estado" data-nivel="${t[2]}">${esc(t[0])}</p>
+        ${sinConexion()}
         <div class="c-botones"><button type="button" class="add alt" data-accion="sincronizar">Sincronizar ahora</button></div>
         <h4>Dispositivos</h4><div id="c-dispositivos" class="c-dispositivos">${pintarDispositivos()}</div>
         <h4>Seguridad</h4>

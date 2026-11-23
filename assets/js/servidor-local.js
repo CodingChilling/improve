@@ -759,6 +759,15 @@ window.AscensoLocal=(()=>{
   });
   // Guarda el contenido de una imagen descargada de la cuenta
   const guardarBlob=(id,tipo,datos)=>Almacen.guardar("adjuntos",{id,tipo,datos});
+  // Imágenes de las libretas y archivos de libros que constan en los datos pero cuyo contenido aún no está aquí
+  // (para tenerlos sin conexión: sync.js los descarga mientras hay red)
+  const faltanEnDispositivo=()=>encolar(async()=>{
+    await preparar();
+    const aqui=new Set(await Almacen.tx(["adjuntos"],"readonly",s=>Almacen.pedir(s.adjuntos.getAllKeys())));
+    const out=[];
+    for(const t of ["adjuntos","archivos"]) for(const [id,r] of mem[t]) if(!r.borrado&&!aqui.has(id)) out.push({id,tabla:t,tipo:r.valores.t,bytes:r.valores.bytes||0});
+    return out;
+  });
 
   // ---------------------------------------------------------------- rutas
   async function atender(metodo,ruta,cuerpo){
@@ -797,7 +806,7 @@ window.AscensoLocal=(()=>{
     // Para la sincronización con la cuenta (sync.js)
     alCambiar:f=>{ escuchas.push(f); },
     dispositivo:()=>preparar().then(()=>dispositivo),
-    aplicarRemotos, encolarTodo, vaciarDatos, marcarSemilla, hayDatosPropios, guardarBlob,
+    aplicarRemotos, encolarTodo, vaciarDatos, marcarSemilla, hayDatosPropios, guardarBlob, faltanEnDispositivo,
     alFaltarAdjunto:f=>{ alFaltar=f; },
     // Para la librería (libreria.js)
     guardarArchivo, leerArchivo,

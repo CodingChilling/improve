@@ -108,6 +108,11 @@ Ascenso funciona igual, solo en ese dispositivo. Con cuenta:
 - **Iniciar sesión** en otro dispositivo: se escribe la contraseña una vez y el dispositivo queda conectado hasta
   que cierres la sesión. Si ese dispositivo ya tenía datos, Ascenso pregunta si los fusiona con la cuenta o los
   sustituye por los de la cuenta.
+- **Sin conexión**: la sesión se queda guardada en el dispositivo y Ascenso abre igual sin red, con todo lo que había
+  la última vez que hubo conexión. Mientras hay conexión se van guardando en el dispositivo, sin abrirlas, las
+  imágenes de las libretas y los libros de la cuenta (los libros, si hay espacio libre y el modo de ahorro de datos
+  está apagado). El panel de la cuenta dice si ya está todo o cuánto falta. Si la sesión llegara a caducar, todo
+  sigue a la vista y al volver a entrar se continúa donde se estaba, sin volver a subir ni descargar nada entero.
 - **Estado**, siempre a la vista en ese mismo texto: sincronizado, sincronizando, sin conexión (con los cambios
   pendientes) o error. Sin conexión todo sigue funcionando; los cambios se envían solos al volver.
 - **Cambiar la contraseña**, **recuperarla** (enlace por email + clave de recuperación), ver los **dispositivos**
