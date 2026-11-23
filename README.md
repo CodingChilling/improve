@@ -70,7 +70,9 @@ dentro, su propio nivel con más nodos. El botón **?** del mapa muestra todos l
 
 **Áreas de color.** Con **«+ Área»** se añade una zona de color (rectángulo, cuadrado, óvalo o círculo) para
 delimitar partes del mapa, con su título y, al lado, cuántos nodos hay dentro (por ejemplo «Terminados · 12»).
-Tienen su propia paleta de tonos apagados, distinta de la de los nodos.
+Al seleccionar un área aparece arriba del mapa su **panel**: título, forma, color, bloqueo, más opciones
+(mover sin los nodos, delante o detrás, eliminar). El color se elige de una **paleta amplia** de 30 tonos apagados
+(diez colores en tres intensidades), distinta de la de los nodos, o de cualquier otro con «Otro…».
 - Se agarran por el **título** o el **borde**: así, dentro de un área grande se sigue pudiendo desplazar el mapa
   y seleccionar nodos. Al moverla, **los nodos de dentro van con ella**; con <kbd>Alt</kbd> (o, en el móvil,
   desde sus opciones › «Mover sin los nodos») se mueve sola.

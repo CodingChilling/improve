@@ -158,8 +158,15 @@ const B_COLORS=["#2E86AB","#3D9468","#D9822B","#C0392B","#5B5FC7","#9B59B6","#D4
 //        áreas de color de un nivel; x, y es la esquina superior izquierda; shape: rect, cuadrado, ovalo o circulo
 const LIMITE_LIBRETA=1000000;   // caracteres por libreta (unas 350 páginas)
 const M_COLORS=["#7F77DD","#BA7517","#1D9E75","#378ADD","#D4537E","#D85A30","#639922","#888780"];
-// Las áreas tienen su propia paleta, de tonos apagados, para no confundirse con los colores vivos de los nodos
-const Z_COLORS=[["#C9A66B","Arena"],["#8FAE8B","Salvia"],["#8BA3BC","Niebla"],["#A99BC9","Lavanda"],["#C99AA9","Rosa"],["#C4896B","Terracota"],["#7E8F9E","Pizarra"],["#A9A46A","Oliva"]];
+// Las áreas tienen su propia paleta, de tonos apagados, para no confundirse con los colores vivos de los nodos:
+// diez tonos en tres intensidades (claro, medio y oscuro). Además se puede elegir cualquier otro color.
+const Z_TONOS=[["Arena",36,.42],["Terracota",18,.4],["Rosa",345,.32],["Ciruela",310,.22],["Lavanda",262,.28],["Niebla",212,.26],
+  ["Turquesa",182,.3],["Salvia",120,.18],["Oliva",62,.3],["Pizarra",210,.1]];
+function hslHex(h,s,l){ const k=n=>(n+h/30)%12, a=s*Math.min(l,1-l), f=n=>Math.round(255*(l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1)))).toString(16).padStart(2,"0");
+  return ("#"+f(0)+f(8)+f(4)).toUpperCase(); }
+// [color, nombre, intensidad]: por filas, primero los claros, luego los medios y luego los oscuros
+const Z_COLORS=[[.8,"claro"],[.63,""],[.45,"oscuro"]].flatMap(([l,t],fila)=>Z_TONOS.map(([n,h,s])=>[hslHex(h,s+(fila===2?.04:0),l),t?n+" "+t:n,fila]));
+const Z_MEDIOS=Z_COLORS.filter(c=>c[2]===1);
 const Z_FORMAS=[["rect","Rectángulo"],["cuadrado","Cuadrado"],["ovalo","Óvalo"],["circulo","Círculo"]];
 function cleanMapData(x){
   const ID=/^[A-Za-z0-9_-]{1,40}$/, HEX=/^#[0-9A-Fa-f]{6}$/, obj=v=>v&&typeof v==="object"?v:{};
@@ -201,7 +208,7 @@ function cleanMapData(x){
     if(X==null||Y==null||!(W>=10)||!(H>=10)) continue;
     const igual=z.shape==="cuadrado"||z.shape==="circulo";
     mzones[id]={map:z.map, parent, title:String(z.title||"").trim().slice(0,80), shape:z.shape, x:X, y:Y, w:W, h:igual?W:H,
-      color:HEX.test(z.color||"")?z.color.toUpperCase():Z_COLORS[0][0], locked:!!z.locked, order:Number.isFinite(+z.order)?Math.round(+z.order):0,
+      color:HEX.test(z.color||"")?z.color.toUpperCase():Z_MEDIOS[0][0], locked:!!z.locked, order:Number.isFinite(+z.order)?Math.round(+z.order):0,
       created:String(z.created||"").slice(0,40)};
   }
   return {maps, mnodes, mlinks, mzones};
@@ -2798,7 +2805,7 @@ function mountMap(){
   bindCanvas(cv);
   MG.birth={};
   if(key!==lastMountKey){ const t0=performance.now(); levelNodes(curMapId(),mapLevel).forEach(([id],i)=>{ MG.birth[id]=t0+Math.min(i,20)*28; }); lastMountKey=key; }
-  mgSettle(); mgDraw(); renderMapNote(); mgIdle();
+  mgSettle(); mgDraw(); renderMapNote(); mgIdle(); pintarPanelZona();
 }
 // Cámara del nivel; mientras el lienzo no tiene tamaño (libreta a pantalla completa) no se guarda
 const cam=()=>mCam[MG.key]||(MG.W?(mCam[MG.key]={z:1, ox:MG.W/2, oy:MG.H/2}):{z:1, ox:0, oy:0});
@@ -2933,7 +2940,7 @@ function crearZona(forma,wx,wy){
   const c=cam(); if(wx==null) [wx,wy]=toWorld(MG.W/2,MG.H/2);
   const base=Math.max(120,Math.min(MG.W,MG.H)*.55/c.z), w=Math.round(zIgual(forma)?base:base*1.5), h=Math.round(base);
   const zs=levelZones(mid,mapLevel), usados=new Set(zs.map(([,z])=>z.color));
-  const color=(Z_COLORS.find(([k])=>!usados.has(k))||Z_COLORS[zs.length%Z_COLORS.length])[0];
+  const color=(Z_MEDIOS.find(([k])=>!usados.has(k))||Z_MEDIOS[zs.length%Z_MEDIOS.length])[0];
   const id=newId("z");
   state.mzones[id]={map:mid, parent:mapLevel||null, title:"", shape:forma, x:Math.round(wx-w/2), y:Math.round(wy-h/2), w, h, color, locked:false,
     order:Math.max(0,...zs.map(([,z])=>z.order))+1, created:new Date().toISOString()};
@@ -2952,24 +2959,84 @@ function renombrarZona(id){
   g.appendChild(i); i.focus(); i.select();
   let hecho=false;
   const fin=ok=>{ if(hecho) return; hecho=true; const v=i.value.replace(/\s+/g," ").trim().slice(0,80); i.remove();
-    const zz=state.mzones[id]; if(ok&&zz&&v!==zz.title){ mRemember(); zz.title=v; save(); } mgDraw(); };
+    const zz=state.mzones[id]; if(ok&&zz&&v!==zz.title){ mRemember(); zz.title=v; save(); } mgDraw(); pintarPanelZona(); };
   i.addEventListener("keydown",ev=>{ ev.stopPropagation(); if(ev.key==="Enter"){ ev.preventDefault(); fin(true); } else if(ev.key==="Escape"){ ev.preventDefault(); fin(false); } });
   i.addEventListener("blur",()=>fin(true));
 }
 function abrirMenuZona(id,x,y){
   const z=state.mzones[id]; if(!z) return;
   if(mZona!==id){ clearSel(); mZona=id; selectionChanged(); }
-  const cambia=f=>()=>{ const zz=state.mzones[id]; if(!zz) return; mRemember(); f(zz); save(); mgDraw(); };
+  const cambia=f=>()=>{ const zz=state.mzones[id]; if(!zz) return; mRemember(); f(zz); save(); mgDraw(); pintarPanelZona(); };
   const hermanas=()=>levelZones(z.map,z.parent).map(([,o])=>o.order);
   const items=[["Cambiar título",()=>renombrarZona(id)],
     ["Forma…",()=>openMgMenu(x,y,Z_FORMAS.map(([k,n])=>[(z.shape===k?"✓ ":"")+n,cambia(zz=>zCambiarForma(zz,k))]))],
-    ["Color…",()=>openMgMenu(x,y,Z_COLORS.map(([k,n])=>[(z.color===k?"✓ ":"")+n,cambia(zz=>{ zz.color=k; }),"",k]))],
+    ["Color…",()=>{ zPaleta=true; pintarPanelZona(); }],
     [z.locked?"Desbloquear":"Bloquear",cambia(zz=>{ zz.locked=!zz.locked; })]];
   if(!z.locked) items.push(["Mover sin los nodos",()=>{ MG.soloZona=id; mvToast("Arrastra el área por su título o su borde: los nodos se quedarán donde están",false); }]);
   items.push(["Traer al frente",cambia(zz=>{ zz.order=Math.max(...hermanas())+1; })],
     ["Enviar al fondo",cambia(zz=>{ zz.order=Math.min(...hermanas())-1; })],
-    ["Eliminar área",()=>{ mRemember(); delete state.mzones[id]; mZona=null; save(); mgDraw(); mvToast("Área eliminada (los nodos siguen ahí)"); },"danger"]);
+    ["Eliminar área",()=>{ mRemember(); delete state.mzones[id]; mZona=null; save(); selectionChanged(); mvToast("Área eliminada (los nodos siguen ahí)"); },"danger"]);
   openMgMenu(x,y,items);
+}
+// ---- Panel de edición del área seleccionada: título, forma, color (paleta amplia u otro), bloqueo, orden y eliminar ----
+let zPaleta=false, zEscribiendo=false;
+const ICONOS_FORMA={rect:'<rect x="3" y="6" width="18" height="12" rx="2"/>', cuadrado:'<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  ovalo:'<ellipse cx="12" cy="12" rx="9.5" ry="6.5"/>', circulo:'<circle cx="12" cy="12" r="8"/>'};
+const ICONO_CANDADO='<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>';
+function zonaVisible(){ const z=mZona&&state.mzones[mZona]; return z&&z.map===curMapId()&&(z.parent||null)===(mapLevel||null)?z:null; }
+function pintarPanelZona(){
+  const g=document.getElementById("mv-graph"); if(!g) return;
+  let p=g.querySelector(".mz-panel");
+  const z=zonaVisible();
+  if(!z){ if(p) p.remove(); zPaleta=false; return; }
+  if(p&&p.dataset.id!==mZona){ p.remove(); p=null; zPaleta=false; }
+  if(!p){ p=document.createElement("div"); p.className="mz-panel"; p.setAttribute("role","toolbar"); p.setAttribute("aria-label","Área seleccionada"); p.dataset.id=mZona; g.appendChild(p); enlazarPanelZona(p); }
+  const titulo=p.querySelector(".mz-titulo");
+  const svg=d=>`<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`, propio=!Z_COLORS.some(([k])=>k===z.color);
+  p.innerHTML=`<div class="mz-fila">
+      <input type="text" class="mz-titulo" maxlength="80" placeholder="Título del área" aria-label="Título del área" value="${esc(z.title)}">
+      <div class="mz-formas" role="group" aria-label="Forma">${Z_FORMAS.map(([k,n])=>`<button type="button" data-zforma="${k}" aria-pressed="${z.shape===k}" aria-label="${n}" title="${n}">${svg(ICONOS_FORMA[k])}</button>`).join("")}</div>
+      <button type="button" class="mz-b mz-color" aria-expanded="${zPaleta}" aria-label="Color" title="Color"><i style="background:${z.color}"></i></button>
+      <button type="button" class="mz-b" data-zaccion="bloquear" aria-pressed="${!!z.locked}" aria-label="${z.locked?"Desbloquear":"Bloquear"}" title="${z.locked?"Bloqueada: no se mueve ni cambia de tamaño":"Bloquear"}">${svg(ICONO_CANDADO)}</button>
+      <button type="button" class="mz-b" data-zaccion="mas" aria-label="Más opciones" title="Más opciones">⋯</button>
+      <button type="button" class="mz-b mz-cerrar" data-zaccion="cerrar" aria-label="Quitar la selección" title="Quitar la selección">×</button>
+    </div>
+    ${zPaleta?`<div class="mz-paleta" role="group" aria-label="Colores del área">
+      ${Z_COLORS.map(([k,n])=>`<button type="button" data-zcolor="${k}" style="background:${k}" aria-label="${n}" title="${n}" aria-pressed="${z.color===k}"></button>`).join("")}
+      <label class="mz-otro${propio?" on":""}" title="Otro color"><input type="color" value="${z.color.toLowerCase()}" aria-label="Otro color"><span>Otro…</span></label>
+    </div>`:""}`;
+  if(titulo&&document.activeElement===titulo){ const t=p.querySelector(".mz-titulo"); t.focus(); t.setSelectionRange(t.value.length,t.value.length); }
+}
+function cambiarZona(f){ const z=zonaVisible(); if(!z) return; mRemember(); f(z); save(); mgDraw(); pintarPanelZona(); }
+function enlazarPanelZona(p){
+  p.addEventListener("pointerdown",e=>e.stopPropagation());
+  p.addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    if(b.dataset.zforma){ cambiarZona(z=>zCambiarForma(z,b.dataset.zforma)); return; }
+    if(b.dataset.zcolor){ cambiarZona(z=>{ z.color=b.dataset.zcolor; }); return; }
+    if(b.classList.contains("mz-color")){ zPaleta=!zPaleta; pintarPanelZona(); return; }
+    const a=b.dataset.zaccion;
+    if(a==="bloquear") cambiarZona(z=>{ z.locked=!z.locked; });
+    else if(a==="cerrar"){ clearSel(); selectionChanged(); }
+    else if(a==="mas"){ const g=document.getElementById("mv-graph").getBoundingClientRect(), r=b.getBoundingClientRect(); const id=mZona;
+      const hermanas=()=>{ const z=state.mzones[id]; return levelZones(z.map,z.parent).map(([,o])=>o.order); };
+      const items=[];
+      if(!state.mzones[id].locked) items.push(["Mover sin los nodos",()=>{ MG.soloZona=id; mvToast("Arrastra el área por su título o su borde: los nodos se quedarán donde están",false); }]);
+      items.push(["Traer al frente",()=>cambiarZona(z=>{ z.order=Math.max(...hermanas())+1; })],["Enviar al fondo",()=>cambiarZona(z=>{ z.order=Math.min(...hermanas())-1; })],
+        ["Eliminar área",()=>{ mRemember(); delete state.mzones[id]; mZona=null; save(); selectionChanged(); mvToast("Área eliminada (los nodos siguen ahí)"); },"danger"]);
+      openMgMenu(r.left-g.left, r.bottom-g.top+4, items); }
+  });
+  // Título: se guarda mientras se escribe (un solo paso para deshacer por cada vez que se edita)
+  p.addEventListener("focusin",e=>{ if(e.target.matches(".mz-titulo")) zEscribiendo=false; });
+  p.addEventListener("input",e=>{
+    if(e.target.matches(".mz-titulo")){ const z=zonaVisible(); if(!z) return; if(!zEscribiendo){ mRemember(); zEscribiendo=true; }
+      z.title=e.target.value.replace(/\s+/g," ").trimStart().slice(0,80); save(); mgDraw(); return; }
+    if(e.target.type==="color"&&/^#[0-9a-f]{6}$/i.test(e.target.value)){ const z=zonaVisible(); if(!z) return; if(!zEscribiendo){ mRemember(); zEscribiendo=true; }
+      z.color=e.target.value.toUpperCase(); save(); mgDraw(); const i=p.querySelector(".mz-color i"); if(i) i.style.background=z.color; }
+  });
+  p.addEventListener("change",e=>{ if(e.target.type==="color"){ zEscribiendo=false; pintarPanelZona(); } });
+  p.addEventListener("focusout",e=>{ if(e.target.matches(".mz-titulo")){ const z=zonaVisible(); if(z&&z.title!==z.title.trim()){ z.title=z.title.trim(); save(); mgDraw(); } } });
+  p.addEventListener("keydown",e=>{ e.stopPropagation(); if(e.target.matches(".mz-titulo")&&(e.key==="Enter"||e.key==="Escape")){ e.preventDefault(); e.target.blur(); } });
 }
 // Llevar la vista a un área (desde el buscador)
 function centrarZona(id){
@@ -3095,7 +3162,7 @@ function selIds(){
 }
 function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; mZona=null; }
 function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; mZona=null; }
-function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); }
+function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); pintarPanelZona(); }
 const mapActive=()=>!boardsView.hidden && !!curMapId() && !!MG && !cdlg.open;
 const isTyping=()=>{ const a=document.activeElement; return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable); };
 
@@ -3594,7 +3661,7 @@ document.addEventListener("keydown",e=>{
   if(k==="F2" && mZona && state.mzones[mZona]){ e.preventDefault(); renombrarZona(mZona); return; }
   if(k==="F2" && (mSel||mapLevel)){ e.preventDefault(); focusTitle(); return; }
   if((k==="Delete" || (e.metaKey && k==="Backspace")) && mZona && state.mzones[mZona] && !selIds().length){
-    e.preventDefault(); mRemember(); delete state.mzones[mZona]; mZona=null; save(); mgDraw(); mvToast("Área eliminada (los nodos siguen ahí)"); return; }
+    e.preventDefault(); mRemember(); delete state.mzones[mZona]; mZona=null; save(); selectionChanged(); mvToast("Área eliminada (los nodos siguen ahí)"); return; }
   if(k==="Delete" || (e.metaKey && k==="Backspace")){ e.preventDefault(); const ids=selIds(); if(ids.length) askDeleteNodes(ids); else if(mSelLink){ mRemember(); delete state.mlinks[mSelLink]; mSelLink=null; save(); mgDraw(); } return; }
   if(k==="Enter" && mSel){ e.preventDefault(); goLevel(mSel); return; }
   if(k==="Backspace" || (e.altKey && k==="ArrowLeft") || (e.metaKey && (k==="[" || k==="ArrowUp"))){ if(mapLevel){ e.preventDefault(); goUp(); } }
