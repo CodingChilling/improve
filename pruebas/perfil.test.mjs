@@ -132,7 +132,7 @@ test("perfil: ánimo, tareas fechadas, estadísticas, zonas y descubrimientos", 
     await p.click('.pf-lista-zonas [data-zona="abdomen"]');
     assert.equal(await p.locator(".pf-detalle h3").innerText(), "Abdomen");
     assert.match(await p.locator(".pf-detalle").innerText(), /Dentro de mis calorías|Proteína/);
-    await p.locator('#pf-pcuerpo .vitruvio [data-zona="cabeza"] rect').click({ force: true });
+    await p.locator('#pf-pcuerpo .vitruvio [data-zona="cabeza"] ellipse').click({ force: true });
     assert.equal(await p.locator(".pf-detalle h3").innerText(), "Cabeza");
     // Hábitos y productividad
     await p.click('.pf-tabs [data-pf="habitos"]');

@@ -83,11 +83,9 @@ window.AscensoResumenes=(()=>{
 
   // ------------------------------------------------------------------ la imagen
   const COLOR={papel:"#f6efdf",tinta:"#2a221a",suave:"#7b6a55",linea:"#d9ccb4",oro:"#b8862f"};
+  // La figura como imagen suelta: lleva dentro su espacio de nombres y sus estilos (con los colores del papel claro)
   function svgFigura(state,r){
-    const base=Figura.svg({figura:state.perfil&&state.perfil.figura||"hombre", etapa:r.xp.etapa, avance:r.xp.nivel>=120?0:((r.xp.nivel-1)%10+r.xp.progreso)/10, nivel:r.xp.progreso, objetivos:null, titulo:""});
-    // Para dibujarla como imagen necesita su espacio de nombres y los colores escritos dentro (no hay hoja de estilos)
-    const estilo=`<style>.vf-papel{fill:#f3ead7}.vf-trazo{fill:none;stroke:#6b4a2b;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round}.vf-circulo,.vf-cuadrado{fill:none;stroke:#6b4a2b;stroke-width:.9;opacity:.75}.vf-anillo{fill:none;stroke:#b8862f;stroke-width:3.4;stroke-linecap:round}.vf-zona{fill:none}.vf-nota text,.vf-firma{fill:#6b4a2b;stroke:none;font-family:Georgia,serif;font-style:italic}.vf-guia{stroke-dasharray:3 3;opacity:.55}</style>`;
-    return base.replace("<svg ",`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="660" `).replace(/(<svg[^>]*>)/,"$1"+estilo);
+    return Figura.svg({figura:state.perfil&&state.perfil.figura||"hombre", etapa:r.xp.etapa, avance:r.xp.nivel>=120?0:((r.xp.nivel-1)%10+r.xp.progreso)/10, nivel:r.xp.progreso, objetivos:null, titulo:"", exportar:true});
   }
   function cargarImagen(svg){
     return new Promise((ok,mal)=>{
