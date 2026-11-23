@@ -135,8 +135,14 @@ a la izquierda.
 
 Presidido por un **Hombre o una Mujer de Vitruvio** (a elegir): un dibujo propio con el canon clásico (ocho cabezas de
 alto, tanto de brazos abiertos como de altura, el ombligo en el centro del círculo) y la segunda postura tocando el
-círculo, con acabado de lámina de cuaderno: papel con grano, tinta sepia con temblor de pluma, aguada de sanguina y
-sombreado a plumilla. En el tema oscuro, tinta clara sobre papel oscuro.
+círculo, con acabado de lámina de cuaderno renacentista: papel con grano, borde irregular y manchas; tinta sepia con
+temblor de pluma, más peso en el lado de la sombra y trazos de búsqueda alrededor del contorno; volumen modelado con
+luces y sombras (los músculos se sugieren con tono, no con líneas), aguada de sanguina y sombreado a plumilla; rostro
+con párpados, iris y labios, y cabello hebra a hebra; manos con dedos, nudillos y uñas. Los anillos de nivel y de
+objetivos son dorados, con una esfera graduada, y la lámina se firma con un sello de lacre. En el tema oscuro, tinta
+clara sobre papel oscuro.
+- **Movimiento** (respeta «reducir movimiento» del sistema): al entrar en el perfil el dibujo se traza solo y el anillo
+  crece hasta tu progreso; al subir de nivel o empezar una etapa, una línea lo celebra una vez y el anillo late.
 - **Nivel**: la experiencia se calcula con todo lo que haces (hábitos cumplidos, rachas, semanas completas, tareas y
   tarjetas hechas, checklists, reflexiones y notas, lectura). Desmarcar un hábito o borrar una tarea hecha la resta;
   archivar no. Hay **120 niveles con nombre**, en 12 etapas de 10 (del Valle al Cielo); a partir del 120 se sigue

@@ -31,7 +31,10 @@ window.AscensoPerfil=(()=>{
   const barra=$("barra"); document.body.insertBefore(vista,barra||null);
   const resumen=$("pf-resumen"), ajustes=$("pf-ajustes");
   const SECCIONES={resumen, cuerpo:$("pf-pcuerpo"), habitos:$("pf-habitos"), productividad:$("pf-productividad"), objetivos:$("pf-objetivos"), descubrir:$("pf-descubrir"), ajustes};
-  let pestana="resumen", libreria=null, zonaSel=null;
+  let pestana="resumen", libreria=null, libreriaLeida=false, zonaSel=null, animarFigura=false, xpPintada=null;
+  // El último nivel visto en este dispositivo, para celebrar cuando se sube (no es un dato sensible)
+  const leerVisto=()=>{ try{ const v=parseInt(localStorage.getItem("ascenso-nivel-visto"),10); return Number.isFinite(v)?v:null; }catch(err){ return null; } };
+  const guardarVisto=n=>{ try{ localStorage.setItem("ascenso-nivel-visto",String(n)); }catch(err){} };
   // El periodo elegido se recuerda en el dispositivo (Mes, si no se ha elegido otro)
   let perClave=(()=>{ try{ const v=localStorage.getItem("ascenso-periodo"); return ["semana","mes","año","siempre"].includes(v)?v:"mes"; }catch(err){ return "mes"; } })();
   const per=()=>Est.periodo(perClave,undefined,state);
@@ -106,8 +109,20 @@ window.AscensoPerfil=(()=>{
     const avance=((nv.nivel-1)%10+nv.progreso)/10, sig=Niveles.etapa(Math.min(nv.nivel+10-((nv.nivel-1)%10),120));
     const nombreNivel=Niveles.nombre(nv.nivel,p.figura), max=Math.max(1,...FUENTES.map(([k])=>xp.partes[k]||0));
     const quedan=nv.hasta-xp.total, finEtapa=Math.min(120,Math.ceil(nv.nivel/10)*10), objs=evaluarObjetivos(xp);
-    resumen.innerHTML=`<div class="pf-portada">
-      <div class="pf-figura">${Figura.svg({figura:p.figura, etapa:nv.etapa, avance:nv.nivel>=120?0:avance, nivel:nv.progreso, objetivos:Obj?Obj.progresoMedio(objs):null, brillo:brillos(per()).o, titulo:`${p.figura==="mujer"?"Mujer":"Hombre"} de Vitruvio, nivel ${nv.nivel}`})}</div>
+    // Al subir de nivel (con la lectura ya contada, para no confundir su llegada con una subida), se celebra una vez
+    let celebra="", animar=animarFigura; animarFigura=false; xpPintada=xp.total;
+    if(libreriaLeida){
+      const visto=leerVisto();
+      if(visto!=null&&nv.nivel>visto){
+        const antes=Niveles.etapa(Math.max(1,visto));
+        celebra=et.numero>antes.numero?`Empieza la etapa ${et.numero}, «${e(et.nombre)}»: ${e(et.lema.toLowerCase())}. La lámina gana una capa nueva.`
+          :`¡Has subido al nivel ${nv.nivel}! Ahora eres «${e(nombreNivel)}».`;
+        animar=true;
+      }
+      if(visto!==nv.nivel) guardarVisto(nv.nivel);
+    }
+    resumen.innerHTML=`${celebra?`<p class="pf-celebra" role="status">${celebra}</p>`:""}<div class="pf-portada">
+      <div class="pf-figura">${Figura.svg({figura:p.figura, etapa:nv.etapa, avance:nv.nivel>=120?0:avance, nivel:nv.progreso, objetivos:Obj?Obj.progresoMedio(objs):null, brillo:brillos(per()).o, animar, celebrar:!!celebra, titulo:`${p.figura==="mujer"?"Mujer":"Hombre"} de Vitruvio, nivel ${nv.nivel}`})}</div>
       <div class="pf-datos">
         <p class="pf-saludo">${e(saludo())}${p.nombre?", "+e(p.nombre):""}</p>
         ${p.porque?`<blockquote class="pf-porque">${e(p.porque)}</blockquote>`:""}
@@ -465,20 +480,28 @@ window.AscensoPerfil=(()=>{
     return true;
   }
   async function cargarLibreria(){
-    if(!window.AscensoLocal||(window.ASCENSO_CONFIG||{}).clasico) return;
+    if(!window.AscensoLocal||(window.ASCENSO_CONFIG||{}).clasico){ libreriaLeida=true; return; }
     try{ libreria=await window.AscensoLocal.api("GET","libreria"); }catch(err){ libreria=null; }
+    libreriaLeida=true;
   }
   function abrir(t="resumen",donde){
     if(window.AscensoLibreria&&window.AscensoLibreria.abierta&&window.AscensoLibreria.abierta()) window.AscensoLibreria.cerrar();
     for(const d of document.querySelectorAll("dialog[open]")) d.close();
     if(typeof closeCal==="function") closeCal(); if(typeof closePad==="function") closePad();
     const estaba=!vista.hidden;
+    if(!estaba) animarFigura=true;      // al entrar, el dibujo se traza (no al cambiar de periodo o de pestaña)
     $("boardsview").hidden=true; document.querySelector("main").hidden=true; vista.hidden=false;
     ponerPestana(t);
     if(!estaba) scrollTo(0,0);
     if(donde){ const el=$("pf-"+donde); if(el) el.scrollIntoView({block:"start"}); }
-    // La lectura suma experiencia: cuando llega, se vuelve a pintar
-    cargarLibreria().then(()=>{ if(!vista.hidden&&pestana!=="ajustes") pintarPestana(); });
+    // La lectura suma experiencia: cuando llega, se vuelve a pintar (si no cambia nada, no se repinta para no cortar
+    // el dibujo que se está trazando)
+    const habiaLibreria=libreriaLeida;
+    cargarLibreria().then(()=>{
+      if(vista.hidden||pestana==="ajustes") return;
+      if(pestana==="resumen"&&habiaLibreria&&Niveles.experiencia(state,libreria).total===xpPintada) return;
+      pintarPestana();
+    });
   }
   function cerrar(){
     if(vista.hidden) return true;
@@ -515,6 +538,8 @@ window.AscensoPerfil=(()=>{
   }
   // Cambios llegados de otro dispositivo o de otra pestaña
   document.addEventListener("ascenso:datos-externos",()=>{ if(vista.hidden) return; if(pestana==="ajustes"){ pintarAjustes(); pintarZonasAjustes(); } else cargarLibreria().then(pintarPestana); });
+  // La librería se lee ya al cargar, para que el perfil se abra con la experiencia completa
+  cargarLibreria();
   document.addEventListener("ascenso:tema",()=>{ if(!vista.hidden&&pestana==="ajustes") pintarAjustes(); });
 
   return {

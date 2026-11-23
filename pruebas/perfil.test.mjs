@@ -35,6 +35,25 @@ test("niveles: 120 nombres que avanzan, curva y experiencia calculada", async ()
   assert.ok(N.experiencia(state).total < xp.total);
 });
 
+test("figura: capas por etapa, valores válidos, anillos y versión para exportar", () => {
+  const window = {}; new Function("window", fs.readFileSync(path.join(RAIZ, "assets/js/figura.js"), "utf8"))(window);
+  const F = window.AscensoFigura;
+  for (const figura of ["hombre", "mujer"]) for (let etapa = 1; etapa <= 12; etapa++) {
+    const s = F.svg({ figura, etapa, avance: 0.5, nivel: 0.4, objetivos: 0.3, brillo: { pecho: 1 }, zonaActiva: "pecho" });
+    assert.ok(!/NaN|undefined|Infinity/.test(s), `${figura} etapa ${etapa}: sin valores inválidos`);
+    const capas = [...s.matchAll(/data-capa="(\d+)"/g)].map(m => +m[1]);
+    assert.deepEqual([...new Set(capas)].sort((a, b) => a - b), Array.from({ length: Math.min(12, etapa + 1) - 1 }, (_, i) => i + 2).filter(n => n <= Math.min(12, etapa + 1)), `${figura} etapa ${etapa}: sus capas y la siguiente a medio trazar`);
+    assert.equal((s.match(/data-zona="/g) || []).length, 6, "las seis zonas");
+  }
+  const e = F.svg({ figura: "mujer", etapa: 12, exportar: true });
+  assert.match(e, /^<svg class="vitruvio" viewBox="40 74 320 330" xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  assert.match(e, /<style>[\s\S]*\.vf-trazo/, "lleva sus estilos dentro");
+  assert.match(F.svg({ animar: true }), /class="vitruvio vf-animada"/);
+  assert.match(F.svg({ celebrar: true }), /class="vitruvio vf-animada vf-celebra"/);
+  assert.doesNotMatch(F.svg({ nivel: 0 }), /class="vf-perla"/, "sin progreso no hay gema");
+  assert.match(F.svg({ nivel: 0.25 }), /stroke-dasharray="0\.2500 1"/);
+});
+
 test("perfil: acceso, nivel, Ajustes, tema y configuración movida", async () => {
   const app = await servirApp(), nav = await chromium.launch();
   try {
@@ -55,6 +74,18 @@ test("perfil: acceso, nivel, Ajustes, tema y configuración movida", async () =>
     assert.ok(Math.abs(x0 - await esperado()) <= 0, "el resumen muestra la experiencia calculada");
     assert.equal(await p.locator(".pf-nivel strong").innerText(), await p.evaluate(x => window.AscensoNiveles.nombre(window.AscensoNiveles.nivelDe(x).nivel, "hombre"), x0));
     assert.equal(await p.locator(".pf-figura svg.vitruvio").count(), 1);
+    // Al entrar, el dibujo se traza; al subir de nivel se celebra una vez (lo visto se recuerda en el dispositivo)
+    assert.match(await p.locator(".pf-figura svg").getAttribute("class"), /vf-animada/);
+    await p.click("#pf-volver");
+    await p.evaluate(() => localStorage.setItem("ascenso-nivel-visto", "0"));
+    await p.click(".summit"); await p.locator("#perfil:not([hidden])").waitFor();
+    await esperar(p, () => !!document.querySelector(".pf-celebra"), null, { que: "la celebración" });
+    assert.match(await p.locator(".pf-celebra").innerText(), /nivel|etapa/);
+    assert.match(await p.locator(".pf-figura svg").getAttribute("class"), /vf-celebra/);
+    assert.equal(await p.evaluate(() => localStorage.getItem("ascenso-nivel-visto")), String(await p.evaluate(() => window.AscensoNiveles.nivelDe(window.AscensoNiveles.experiencia(state).total).nivel)));
+    await p.click('.pf-tabs [data-pf="cuerpo"]'); await p.click('.pf-tabs [data-pf="resumen"]');
+    assert.equal(await p.locator(".pf-celebra").count(), 0, "solo una vez");
+    assert.doesNotMatch(await p.locator("#pf-resumen .pf-figura svg").getAttribute("class"), /vf-animada/, "cambiar de pestaña no vuelve a trazarlo");
     await p.click("#pf-volver");
     await p.locator("#checks li button").first().click();
     await p.click(".summit");

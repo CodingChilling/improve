@@ -7115,6 +7115,14 @@ dialog.tdlg.diario {
   --vf-zona-o: 0.38;
   --vf-tono-pelo: 236, 214, 176;
   --vf-oro: #dcae5c;
+  --vf-sombra: 0, 0, 0;
+  --vf-luz: #e9d2ad;
+  --vf-v-borde: 0.55;
+  --vf-v-ancha: 0.3;
+  --vf-v-luz: 0.2;
+  --vf-t-sombra: 0.45;
+  --vf-t-luz: 0.12;
+  --vf-peso: 0.5;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .vitruvio {
@@ -7129,6 +7137,14 @@ dialog.tdlg.diario {
     --vf-zona-o: 0.38;
     --vf-tono-pelo: 236, 214, 176;
     --vf-oro: #dcae5c;
+    --vf-sombra: 0, 0, 0;
+    --vf-luz: #e9d2ad;
+    --vf-v-borde: 0.55;
+    --vf-v-ancha: 0.3;
+    --vf-v-luz: 0.2;
+    --vf-t-sombra: 0.45;
+    --vf-t-luz: 0.12;
+    --vf-peso: 0.5;
   }
 }
 
@@ -7999,4 +8015,27 @@ html.bloqueada body > :not(#bloqueo) {
 .bq-form .pf-campo input {
   max-width: 220px;
   letter-spacing: 0.3em;
+}
+/* Al subir de nivel o de etapa: una línea dorada sobre la figura */
+.pf-celebra {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: linear-gradient(120deg, rgba(212, 166, 72, 0.16), rgba(212, 166, 72, 0.04));
+  font-family: var(--serif);
+  font-size: 1.12rem;
+  text-align: center;
+  animation: pf-celebra 0.9s ease 0.4s both;
+}
+@keyframes pf-celebra {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-celebra {
+    animation: none;
+  }
 }
