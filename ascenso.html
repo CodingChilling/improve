@@ -21,6 +21,7 @@
 <link rel="apple-touch-icon" href="assets/icono/icono-180.png?v=20261022">
 <link rel="stylesheet" href="assets/css/fuentes.css">
 <link rel="stylesheet" href="assets/css/estilos.css">
+<script src="assets/js/tema.js"></script>
 </head>
 <body>
 <main>
@@ -94,6 +95,7 @@
     </div>
     <div class="plan" id="plan" role="group" aria-label="Entreno de este día"></div>
     <ul class="checks" id="checks"></ul>
+    <div class="animo"><span id="animo-l">¿Cómo te sientes?</span><div class="animo-caras" id="animo" role="radiogroup" aria-labelledby="animo-l"></div></div>
     <div class="weight">
       <label for="w">Peso de hoy (kg)</label>
       <input id="w" type="number" inputmode="decimal" step="0.1" min="30" max="250" placeholder="81.5">
@@ -158,7 +160,7 @@
     </div>
   </details>
 
-  <details class="cfg">
+  <details class="cfg" id="imgcfgbox">
     <summary>Imágenes</summary>
     <div class="cfgbody">
       <p>Cada día el marco muestra una imagen de la carpeta assets/images. Para añadir o quitar imágenes, basta con copiarlas o borrarlas de esa carpeta. Si el nombre de un archivo contiene el de un autor (por ejemplo «seneca» o «marco-aurelio»), aparecerá los días en que la frase sea suya.</p>
@@ -166,7 +168,7 @@
     </div>
   </details>
 
-  <details class="cfg">
+  <details class="cfg" id="backupbox">
     <summary>Copia de seguridad</summary>
     <div class="cfgbody">
       <p>Exporta una copia de tus datos de vez en cuando, o para pasarlos a otro dispositivo. Al importar una copia se sustituyen los datos actuales.</p>
@@ -205,7 +207,7 @@
   <button type="button" data-ir="tareas"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.3l2.5 2.5 4.7-5.2"/></svg><span>Tareas</span></button>
   <button type="button" data-ir="tableros"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="7" height="16" rx="2"/><rect x="13.5" y="4" width="7" height="10" rx="2"/></svg><span>Tableros</span></button>
   <button type="button" data-ir="libreria" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.500C10.200 5.200 7.800 4.700 4.500 5v13c3.300-.3 5.700.2 7.500 1.500 1.800-1.300 4.200-1.800 7.500-1.500V5c-3.300-.3-5.700.2-7.500 1.500zM12 6.500v13"/></svg><span>Librería</span></button>
-  <button type="button" data-ir="cuenta" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.9-3.6 3.9-5.5 7.5-5.5s6.600 1.900 7.5 5.500"/></svg><span>Cuenta</span><i class="b-punto" hidden></i></button>
+  <button type="button" data-ir="perfil"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="7.6" r="1.9"/><path d="M12 9.8v5.4M12 15.2l-2.6 4.2M12 15.2l2.6 4.2M6.2 11.6h11.6"/></svg><span>Perfil</span><i class="b-punto" hidden></i></button>
 </nav>
 <dialog id="carddlg" class="tdlg cdlg" aria-label="Tarjeta"></dialog>
 
@@ -218,6 +220,10 @@
 <script src="assets/js/epub.js"></script>
 <script src="assets/js/libreria.js"></script>
 <script src="assets/js/cuenta.js"></script>
+<script src="assets/js/niveles.js"></script>
+<script src="assets/js/estadisticas.js"></script>
+<script src="assets/js/figura.js"></script>
+<script src="assets/js/perfil.js"></script>
 <script src="assets/js/movil.js"></script>
 <script src="assets/js/pwa.js"></script>
 </body>

@@ -1,4 +1,4 @@
-// Ascenso en el móvil: la barra de navegación de abajo y el gesto o botón «atrás» del teléfono.
+// La barra de accesos (abajo en el móvil; columna a la izquierda en el ordenador) y el gesto o botón «atrás».
 // No guarda nada ni toca los datos: solo mueve la pantalla y cierra lo que esté abierto.
 "use strict";
 (() => {
@@ -8,13 +8,15 @@
   const boton = k => barra.querySelector('[data-ir="' + k + '"]');
   const seccion = { hoy: () => $("head"), tareas: () => document.querySelector("section.tasks") };
   const Libreria = window.AscensoLibreria && window.AscensoLibreria.disponible ? window.AscensoLibreria : null;
+  const Perfil = window.AscensoPerfil && window.AscensoPerfil.disponible ? window.AscensoPerfil : null;
   const suave = () => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
   // ---------------------------------------------------------------- barra de abajo
   let fijada = null, fijadaHasta = 0;            // tras pulsar, se marca el destino aunque el desplazamiento aún no haya llegado
   function marcar() {
     let activa = "tableros";
-    if (Libreria && Libreria.abierta()) activa = "libreria";
+    if (Perfil && Perfil.abierta()) activa = "perfil";
+    else if (Libreria && Libreria.abierta()) activa = "libreria";
     else if (tableros.hidden) {
       activa = "hoy";
       if (fijada && Date.now() < fijadaHasta) activa = fijada;
@@ -29,7 +31,8 @@
     }
   }
   function ir(k) {
-    if (k === "cuenta") { if (window.AscensoCuenta && window.AscensoCuenta.abrir) window.AscensoCuenta.abrir(); return; }
+    if (k === "perfil") { if (Perfil) Perfil.abrir("resumen"); return; }
+    if (Perfil && Perfil.abierta() && !Perfil.cerrar()) return;          // (con la clave de recuperación a la vista no se sale)
     if (k === "libreria") { if (Libreria) Libreria.abrir(); return; }
     if (Libreria && Libreria.abierta()) Libreria.cerrar();
     if (k === "tableros") {
@@ -56,15 +59,15 @@
   // La librería: igual, solo en la aplicación nueva
   if (Libreria) boton("libreria").hidden = false;
 
-  // La cuenta: solo donde existe (no en la versión clásica), con un punto que dice cómo va la sincronización
-  if (window.AscensoCuenta && window.AscensoCuenta.disponible) {
-    const b = boton("cuenta"), punto = b.querySelector(".b-punto");
-    b.hidden = false;
+  // El perfil, con un punto que dice cómo va la sincronización (con cuenta; no en la versión clásica)
+  if (!Perfil) boton("perfil").hidden = true;
+  if (Perfil && window.AscensoCuenta && window.AscensoCuenta.disponible) {
+    const b = boton("perfil"), punto = b.querySelector(".b-punto");
     const nombres = { sincronizado: "sincronizado", sincronizando: "sincronizando", "sin-conexion": "sin conexión", error: "sin sincronizar" };
     document.addEventListener("ascenso:sync", e => {
       const estado = e.detail && e.detail.estado, hay = !!nombres[estado];
       punto.hidden = !hay; punto.dataset.estado = hay ? estado : "";
-      b.setAttribute("aria-label", "Cuenta" + (hay ? ": " + nombres[estado] : ""));
+      b.setAttribute("aria-label", "Perfil" + (hay ? " (cuenta: " + nombres[estado] + ")" : ""));
     });
   }
 
@@ -74,7 +77,7 @@
   const ventanitas = [["calpop", () => closeCal()], ["notepad", () => closePad()], ["evpop", () => closeEvPop()]];
   const abiertas = () => document.querySelector("dialog[open]") || ventanitas.some(([id]) => $(id) && !$(id).hidden);
   const enTablero = () => { try { return curBoard !== "home"; } catch (e) { return false; } };
-  const nivel = () => (tableros.hidden ? 0 : enTablero() ? 2 : 1) + (Libreria ? Libreria.nivel() : 0) + (abiertas() ? 1 : 0);
+  const nivel = () => (tableros.hidden ? 0 : enTablero() ? 2 : 1) + (Libreria ? Libreria.nivel() : 0) + (Perfil ? Perfil.nivel() : 0) + (abiertas() ? 1 : 0);
   let enHistoria = 0, ignorar = 0;
   // Los pasos propios llevan marca; así se distinguen de una navegación de verdad (el enlace de un email, que llega en «#…»)
   const marcarBase = () => { try { if (!history.state || history.state.ascenso == null) history.replaceState({ ascenso: 0 }, ""); } catch (e) {} };
@@ -91,6 +94,7 @@
     if (d) { if (d.dispatchEvent(new Event("cancel", { cancelable: true }))) d.close(); return; }   // un diálogo puede negarse (la clave de recuperación)
     for (const [id, cerrar] of ventanitas) if ($(id) && !$(id).hidden) { cerrar(); return; }
     if (Libreria && Libreria.atras()) return;
+    if (Perfil && Perfil.atras()) return;
     if (!tableros.hidden) { if (enTablero()) setBoard("home"); else $("bv-back").click(); }
   }
   addEventListener("popstate", e => {

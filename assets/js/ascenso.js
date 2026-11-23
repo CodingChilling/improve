@@ -37,6 +37,14 @@ function cleanTipos(t){
 }
 // Plan semanal por fechas: «plan» es el de siempre y cada versión de «planes» manda desde su fecha en adelante.
 // Así, cambiar el entreno de esta semana o de las siguientes no toca las semanas que ya pasaron.
+// Perfil (figura, nombre, «mi porqué» y reparto de las zonas del cuerpo; zonas null = aún sin elegir)
+const ZONAS_CUERPO=["cabeza","pecho","brazos","manos","abdomen","piernas"];
+function cleanPerfil(p){
+  p=p&&typeof p==="object"?p:{};
+  let zonas=null;
+  if(p.zonas&&typeof p.zonas==="object"){ zonas={}; for(const z of ZONAS_CUERPO) zonas[z]=Array.isArray(p.zonas[z])?[...new Set(p.zonas[z].filter(r=>typeof r==="string"&&/^[hte]:[A-Za-z0-9_-]{1,40}$/.test(r)))].slice(0,60):[]; }
+  return {figura:p.figura==="mujer"?"mujer":"hombre", nombre:String(p.nombre||"").trim().slice(0,40), porque:String(p.porque||"").trim().slice(0,300), zonas};
+}
 function cleanPlanes(p){
   const F=/^\d{4}-\d{2}-\d{2}$/, out=[];
   if(Array.isArray(p)) for(const v of p){
@@ -65,6 +73,7 @@ const cleanState = (x,fallbackDays) => ({
   habits:cleanHabits(x.habits),
   thr:[0.5,0.66,0.75,1].includes(+x.thr)?+x.thr:0.66,
   tipos:cleanTipos(x.tipos),
+  perfil:cleanPerfil(x.perfil),
   hist:cleanHist(x.hist),
   tags:cleanTags(x.tags),
   tasks:cleanTasks(x.tasks),
@@ -135,6 +144,8 @@ function cleanTasks(x){
       list:["pendiente","proceso","hecha"].includes(t.list)?t.list:"pendiente",
       tags:Array.isArray(t.tags)?t.tags.filter(v=>typeof v==="string"&&ID_OK.test(v)):[],
       created:String(t.created||t.date).slice(0,40),
+      // cuándo se terminó (las que ya estaban hechas antes de apuntarlo: el día de la tarea, aproximado)
+      done:t.done?String(t.done).slice(0,40):(t.list==="hecha"?String(t.date):null),
       // checklist, como la de las tarjetas de los tableros: [{id, t, d}]
       check:Array.isArray(t.check)?t.check.filter(k=>k&&ID_OK.test(k.id||"")&&String(k.t||"").trim()).slice(0,100)
         .map(k=>({id:k.id, t:String(k.t).trim().slice(0,300), d:!!k.d})):[],
@@ -417,10 +428,24 @@ function renderDay(){
     };
     li.appendChild(b); ul.appendChild(li);
   }
+  renderAnimo();
   const w=document.getElementById("w"); w.value = dayData(sel).w ?? "";
   document.getElementById("next").disabled = key(sel)===key(today());
 }
 
+// ---------- Ánimo del día (de 1 a 5): un toque; tocar otra vez la misma cara lo quita ----------
+const ANIMOS=[[1,"Muy mal","M8 16.6c2.4-3 5.6-3 8 0"],[2,"Mal","M8.6 15.6c2-1.6 4.8-1.6 6.8 0"],[3,"Normal","M8.6 15h6.8"],[4,"Bien","M8.6 14.2c2 1.8 4.8 1.8 6.8 0"],[5,"Muy bien","M8 13.6c2.4 3.6 5.6 3.6 8 0"]];
+function renderAnimo(){
+  const box=document.getElementById("animo"); if(!box) return;
+  const a=dayData(sel).a||0;
+  box.innerHTML=ANIMOS.map(([n,t,boca])=>`<button type="button" role="radio" data-animo="${n}" aria-checked="${a===n}" aria-label="${t}" title="${t}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2"/><circle cx="9" cy="10" r="1" class="ojo"/><circle cx="15" cy="10" r="1" class="ojo"/><path d="${boca}"/></svg></button>`).join("");
+}
+document.getElementById("animo")?.addEventListener("click",e=>{
+  const b=e.target.closest("[data-animo]"); if(!b) return;
+  const k=key(sel), n=+b.dataset.animo, d=state.days[k]=state.days[k]||{};
+  if(d.a===n) delete d.a; else d.a=n;
+  save(); renderAnimo();
+});
 function weekSummary(m){
   let done=0,total=0,n=0,ws=[];
   for(let i=0;i<7;i++){ const d=addDays(m,i); if(d>today()) break; const x=counts(d,"week"); done+=x.done; total+=x.total; n++; const w=dayData(d).w; if(w) ws.push(+w); }
@@ -4419,7 +4444,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=14;
+const VERSION_NECESARIA=17;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){
@@ -4431,7 +4456,7 @@ function saveLocal(){
     localStorage.setItem(STORE,j); return true;
   }catch(e){ try{ localStorage.removeItem(STORE); }catch(e2){} return false; }
 }
-function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
+function snapshot(){ return JSON.parse(JSON.stringify({plan:state.plan,planes:state.planes,thr:state.thr,tipos:state.tipos,perfil:state.perfil,habits:state.habits,days:state.days,hist:state.hist,tags:state.tags,tasks:state.tasks,notes:state.notes,events:state.events,
   boards:state.boards,blabels:state.blabels,blists:state.blists,cards:state.cards,maps:state.maps,mnodes:state.mnodes,mlinks:state.mlinks,mzones:state.mzones})); }
 async function api(method,path,body){
   if(LOCAL) return AscensoLocal.api(method,path,body);
@@ -4445,7 +4470,7 @@ async function api(method,path,body){
 function dayPayload(d){
   const o={c:{}}; if(!d) return o;
   for(const [k,v] of Object.entries(d.c||{})) if(v) o.c[k]=true;
-  if(d.w!=null) o.w=d.w; if(d.type) o.type=d.type;
+  if(d.w!=null) o.w=d.w; if(d.type) o.type=d.type; if(d.a) o.a=d.a;
   return o;
 }
 // Guardado con espera: mientras se escribe en una libreta, se guarda 0,7 s después de la última tecla
@@ -4455,8 +4480,16 @@ function saveSoon(){ clearTimeout(saveSoonT); saveSoonT=setTimeout(()=>{ saveSoo
 function flushSave(){ if(saveSoonT){ clearTimeout(saveSoonT); saveSoonT=null; save(); } }
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) flushSave(); });
 window.addEventListener("pagehide",flushSave);
+// Cuándo se terminó cada tarea: se apunta al pasar a «Hechas» y se quita si vuelve a otra lista
+function fecharTareas(){
+  for(const t of Object.values(state.tasks)){
+    if(t.list==="hecha"){ if(!t.done) t.done=new Date().toISOString(); }
+    else if(t.done) t.done=null;
+  }
+}
 function save(){
   if(saveSoonT){ clearTimeout(saveSoonT); saveSoonT=null; }
+  fecharTareas();
   const okLocal=saveLocal();
   if(!online){
     if(okLocal) document.dispatchEvent(new Event("ascenso:guardado"));
@@ -4481,8 +4514,8 @@ async function sync(){
   const enviar=async(metodo,ruta,datos)=>{ try{ await api(metodo,ruta,datos); return true; }catch(e){ errores.push(e); return false; } };
   try{
     const now=snapshot();
-    if(JSON.stringify([now.plan,now.planes,now.thr,now.tipos])!==JSON.stringify([synced.plan,synced.planes,synced.thr,synced.tipos])){
-      if(await enviar("PUT","config",{plan:now.plan,planes:now.planes,thr:now.thr,tipos:now.tipos})){ synced.plan=now.plan; synced.planes=now.planes; synced.thr=now.thr; synced.tipos=now.tipos; }
+    if(JSON.stringify([now.plan,now.planes,now.thr,now.tipos,now.perfil])!==JSON.stringify([synced.plan,synced.planes,synced.thr,synced.tipos,synced.perfil])){
+      if(await enviar("PUT","config",{plan:now.plan,planes:now.planes,thr:now.thr,tipos:now.tipos,perfil:now.perfil})){ synced.plan=now.plan; synced.planes=now.planes; synced.thr=now.thr; synced.tipos=now.tipos; synced.perfil=now.perfil; }
     }
     if(JSON.stringify(now.habits)!==JSON.stringify(synced.habits)){
       if(await enviar("PUT","habitos",now.habits)) synced.habits=now.habits;

@@ -73,6 +73,16 @@ test("la versión clásica (servidor.py) sigue guardando en ascenso.db", async (
     const estado = await (await fetch(base + "api/estado")).json();
     assert.ok(Object.values(estado.tasks).some(t => t.title === "Tarea clásica"));
     assert.equal((await pagina.evaluate(() => indexedDB.databases())).length, 0, "la versión clásica no usa IndexedDB");
+    // El perfil también está en la versión clásica (sin Cuenta) y guarda en ascenso.db
+    await pagina.click(".summit"); await pagina.locator("#perfil:not([hidden])").waitFor();
+    assert.match(await pagina.locator(".pf-nivel strong").innerText(), /\S/);
+    await pagina.click('[data-pf="ajustes"]');
+    assert.equal(await pagina.locator("#pf-cuenta").count(), 0, "sin cuenta en la versión clásica");
+    await pagina.fill("#pf-nombre", "Clásico"); await pagina.click('[data-figura="mujer"]');
+    await pagina.waitForFunction(() => /Guardado en la base de datos/.test(document.getElementById("status").textContent));
+    await pagina.waitForTimeout(800);
+    const conPerfil = await (await fetch(base + "api/estado")).json();
+    assert.deepEqual([conPerfil.perfil.nombre, conPerfil.perfil.figura], ["Clásico", "mujer"]);
   } finally { await nav.close(); proc.kill(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

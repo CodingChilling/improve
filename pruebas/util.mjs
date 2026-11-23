@@ -137,8 +137,9 @@ export function servirAppConCuenta({ url, clave = "sb_publishable_prueba" }) {
 
 // ---- El panel de la cuenta, usado como lo haría una persona ----
 export const panel = p => p.locator("#cuentadlg");
-const panelAbierto = p => p.evaluate(() => { const d = document.getElementById("cuentadlg"); return !!(d && d.open); });
-export async function abrirPanel(p) { if (!(await panelAbierto(p))) await p.click("#status"); await p.locator("#cuentadlg[open]").waitFor(); }
+// (La cuenta vive en Perfil › Ajustes; el texto de estado lleva hasta ella)
+const panelAbierto = p => p.locator("#cuentadlg").isVisible();
+export async function abrirPanel(p) { if (!(await panelAbierto(p))) await p.click("#status"); await p.locator("#cuentadlg").waitFor({ state: "visible" }); }
 export async function crearCuenta(p, sim, email, clave, { confirmar = true } = {}) {
   await abrirPanel(p);
   await panel(p).getByRole("button", { name: "Crear una cuenta" }).click();
@@ -169,5 +170,5 @@ export async function entrarPorPrimeraVez(p, email, clave) {
   await panel(p).locator(".c-quien").waitFor();
   return recuperacion;
 }
-export const cerrarPanel = async p => { if (await panelAbierto(p)) await panel(p).locator(".dlg-x").click(); };
+export const cerrarPanel = async p => { if (await panelAbierto(p)) await p.click("#pf-volver"); };
 export const alDia = (p, limite = 15000) => esperar(p, () => { const i = window.AscensoSync.informe(); return i.estado === "sincronizado" && i.pendientes === 0; }, null, { limite, que: "la sincronización termina" });

@@ -6719,3 +6719,877 @@ dialog.tdlg.diario {
     height: 30px;
   }
 }
+
+/* ======================================================================
+   Barra de accesos en el ordenador: columna fija a la izquierda
+   ====================================================================== */
+.barra button[hidden] {
+  display: none;
+}
+@media (min-width: 700px) {
+  :root {
+    --rail: 78px;
+  }
+  body {
+    padding-left: var(--rail);
+  }
+  .barra {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    box-sizing: border-box;
+    width: var(--rail);
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 6px 18px;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-right: 1px solid var(--line);
+  }
+  .barra button {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 0 7px;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .barra button:hover {
+    color: var(--ink);
+    background: var(--soft);
+  }
+  .barra svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .barra button[aria-current="page"] {
+    color: var(--gold);
+    background: var(--soft);
+  }
+  .barra button[data-ir="perfil"] {
+    margin-top: auto;               /* el perfil, abajo del todo, como en las apps de escritorio */
+  }
+  .barra .b-punto {
+    position: absolute;
+    top: 7px;
+    left: calc(50% + 8px);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    background: var(--active);
+  }
+  .barra .b-punto[hidden] {
+    display: none;
+  }
+  .barra .b-punto[data-estado="sincronizando"] {
+    background: var(--strength);
+  }
+  .barra .b-punto[data-estado="sin-conexion"] {
+    background: var(--climb);
+  }
+  .barra .b-punto[data-estado="error"] {
+    background: var(--p-urgente);
+  }
+  body.leyendo {
+    padding-left: 0;
+  }
+}
+
+/* ======================================================================
+   Perfil (assets/js/perfil.js) y figura de Vitruvio (assets/js/figura.js)
+   ====================================================================== */
+.pf-top {
+  flex-wrap: wrap;
+}
+.pf-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.pf-tabs button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.pf-tabs button[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.pf-cuerpo {
+  max-width: 1000px;
+}
+.pf-cuerpo section[hidden] {
+  display: none;
+}
+.pf-portada {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+@media (min-width: 860px) {
+  .pf-portada {
+    grid-template-columns: minmax(300px, 440px) minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+.pf-figura .vitruvio {
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.18));
+}
+.pf-saludo {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.pf-porque {
+  margin: 0 0 16px;
+  padding-left: 12px;
+  border-left: 3px solid var(--soft);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.pf-nivel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 0 12px;
+}
+.pf-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.pf-nivel strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+.pf-nivel small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.pf-barra {
+  height: 8px;
+  border-radius: 8px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pf-barra i {
+  display: block;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--gold);
+}
+.pf-xp,
+.pf-etapa,
+.pf-nota {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.pf-cifras {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+.pf-cifras div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.pf-cifras b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+.pf-cifras span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.pf-caja {
+  margin: 0 0 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.pf-caja h3 {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-size: 1.3rem;
+}
+.pf-fuentes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-fuentes li {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4.5rem;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 0.9rem;
+}
+.pf-fuentes i {
+  height: 6px;
+  border-radius: 6px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pf-fuentes b {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+.pf-fuentes em {
+  font-style: normal;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pf-figuras {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pf-figuras button {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.pf-figuras button[aria-checked="true"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--soft);
+}
+.pf-mini .vitruvio {
+  display: block;
+  width: 110px;
+}
+.pf-campo {
+  display: block;
+  margin: 0 0 10px;
+}
+.pf-campo span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pf-campo input,
+.pf-campo textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.pf-seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.pf-seg button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.pf-seg button[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.pf-ajustes details.cfg {
+  margin: 0 0 16px;
+}
+/* La cuenta, dentro de Ajustes (antes era una ventana) */
+.cuenta-panel .dlg-head {
+  padding: 0;
+}
+.cuenta-panel .c-cuerpo {
+  padding: 8px 0 0;
+}
+.cuenta-panel .c-titulo {
+  font-size: 1.1rem;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .pf-campo input,
+  .pf-campo textarea {
+    font-size: 16px;
+  }
+  .pf-tabs button,
+  .pf-seg button {
+    min-height: 40px;
+  }
+  .pf-fuentes li {
+    grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr) 4rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* La figura: boceto en sepia sobre papel; en oscuro, trazo claro sobre papel oscuro */
+.vitruvio {
+  --vf-linea: #6b4a2b;
+  --vf-papel: #f3ead7;
+  --vf-oro: #b8862f;
+  --vf-zona: 196, 104, 52;
+}
+:root[data-theme="dark"] .vitruvio {
+  --vf-linea: #e3d3b5;
+  --vf-papel: #25221d;
+  --vf-oro: #d9ad62;
+  --vf-zona: 232, 150, 84;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .vitruvio {
+    --vf-linea: #e3d3b5;
+    --vf-papel: #25221d;
+    --vf-oro: #d9ad62;
+    --vf-zona: 232, 150, 84;
+  }
+}
+.vf-papel {
+  fill: var(--vf-papel);
+}
+.vf-trazo {
+  fill: none;
+  stroke: var(--vf-linea);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.vf-circulo,
+.vf-cuadrado {
+  fill: none;
+  stroke: var(--vf-linea);
+  stroke-width: 0.9;
+  opacity: 0.75;
+}
+.vf-anillo {
+  fill: none;
+  stroke: var(--vf-oro);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+}
+.vf-zona {
+  fill: rgba(var(--vf-zona), calc(var(--b) * 0.6));
+}
+.vf-nota text,
+.vf-firma {
+  fill: var(--vf-linea);
+  stroke: none;
+  font-family: var(--serif);
+  font-style: italic;
+}
+.vf-guia {
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+}
+
+/* ---------- Ánimo del día ---------- */
+.animo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.animo > span {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+.animo-caras {
+  display: flex;
+  gap: 4px;
+}
+.animo-caras button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+}
+.animo-caras svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.animo-caras .ojo {
+  fill: currentColor;
+  stroke: none;
+}
+.animo-caras button:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.animo-caras button[aria-checked="true"] {
+  background: var(--gold);
+  color: var(--on-gold);
+}
+
+/* ---------- Perfil: estadísticas (fase 2) ---------- */
+.pf-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pf-tabs::-webkit-scrollbar {
+  display: none;
+}
+.pf-tabs button {
+  flex: none;
+  white-space: nowrap;
+}
+.pf-periodos {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.pf-periodos[hidden] {
+  display: none;
+}
+.pf-periodos button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.pf-periodos button[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.pf-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.pf-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.pf-caja .pf-tiles .pf-tile {
+  background: var(--bg);
+}
+.pf-tile b {
+  font-family: var(--serif);
+  font-size: 1.8rem;
+  line-height: 1.05;
+}
+.pf-tile b small {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.pf-tile span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.pf-cambio {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pf-cambio.sube::first-letter,
+.pf-cambio.baja::first-letter {
+  color: var(--gold);
+}
+/* Barras horizontales: un solo tono, extremos redondeados, carril discreto */
+.pf-b {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pf-b b {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--gold);
+}
+.pf-filas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-filas li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 10rem) minmax(0, 1fr) 4.6rem auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.pf-filas li:first-child {
+  border-top: 0;
+}
+.pf-filas em {
+  font-style: normal;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pf-n {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.pf-filas.pf-habitos li {
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4rem auto;
+}
+.pf-filas.pf-habitos small {
+  grid-column: 1 / 3;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.pf-mini-dias {
+  grid-column: 3 / 5;
+  justify-self: end;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+}
+.pf-mini-dias i {
+  display: flex;
+  align-items: flex-end;
+  width: 6px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pf-mini-dias b {
+  display: block;
+  width: 100%;
+  background: var(--gold);
+}
+/* Columnas verticales (días de la semana, serie de tareas) */
+.pf-columnas {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  height: 150px;
+}
+.pf-columnas > div {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  gap: 3px;
+}
+.pf-columnas i {
+  display: flex;
+  align-items: flex-end;
+  width: min(28px, 100%);
+  height: 100%;
+  border-radius: 4px 4px 0 0;
+  border-bottom: 1px solid var(--line);
+}
+.pf-columnas b {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border-radius: 4px 4px 0 0;
+  background: var(--gold);
+}
+.pf-columnas span {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pf-columnas em {
+  font-style: normal;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pf-serie span {
+  font-size: 0.68rem;
+}
+/* Ánimo: una barra por día (o por semana) */
+.pf-animo {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 70px;
+  margin-top: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.pf-animo span {
+  flex: 1 1 0;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+.pf-animo i {
+  display: block;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--gold);
+}
+.pf-eje {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+/* Calendario del último año: intensidad del dorado según lo cumplido */
+.pf-cal-marco {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.pf-cal {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-columns: 11px;
+  gap: 3px;
+  width: max-content;
+}
+.pf-cal i,
+.pf-leyenda i {
+  display: block;
+  border-radius: 3px;
+  background: var(--line);
+}
+.pf-cal i[style],
+.pf-leyenda i[style] {
+  background: color-mix(in srgb, var(--gold) calc(15% + var(--r) * 85%), transparent);
+}
+.pf-cal i.fut {
+  background: none;
+}
+.pf-leyenda {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.pf-leyenda i {
+  width: 11px;
+  height: 11px;
+}
+/* Zonas del cuerpo */
+.pf-lista-zonas {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.pf-lista-zonas button {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr) 3.6rem;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  font-size: 0.92rem;
+}
+.pf-lista-zonas button:hover,
+.pf-lista-zonas button[aria-pressed="true"] {
+  background: var(--soft);
+}
+.pf-lista-zonas button[aria-pressed="true"] span {
+  font-weight: 700;
+}
+.pf-lista-zonas em {
+  font-style: normal;
+  text-align: right;
+  color: var(--muted);
+}
+.vf-zona {
+  cursor: pointer;
+}
+.vf-zona.on {
+  stroke: var(--vf-oro);
+  stroke-width: 2.5;
+}
+.pf-detalle h3 {
+  font-size: 1.15rem;
+}
+.pf-zonas-lista h4 {
+  margin: 14px 0 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pf-zfila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+.pf-zfila > span:not(.pf-punto) {
+  flex: 1;
+  min-width: 0;
+}
+.pf-zfila select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+/* Descubrimientos */
+.pf-descubre ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-descubre li {
+  padding: 10px 0 10px 14px;
+  border-left: 3px solid var(--soft);
+  margin-bottom: 8px;
+}
+.pf-descubre li p {
+  margin: 0;
+}
+.pf-descubre li small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.pf-descubre .add {
+  margin-top: 6px;
+}
+@media (max-width: 699px) {
+  .pf-filas li {
+    grid-template-columns: auto minmax(0, 1fr) 4.2rem;
+  }
+  .pf-filas li .pf-b {
+    grid-column: 1 / -1;
+    order: 5;
+  }
+  .pf-filas li .pf-cambio {
+    grid-column: 1 / -1;
+    order: 6;
+  }
+  .pf-filas.pf-habitos li {
+    grid-template-columns: minmax(0, 1fr) 4rem;
+  }
+  .pf-filas.pf-habitos small {
+    grid-column: 1;
+  }
+  .pf-mini-dias {
+    grid-column: 2;
+  }
+  .pf-zfila select {
+    font-size: 16px;
+    min-height: 40px;
+  }
+  .pf-periodos button {
+    min-height: 40px;
+  }
+}

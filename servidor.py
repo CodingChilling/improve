@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS habitos (
 CREATE TABLE IF NOT EXISTS dias (
   fecha TEXT PRIMARY KEY,  -- AAAA-MM-DD
   peso  REAL,
-  tipo  TEXT               -- entreno distinto al del plan semanal (opcional)
+  tipo  TEXT,              -- entreno distinto al del plan semanal (opcional)
+  animo INTEGER            -- ánimo del día, de 1 a 5 (opcional)
 );
 CREATE TABLE IF NOT EXISTS marcas (
   fecha     TEXT NOT NULL,
@@ -287,9 +288,9 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   huerfano_desde TEXT
 );
 """
-VERSION_BD = 12
+VERSION_BD = 13
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 15
+VERSION_APP = 17
 
 
 class ErrorDatos(Exception):
@@ -316,6 +317,10 @@ def migrar(con):
     columnas = {r[1] for r in con.execute("PRAGMA table_info(tareas)")}
     if "archivada" not in columnas:
         con.execute("ALTER TABLE tareas ADD COLUMN archivada TEXT")
+    if "hecha_el" not in columnas:
+        con.execute("ALTER TABLE tareas ADD COLUMN hecha_el TEXT")     # cuándo pasó a «Hechas»
+    if "animo" not in {r[1] for r in con.execute("PRAGMA table_info(dias)")}:
+        con.execute("ALTER TABLE dias ADD COLUMN animo INTEGER")
     columnas = {r[1] for r in con.execute("PRAGMA table_info(tarjetas)")}
     if "archivada" not in columnas:
         con.execute("ALTER TABLE tarjetas ADD COLUMN archivada TEXT")
@@ -339,12 +344,14 @@ def leer_estado(con):
         for r in con.execute("SELECT * FROM habitos ORDER BY orden, id")
     ]
     dias = {}
-    for r in con.execute("SELECT fecha, peso, tipo FROM dias"):
+    for r in con.execute("SELECT fecha, peso, tipo, animo FROM dias"):
         d = dias.setdefault(r["fecha"], {})
         if r["peso"] is not None:
             d["w"] = r["peso"]
         if r["tipo"]:
             d["type"] = r["tipo"]
+        if r["animo"]:
+            d["a"] = r["animo"]
     for r in con.execute("SELECT fecha, habito_id FROM marcas"):
         dias.setdefault(r["fecha"], {}).setdefault("c", {})[r["habito_id"]] = True
     historial = {}
@@ -364,7 +371,7 @@ def leer_estado(con):
         tareas[r["id"]] = {
             "date": r["fecha"], "title": r["titulo"], "notes": r["notas"],
             "prio": r["prioridad"], "list": r["lista"], "created": r["creada"], "tags": [], "check": [],
-            "archived": r["archivada"],
+            "done": r["hecha_el"], "archived": r["archivada"],
         }
     for r in con.execute("SELECT tarea_id, etiqueta_id FROM tarea_etiquetas ORDER BY rowid"):
         if r["tarea_id"] in tareas:
@@ -433,6 +440,7 @@ def leer_estado(con):
         "planes": config.get("planes"),
         "thr": config.get("thr"),
         "tipos": config.get("tipos"),
+        "perfil": config.get("perfil"),
         "habits": habitos,
         "days": dias,
         "hist": historial,
@@ -550,11 +558,45 @@ def validar_dia(d):
     tipo = d.get("type")
     if tipo is not None and (not isinstance(tipo, str) or not ID_RE.match(tipo)):
         raise ErrorDatos("tipo de entreno no válido")
+    animo = d.get("a")
+    if animo is not None and not (isinstance(animo, int) and not isinstance(animo, bool) and 1 <= animo <= 5):
+        raise ErrorDatos("ánimo no válido")
     marcas = d.get("c") or {}
     if not isinstance(marcas, dict):
         raise ErrorDatos("marcas no válidas")
     ids = [k for k, v in marcas.items() if v is True and ID_RE.match(str(k))]
-    return peso, tipo, ids
+    return peso, tipo, animo, ids
+
+
+ZONAS_CUERPO = ["cabeza", "pecho", "brazos", "manos", "abdomen", "piernas"]
+REF_RE = re.compile(r"^[hte]:[A-Za-z0-9_-]{1,40}$")
+
+
+def validar_perfil(p):
+    """Perfil: figura (hombre o mujer), nombre, «mi porqué» y qué reúne cada zona del cuerpo (None: sin elegir)."""
+    if not isinstance(p, dict):
+        raise ErrorDatos("perfil no válido")
+    figura = str(p.get("figura") or "") or "hombre"
+    if figura not in ("hombre", "mujer"):
+        raise ErrorDatos("perfil no válido")
+    zonas = None
+    if p.get("zonas") is not None:
+        if not isinstance(p["zonas"], dict):
+            raise ErrorDatos("perfil no válido")
+        zonas = {}
+        for z in ZONAS_CUERPO:
+            lista = p["zonas"].get(z, [])
+            if not isinstance(lista, list) or len(lista) > 60:
+                raise ErrorDatos("perfil no válido")
+            salida = []
+            for r in lista:
+                if not isinstance(r, str) or not REF_RE.match(r):
+                    raise ErrorDatos("perfil no válido")
+                if r not in salida:
+                    salida.append(r)
+            zonas[z] = salida
+    return {"figura": figura, "nombre": str(p.get("nombre") or "").strip()[:40],
+            "porque": str(p.get("porque") or "").strip()[:300], "zonas": zonas}
 
 
 def guardar_config(con, datos):
@@ -566,6 +608,8 @@ def guardar_config(con, datos):
         con.execute("INSERT OR REPLACE INTO config VALUES ('tipos', ?)", (json.dumps(validar_tipos(datos["tipos"])),))
     if "planes" in datos:
         con.execute("INSERT OR REPLACE INTO config VALUES ('planes', ?)", (json.dumps(validar_planes(datos["planes"])),))
+    if "perfil" in datos:
+        con.execute("INSERT OR REPLACE INTO config VALUES ('perfil', ?)", (json.dumps(validar_perfil(datos["perfil"])),))
 
 
 def guardar_habitos(con, lista):
@@ -590,11 +634,11 @@ def guardar_habitos(con, lista):
 def guardar_dia(con, fecha, datos):
     if not FECHA_RE.match(fecha):
         raise ErrorDatos("fecha no válida")
-    peso, tipo, ids = validar_dia(datos)
-    if peso is None and tipo is None:
+    peso, tipo, animo, ids = validar_dia(datos)
+    if peso is None and tipo is None and animo is None:
         con.execute("DELETE FROM dias WHERE fecha = ?", (fecha,))
     else:
-        con.execute("INSERT OR REPLACE INTO dias (fecha, peso, tipo) VALUES (?, ?, ?)", (fecha, peso, tipo))
+        con.execute("INSERT OR REPLACE INTO dias (fecha, peso, tipo, animo) VALUES (?, ?, ?, ?)", (fecha, peso, tipo, animo))
     con.execute("DELETE FROM marcas WHERE fecha = ?", (fecha,))
     for hid in ids:
         # Solo se guardan marcas de hábitos que existen
@@ -669,6 +713,8 @@ def guardar_tarea(con, tid, datos):
     creada = str(datos.get("created") or "")[:40] or fecha
     archivada = datos.get("archived")
     archivada = str(archivada)[:40] if archivada else None
+    hecha_el = datos.get("done")
+    hecha_el = str(hecha_el)[:40] if hecha_el else None
     etiquetas = datos.get("tags") or []
     if not isinstance(etiquetas, list):
         raise ErrorDatos("etiquetas no válidas")
@@ -683,11 +729,11 @@ def guardar_tarea(con, tid, datos):
         if texto:
             puntos.append((comprobar_id(punto.get("id"), "elemento"), texto, int(bool(punto.get("d")))))
     con.execute(
-        """INSERT INTO tareas (id, fecha, titulo, notas, prioridad, lista, creada, archivada) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO tareas (id, fecha, titulo, notas, prioridad, lista, creada, archivada, hecha_el) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET fecha=excluded.fecha, titulo=excluded.titulo, notas=excluded.notas,
-             prioridad=excluded.prioridad, lista=excluded.lista, archivada=excluded.archivada,
+             prioridad=excluded.prioridad, lista=excluded.lista, archivada=excluded.archivada, hecha_el=excluded.hecha_el,
              actualizada=datetime('now', 'localtime')""",
-        (tid, fecha, titulo, notas, prioridad, lista, creada, archivada),
+        (tid, fecha, titulo, notas, prioridad, lista, creada, archivada, hecha_el),
     )
     con.execute("DELETE FROM tarea_etiquetas WHERE tarea_id = ?", (tid,))
     for eid in etiquetas:
@@ -1125,7 +1171,7 @@ def importar(con, estado):
     con.execute("DELETE FROM dias")
     con.execute("DELETE FROM habitos")
     con.execute("DELETE FROM config")
-    guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos") if estado.get(k) is not None})
+    guardar_config(con, {k: estado[k] for k in ("plan", "planes", "thr", "tipos", "perfil") if estado.get(k) is not None})
     guardar_habitos(con, estado.get("habits") or [])
     for fecha, d in estado["days"].items():
         guardar_dia(con, str(fecha), d)
