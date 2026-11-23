@@ -14,6 +14,7 @@ window.AscensoLocal=(()=>{
   const TIPOS_BASE=new Set(["climb","strength","active","rest"]);     // los de siempre (formato antiguo de «tipos»)
   const MAX_TIPOS=20, MAX_PLANES=400;
   const FORMAS_ZONA=new Set(["rect","cuadrado","ovalo","circulo"]);   // áreas de los mapas
+  const TIPOS_OBJETIVO=new Set(["racha","habito","tareas","reflexiones","libros","nivel"]);
   const UMBRALES=new Set([0.5,0.66,0.75,1.0]);
   const PRIORIDADES=new Set(["urgente","alta","media","baja"]);
   const PRIORIDADES_TARJETA=new Set([...PRIORIDADES,"ninguna"]);
@@ -23,9 +24,9 @@ window.AscensoLocal=(()=>{
   const MAX_IMAGEN=15*1024*1024;         // bytes por imagen
   const DIAS_HUERFANAS=30;               // días que se conserva una imagen que ya no está en ninguna libreta
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
-  const VERSION_APP=17;
+  const VERSION_APP=18;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
-                "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","zonas","adjuntos",
+                "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","zonas","objetivos","adjuntos",
                 "libros","lecturas","subrayados","archivos"];
   // La librería: no entra en la copia de seguridad (los archivos pesan demasiado), así que importar una copia no la toca
   const TABLAS_LIBRERIA=new Set(["libros","lecturas","subrayados","archivos"]);
@@ -209,6 +210,8 @@ window.AscensoLocal=(()=>{
     for(const [id,v] of nodosT) if(seVe(id,new Set())) nodos[id]={map:v.map,parent:v.parent||null,title:v.title,color:v.color||"",x:v.x,y:v.y,notes:v.notes,created:v.created};
     const conexiones={};
     for(const [id,v] of vivos("conexiones")) if(nodos[v.a]&&nodos[v.b]) conexiones[id]={a:v.a,b:v.b};
+    const objetivos={};
+    for(const [id,v] of vivos("objetivos")) objetivos[id]={titulo:v.titulo,tipo:v.tipo,ref:v.ref||null,meta:v.meta,desde:v.desde,hasta:v.hasta,archivado:!!v.archivado,creado:v.creado};
     // Áreas de color de los mapas: las de un mapa o un nivel que ya no existe no se muestran
     const zonas={};
     for(const [id,v] of vivos("zonas")) if(mapas[v.map]&&(!v.parent||nodos[v.parent]))
@@ -218,7 +221,7 @@ window.AscensoLocal=(()=>{
     const vacia=!hay(config)&&!habitos.length&&!hay(dias)&&!hay(historial)&&!hay(etiquetas)&&!hay(tareas)&&!hay(notas)&&!hay(eventos)&&!hay(tableros)&&!hay(mapas);
     const nada=v=>v===undefined?null:v;
     return {plan:nada(config.plan),planes:nada(config.planes),thr:nada(config.thr),tipos:nada(config.tipos),perfil:nada(config.perfil),habits:habitos,days:dias,hist:historial,tags:etiquetas,tasks:tareas,
-      notes:notas,events:eventos,boards:tableros,blabels:etiquetasTab,blists:listas,cards:tarjetas,maps:mapas,mnodes:nodos,mlinks:conexiones,mzones:zonas,
+      notes:notas,events:eventos,boards:tableros,blabels:etiquetasTab,blists:listas,cards:tarjetas,maps:mapas,mnodes:nodos,mlinks:conexiones,mzones:zonas,objetivos,
       att:adjuntos,vacia,version:VERSION_APP};
   }
 
@@ -511,6 +514,28 @@ window.AscensoLocal=(()=>{
     if(na.map!==nb.map||(na.parent||null)!==(nb.parent||null)) mal("solo se pueden conectar nodos del mismo nivel");
     op.poner("conexiones",cid,{a,b});
   }
+  // Objetivo con fecha: racha, % de un hábito, tareas, reflexiones, libros o nivel; su progreso se calcula de los datos
+  function guardarObjetivo(op,oid,d){
+    oid=comprobarId(oid,"objetivo");
+    if(!esDic(d)) mal("objetivo no válido");
+    const tipo=texto(d.tipo);
+    if(!TIPOS_OBJETIVO.has(tipo)) mal("tipo de objetivo no válido");
+    const ref=d.ref===undefined||d.ref===null||d.ref===""?null:d.ref;
+    if(ref!==null&&(typeof ref!=="string"||!ID_RE.test(ref))) mal("objetivo no válido");
+    if(tipo==="habito"&&!ref) mal("el objetivo necesita un hábito");
+    const meta=d.meta;
+    if(!(typeof meta==="number"&&Number.isInteger(meta)&&meta>=1&&meta<=(tipo==="habito"?100:100000))) mal("meta no válida");
+    const desde=texto(d.desde), hasta=texto(d.hasta);
+    if(!FECHA_RE.test(desde)||!FECHA_RE.test(hasta)) mal("fechas del objetivo no válidas");
+    const a=fechaReal(desde), b=fechaReal(hasta);
+    if(a===null||b===null) mal("fechas del objetivo no válidas");
+    const dias=Math.round((b-a)/86400000);
+    if(dias<0) mal("el objetivo termina antes de empezar");
+    if(dias>1830) mal("el objetivo dura demasiado");
+    const prev=op.leer("objetivos",oid);
+    op.poner("objetivos",oid,{titulo:cortar(texto(d.titulo).trim(),80),tipo,ref,meta,desde,hasta,archivado:d.archivado===true,
+      creado:prev?prev.creado:cortar(texto(d.creado),40)});
+  }
   // Área de color de un mapa: rectángulo, cuadrado, óvalo o círculo, en un nivel (el del mapa o el de dentro de un nodo)
   function guardarZona(op,zid,d){
     zid=comprobarId(zid,"área");
@@ -719,6 +744,7 @@ window.AscensoLocal=(()=>{
     "nodos/":[guardarNodo,borrarNodo],
     "conexiones/":[guardarConexion,borrarSimple("conexiones","conexión")],
     "zonas/":[guardarZona,borrarSimple("zonas","área")],
+    "objetivos/":[guardarObjetivo,borrarSimple("objetivos","objetivo")],
     "libros/":[guardarLibro,borrarLibro],
     "lecturas/":[guardarLectura,borrarSimple("lecturas","libro")],
     "subrayados/":[guardarSubrayado,borrarSimple("subrayados","subrayado")],
@@ -746,6 +772,7 @@ window.AscensoLocal=(()=>{
     }
     cada("mlinks",guardarConexion);
     cada("mzones",guardarZona);
+    cada("objetivos",guardarObjetivo);
   }
 
   // ---- imágenes del día: la lista se genera al publicar (herramientas/generar.py) ----

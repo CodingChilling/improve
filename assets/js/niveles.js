@@ -79,7 +79,14 @@ window.AscensoNiveles=(()=>{
       }
       p.lectura+=Object.keys(libreria.subrayados||{}).length*PUNTOS.subrayado;
     }
-    const total=Object.values(p).reduce((a,b)=>a+b,0);
+    let total=Object.values(p).reduce((a,b)=>a+b,0);
+    // Objetivos cumplidos: los de tipo «nivel» se miden con el nivel sin contar los objetivos (así no dan vueltas)
+    const O=window.AscensoObjetivos;
+    if(O&&state.objetivos){
+      const base=nivelDe(total).nivel;
+      for(const g of Object.values(state.objetivos)) if(O.medir(state,g,{libreria,nivel:base,hasta:fin}).estado==="cumplido") p.objetivos+=PUNTOS.objetivo;
+      total+=p.objetivos;
+    }
     return {total, partes:p};
   }
 
