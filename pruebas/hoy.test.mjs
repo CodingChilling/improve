@@ -51,3 +51,29 @@ test("Hoy: nueva tarea en una línea, con prioridad y lista que se recuerdan; y 
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
 });
+
+test("Hoy más despejado: sin leyenda ni ayudas, y las etiquetas se gestionan en Perfil › Ajustes", async () => {
+  const app = await servirApp(), nav = await chromium.launch();
+  try {
+    const { pagina: p } = await abrirConDatos(nav, app, { viewport: { width: 1440, height: 900 } });
+    const errores = []; p.on("pageerror", e => errores.push(String(e)));
+    assert.equal(await p.locator("main #legend, main .drag-hint").count(), 0, "sin leyenda ni ayuda de arrastrar");
+    assert.equal(await p.locator("main").getByText("Toca un día para verlo").count(), 0);
+    assert.equal(await p.locator("main #tagmgrbox").count(), 0, "el gestor de etiquetas ya no está en Hoy");
+    assert.match(await p.locator("#week .day").first().getAttribute("title"), /\S/, "cada día dice su entreno al pasar el ratón");
+    // Desde la nueva tarea: «Gestionar…» lleva a Ajustes, con el gestor abierto
+    await p.click("#tnew"); await p.keyboard.type("Algo");
+    await p.locator("#tnewtags [data-gestionar-etiquetas]").click();
+    await p.locator("#pf-ajustes #tagmgrbox[open]").waitFor();
+    await esperar(p, () => document.activeElement && document.activeElement.id === "tagname", null, { que: "el foco en el nombre de la etiqueta nueva" });
+    await p.keyboard.type("Lectura"); await p.keyboard.press("Enter");
+    await esperar(p, () => window.AscensoLocal.api("GET", "estado").then(e => Object.values(e.tags).some(t => t.name === "Lectura")), null, { que: "la etiqueta se crea desde Ajustes" });
+    // Y desde la ficha de una tarea
+    await p.evaluate(() => window.AscensoPerfil.cerrar()); await p.waitForTimeout(200);
+    await p.locator("#board .task").first().click(); await p.locator("#taskdlg[open]").waitFor();
+    await p.locator("#taskdlg [data-gestionar-etiquetas]").click();
+    await p.locator("#pf-ajustes #tagmgrbox[open]").waitFor();
+    assert.equal(await p.locator("#taskdlg[open]").count(), 0, "la ficha se cierra");
+    assert.deepEqual(errores, []);
+  } finally { await nav.close(); await app.cerrar(); }
+});

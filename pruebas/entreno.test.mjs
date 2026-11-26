@@ -47,7 +47,7 @@ test("tipos de entreno: más tipos, cambios hacia delante y semanas pasadas inta
     await elegir(2, "Yoga");
     const yoga = await tipo(2);
     assert.match(yoga, /^k/);
-    assert.match(await p.locator("#legend").innerText(), /Yoga/);
+    assert.match(await p.locator("#week .day").first().getAttribute("title"), /Yoga/, "el día dice su tipo al pasar el ratón");
     assert.equal(await p.locator("#week .day").first().locator(".hold").evaluate(e => getComputedStyle(e).backgroundColor), "rgb(22, 160, 133)", "su color se ve en la semana");
     // Un día de una semana pasada también puede ser de Yoga
     await elegir(-2, "Yoga");
@@ -71,7 +71,6 @@ test("tipos de entreno: más tipos, cambios hacia delante y semanas pasadas inta
     assert.equal(await p.locator("#plan button").count(), 4, "ni elegir");
     await lunes(-2);
     assert.equal(await p.locator('#plan button[aria-pressed="true"]').innerText(), "Yoga", "pero el día pasado lo sigue mostrando");
-    assert.match(await p.locator("#legend").innerText(), /Yoga/);
     // Un tipo que nadie usa se quita del todo
     await p.evaluate(() => window.AscensoPerfil.abrir("ajustes"));
     await p.click("#typeadd");
