@@ -99,7 +99,8 @@ test("móvil: barra de navegación, botón atrás y tamaños táctiles", async (
     assert.ok(await visible("#barra"), "en el móvil hay barra de navegación");
     assert.equal(await actual(), "hoy");
     await ir("tareas");
-    await esperar(pagina, () => Math.abs(document.querySelector("section.tasks").getBoundingClientRect().top) < 40, null, { que: "la pantalla baja hasta las tareas" });
+    // (sube hasta arriba, o hasta donde llega la página si hay pocas tareas debajo)
+    await esperar(pagina, () => { const t = document.querySelector("section.tasks").getBoundingClientRect().top; return Math.abs(t) < 40 || (t < innerHeight * 0.4 && innerHeight + scrollY >= document.documentElement.scrollHeight - 4); }, null, { que: "la pantalla baja hasta las tareas" });
     assert.equal(await actual(), "tareas");
     await ir("hoy");
     await esperar(pagina, () => scrollY === 0, null, { que: "la pantalla vuelve arriba" });

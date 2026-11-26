@@ -446,25 +446,6 @@ section {
   height: 100%;
   background: var(--gold);
 }
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin-top: 12px;
-  font-size: 0.88rem;
-  color: var(--muted);
-}
-.legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.legend b {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
 .hint {
   font-size: 0.88rem;
   color: var(--muted);
@@ -1195,22 +1176,10 @@ body.is-dragging * {
   background: var(--soft);
   color: var(--ink);
 }
-.drag-hint {
-  margin-top: 10px;
-}
-.drag-hint .h-wide {
-  display: none;
-}
 @media (min-width: 760px) {
   /* Mientras se arrastra, una columna vacía también es fácil de alcanzar */
   .board .col {
     min-height: 120px;
-  }
-  .drag-hint .h-wide {
-    display: inline;
-  }
-  .drag-hint .h-narrow {
-    display: none;
   }
 }
 
@@ -9149,4 +9118,12 @@ html.bloqueada body > :not(#bloqueo) {
     max-width: none;
     justify-content: space-between;
   }
+}
+
+/* Etiquetas: enlace al gestor (en Perfil › Ajustes) al final del selector */
+.tp-gestionar {
+  align-self: center;
+  margin-left: 2px;
+  padding: 4px 2px;
+  font-size: 0.8rem;
 }

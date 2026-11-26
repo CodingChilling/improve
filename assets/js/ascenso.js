@@ -341,14 +341,11 @@ function renderWeek(){
     const d=addDays(m,i), b=document.createElement("button");
     b.className="day"+(key(d)===key(sel)?" sel":"");
     b.setAttribute("aria-label", d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"})+", "+typeLong(typeFor(d)));
+    b.title=typeLong(typeFor(d));         // sin leyenda: el tipo de entreno se lee al pasar el ratón
     b.innerHTML=`<span class="dn">${DOW[i]}</span><span class="dd">${d.getDate()}</span><span ${marcaTipo(typeFor(d),"hold")}></span><span class="pct"><i style="width:${Math.round(ratio(d)*100)}%"></i></span>`;
     b.onclick=()=>{sel=d;render();};
     w.appendChild(b);
   }
-  // Leyenda: los tipos que se pueden elegir y, si salen en esta semana, los archivados
-  const enSemana=new Set(Array.from({length:7},(_,i)=>typeFor(addDays(m,i))));
-  document.getElementById("legend").innerHTML=state.tipos.filter(t=>!t.oculto||enSemana.has(t.id))
-    .map(t=>`<span><b ${marcaTipo(t.id)}></b>${esc(t.name)}</span>`).join("");
 }
 
 // ---- Eventos del día, al lado de la racha ----
@@ -4385,9 +4382,10 @@ function textOn(hex){ const n=parseInt(hex.slice(1),16), r=n>>16&255, g=n>>8&255
 function tagChip(id){ const t=state.tags[id]; return t?`<span class="tag" style="--c:${t.color};--tc:${textOn(t.color)}">${esc(t.name)}</span>`:""; }
 function tagPickerHTML(selected){
   const ids=Object.keys(state.tags).sort((a,b)=>state.tags[a].name.localeCompare(state.tags[b].name,"es"));
-  if(!ids.length) return `<span class="tp-empty">Crea etiquetas en «Etiquetas» para asignarlas.</span>`;
+  const gestionar=`<button type="button" class="linklike tp-gestionar" data-gestionar-etiquetas>${ids.length?"Gestionar…":"Crear etiquetas…"}</button>`;
+  if(!ids.length) return `<span class="tp-empty">Aún no hay etiquetas.</span>`+gestionar;
   return ids.map(id=>{ const t=state.tags[id], on=selected.has(id);
-    return `<button type="button" class="tp" data-tag="${id}" aria-pressed="${on}" style="--c:${t.color};--tc:${textOn(t.color)}">${esc(t.name)}</button>`; }).join("");
+    return `<button type="button" class="tp" data-tag="${id}" aria-pressed="${on}" style="--c:${t.color};--tc:${textOn(t.color)}">${esc(t.name)}</button>`; }).join("")+gestionar;
 }
 const prioOptions=v=>PRIOS.map(([id,n])=>`<option value="${id}"${id===v?" selected":""}>${n}</option>`).join("");
 const listOptions=v=>LISTS.map(([id,n])=>`<option value="${id}"${id===v?" selected":""}>${n}</option>`).join("");
@@ -4537,7 +4535,14 @@ document.addEventListener("focusin",e=>{
   if(t&&t.tagName==="INPUT"&&/^(text|search|number)$/.test(t.type)&&!t.hasAttribute("enterkeyhint")) t.setAttribute("enterkeyhint","done");
 });
 document.getElementById("tnew").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addTask(); } });
+// El gestor de etiquetas vive en Perfil › Ajustes (en la versión sin perfil, sigue en la página del día)
+function abrirGestorEtiquetas(){
+  const P=window.AscensoPerfil; if(P&&P.disponible) P.abrir("ajustes");
+  const m=document.getElementById("tagmgrbox"); m.open=true; renderTagMgr();
+  m.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>document.getElementById("tagname").focus({preventScroll:true}),400);
+}
 document.getElementById("tnewtags").addEventListener("click",e=>{
+  if(e.target.closest("[data-gestionar-etiquetas]")){ abrirGestorEtiquetas(); return; }
   const b=e.target.closest(".tp"); if(!b) return;
   const id=b.dataset.tag; newTaskTags.has(id)?newTaskTags.delete(id):newTaskTags.add(id); renderTasks();
 });
@@ -4653,7 +4658,6 @@ function renderTaskDlg(){
           `<button type="button" data-prio="${id}" class="pp-${id}" aria-pressed="${id===t.prio}">${n}</button>`).join("")}</div>
         <h4>Etiquetas</h4>
         <div class="tagpick d-tags">${tagPickerHTML(new Set(t.tags))}</div>
-        <button type="button" class="linklike d-mgr">Crear o editar etiquetas</button>
         <h4>Descripción</h4>
         ${descEditing
           ? `<textarea class="d-desc-edit" rows="5" maxlength="2000" placeholder="Añade una descripción más detallada…">${esc(t.notes)}</textarea>
@@ -4713,10 +4717,7 @@ dlg.addEventListener("click",e=>{
   if(e.target.closest(".d-done")){ t.list = t.list==="hecha" ? "pendiente" : "hecha"; taskChanged(); return; }
   if(e.target.closest(".d-toboard")){ toBoardOpen=!toBoardOpen; renderTaskDlg(); return; }
   if(e.target.closest(".tb-go")){ const l=dlg.querySelector(".tb-list"); if(l&&state.blists[l.value]) taskToCard(openTaskId,l.value); return; }
-  if(e.target.closest(".d-mgr")){
-    closeTask(); const m=document.querySelector("details.tagmgr"); m.open=true;
-    m.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>document.getElementById("tagname").focus(),400); return;
-  }
+  if(e.target.closest(".d-mgr")||e.target.closest("[data-gestionar-etiquetas]")){ closeTask(); abrirGestorEtiquetas(); return; }
   if(e.target.closest(".d-arch")){ const id=openTaskId; closeTask(); archiveTask(id); return; }
   if(e.target.closest(".d-unarch")){ restoreTask(openTaskId); renderTaskDlg(); return; }
   const del=e.target.closest(".d-del");

@@ -23,6 +23,8 @@
       else {
         const limite = innerHeight * 0.4;
         for (const k of ["tareas"]) if (seccion[k]().getBoundingClientRect().top < limite) activa = k;
+        // Con pocas tareas la página no llega a subirlas arriba del todo: al final de la página, también es «Tareas»
+        if (scrollY > 0 && innerHeight + scrollY >= document.documentElement.scrollHeight - 4) activa = "tareas";
       }
     }
     for (const b of barra.querySelectorAll("button")) {

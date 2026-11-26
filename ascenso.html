@@ -80,8 +80,6 @@
   <section aria-labelledby="h-week" class="sec-semana">
     <h2 id="h-week">Esta semana</h2>
     <div class="week" id="week"></div>
-    <div class="legend" id="legend"></div>
-    <p class="hint" title="Cambia su entreno con los botones de Hoy: vale para ese día y los mismos días de las semanas siguientes (en una semana pasada, solo para ese día).">Toca un día para verlo.</p>
   </section>
 
   <section aria-labelledby="h-day" class="sec-hoy">
@@ -106,7 +104,7 @@
 
   <section aria-labelledby="h-tasks" class="tasks">
     <div class="dayhead tasks-head">
-      <h2 id="h-tasks">Tareas <span class="tdate" id="tdate"></span></h2>
+      <h2 id="h-tasks" title="Arrastra una tarea a otra columna (en el móvil, mantenla pulsada y llévala a otra pestaña) para cambiarla de lista.">Tareas <span class="tdate" id="tdate"></span></h2>
     </div>
     <div class="tadd" id="tadd">
       <div class="tadd-linea">
@@ -128,8 +126,7 @@
     </div>
     <div class="ttabs" id="ttabs" role="tablist" aria-label="Listas de tareas"></div>
     <div class="board" id="board"></div>
-    <p class="hint drag-hint"><span class="h-wide">Arrastra una tarea a otra columna para cambiarla de lista.</span><span class="h-narrow">Mantén pulsada una tarea y arrástrala a otra pestaña para cambiarla de lista.</span></p>
-    <details class="cfg tagmgr">
+    <details class="cfg tagmgr" id="tagmgrbox">
       <summary>Etiquetas</summary>
       <div class="cfgbody">
         <p>Cada etiqueta tiene un nombre y un color. Si quitas una, desaparece también de las tareas que la tenían.</p>

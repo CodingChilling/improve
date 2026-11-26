@@ -75,7 +75,7 @@ window.AscensoPerfil=(()=>{
       `<p class="pf-nota">${(window.ASCENSO_CONFIG||{}).clasico?"El bloqueo con PIN o con la huella está en la aplicación nueva (la que se instala en el móvil). Esta versión clásica guarda los datos en ascenso.db, en tu ordenador: los protege la sesión de tu ordenador.":"Este navegador no permite el bloqueo con PIN."}</p>`}</div></section>
     ${cuentaDisponible?`<section class="pf-caja" id="pf-cuenta"><h3>Cuenta</h3><div id="pf-cuenta-sitio"></div></section>`:""}
     <div id="pf-config"></div>`;
-  for(const id of ["cfg","typecfgbox","imgcfgbox","backupbox"]){ const d=$(id); if(d) $("pf-config").appendChild(d); }
+  for(const id of ["cfg","typecfgbox","tagmgrbox","imgcfgbox","backupbox"]){ const d=$(id); if(d) $("pf-config").appendChild(d); }
   for(const m of ajustes.querySelectorAll("[data-mini]")) m.innerHTML=Figura.svg({figura:m.dataset.mini, etapa:1, titulo:""});
 
   function pintarAjustes(){

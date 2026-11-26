@@ -20,7 +20,7 @@ En los dos casos, sin dependencias: ni frameworks, ni paquetes que instalar para
   cambia para ese día y los mismos días de las semanas que vienen; en una semana pasada, solo para ese día. Las
   semanas pasadas no cambian nunca por lo que se haga después. Al quitar un tipo ya usado, eliges a cuál pasan sus
   días desde esta semana; las semanas pasadas lo conservan.
-- **Tareas** por día al estilo de Trello: tres listas (Pendientes, En proceso, Hechas), arrastrar y soltar, prioridades (urgente, alta, media, baja), etiquetas con color y una checklist en la ficha de cada tarea.
+- **Tareas** por día al estilo de Trello: tres listas (Pendientes, En proceso, Hechas), arrastrar y soltar, prioridades (urgente, alta, media, baja), etiquetas con color (se crean y editan en Perfil › Ajustes) y una checklist en la ficha de cada tarea. La página del día va sin leyendas ni ayudas: el tipo de entreno de cada día de la semana se lee al pasar el ratón por él.
 - **Frase del día** y **imagen del día**, sin repetirse hasta agotar todas, con historial guardado.
 - **Copia de seguridad**: exportar e importar todos los datos en JSON.
 
@@ -206,7 +206,8 @@ clara sobre papel oscuro.
 - **Ánimo**: bajo los hábitos del día, cinco caras para decir cómo te sientes (tocar la misma otra vez lo quita).
 - **Ajustes**: tu figura, tu nombre (para saludarte) y «mi porqué»; las zonas del cuerpo; el tema (automático, claro u oscuro, de cada
   dispositivo); el **Bloqueo**; la **Cuenta**; y la configuración que antes estaba al final de la página del día: hábitos, tipos de
-  entreno, imágenes y copia de seguridad.
+  entreno, **etiquetas de las tareas**, imágenes y copia de seguridad. A las etiquetas también se llega con «Gestionar…»
+  al elegir las etiquetas de una tarea (en la nueva tarea o en su ficha).
 
 ### Bloqueo con PIN o huella (Perfil › Ajustes › Bloqueo)
 
