@@ -43,7 +43,8 @@ function cleanPerfil(p){
   p=p&&typeof p==="object"?p:{};
   let zonas=null;
   if(p.zonas&&typeof p.zonas==="object"){ zonas={}; for(const z of ZONAS_CUERPO) zonas[z]=Array.isArray(p.zonas[z])?[...new Set(p.zonas[z].filter(r=>typeof r==="string"&&/^[hte]:[A-Za-z0-9_-]{1,40}$/.test(r)))].slice(0,60):[]; }
-  return {figura:p.figura==="mujer"?"mujer":"hombre", nombre:String(p.nombre||"").trim().slice(0,40), porque:String(p.porque||"").trim().slice(0,300), zonas};
+  const accesos=Array.isArray(p.accesos)?[...new Set(p.accesos.filter(a=>typeof a==="string"&&/^[A-Za-z0-9_-]{1,40}$/.test(a)))].slice(0,30):[];
+  return {figura:p.figura==="mujer"?"mujer":"hombre", nombre:String(p.nombre||"").trim().slice(0,40), porque:String(p.porque||"").trim().slice(0,300), zonas, accesos};
 }
 // Objetivos con fecha: {id: {titulo, tipo, ref, meta, desde, hasta, archivado, creado}}
 function cleanObjetivos(x){
@@ -1231,7 +1232,9 @@ function renderPicker(){
     `<hr><button type="button" class="pk-item" data-gohome>Todos los tableros</button><button type="button" class="pk-item" data-gonew>+ Nuevo tablero</button>`+
     `<hr><p class="pk-h">Mapas</p>`+mapsSorted().map(([id,mp])=>
     `<button type="button" class="pk-item${"m:"+id===curBoard?" on":""}" data-gomap="${id}" style="--c:${mp.color}"><span class="pk-dot pk-round"></span>${esc(mp.title)}${mp.fav?'<span class="pk-star">★</span>':""}</button>`).join("")+
-    `<button type="button" class="pk-item" data-gonewmap>+ Nuevo mapa</button>`;
+    `<button type="button" class="pk-item" data-gonewmap>+ Nuevo mapa</button>`+
+    (accesos().length?`<hr><p class="pk-h">Accesos rápidos</p>`+accesos().map(id=>{ const n=state.mnodes[id], mp=state.maps[n.map];
+      return `<button type="button" class="pk-item" data-goacceso="${id}" style="--c:${n.color||mp.color}" title="${esc(rutaNodo(n))}"><span class="pk-dot pk-round"></span>${esc(n.title)}<span class="pk-sub">${esc(mp.title)}</span></button>`; }).join(""):"");
 }
 function homeHTML(){
   const items=boardsSorted().map(([id,b])=>{
@@ -1457,6 +1460,7 @@ document.getElementById("bv-menu").addEventListener("click",e=>{
   const b=e.target.closest("[data-goboard]"); if(b){ setBoard(b.dataset.goboard); return; }
   if(e.target.closest("[data-gohome]")){ setBoard("home"); return; }
   const mp=e.target.closest("[data-gomap]"); if(mp){ setMap(mp.dataset.gomap); return; }
+  const ac=e.target.closest("[data-goacceso]"); if(ac){ pickerOpen=false; renderPicker(); irANodo(ac.dataset.goacceso); return; }
   if(e.target.closest("[data-gonewmap]")){ openNewMap(); setBoard("home"); const f=document.getElementById("nm-name"); if(f){ f.focus(); f.scrollIntoView({block:"center"}); } return; }
   if(e.target.closest("[data-gonew]")){ openNewBoard(); setBoard("home"); const f=document.getElementById("nb-name"); if(f) f.focus(); }
 });
@@ -1742,6 +1746,7 @@ function mapViewHTML(mid,m){
       <div class="mv-help-wrap"><button type="button" class="mv-help-btn" data-mhelp aria-label="Comandos y atajos" aria-expanded="${mHelpOpen}" title="Comandos y atajos (?)">?</button>
         ${mHelpOpen?helpHTML():""}</div>
     </div>
+    ${accesosHTML(mid)}
     <div class="mv-body${solo?" solo":""}" id="mv-body" style="--split:${mSplit}%">
       <div class="mv-graph" id="mv-graph">
         <canvas id="mv-cv" aria-label="Mapa de nodos"></canvas>
@@ -1759,6 +1764,47 @@ function mapViewHTML(mid,m){
     </div>
   </div>`;
 }
+// ---- Accesos rápidos a nodos ----
+// Se marcan con el marcador de la libreta de un nodo y aparecen en una fila fina bajo la cabecera del mapa
+// (de todos los mapas) y en el menú de tableros y mapas. Mantener pulsado (o clic derecho) uno lo quita.
+// Se guardan en el perfil (se sincronizan) como una lista de ids, en el orden en que se añadieron.
+const ICON_MARCADOR='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10a1 1 0 0 1 1 1V21l-6-4-6 4V4.5a1 1 0 0 1 1-1z"/></svg>';
+const accesos=()=>((state.perfil&&state.perfil.accesos)||[]).filter(id=>state.mnodes[id]&&state.maps[state.mnodes[id].map]);
+const esAcceso=id=>accesos().includes(id);
+const rutaNodo=n=>{ const p=[]; let x=n.parent; while(x&&state.mnodes[x]){ p.unshift(state.mnodes[x].title); x=state.mnodes[x].parent; } return [state.maps[n.map].title,...p,n.title].join(" › "); };
+function alternarAcceso(id){
+  const l=accesos().filter(x=>x!==id);
+  if(!esAcceso(id)){ if(l.length>=30){ mvToast("Como mucho 30 accesos rápidos: quita alguno antes",false); return false; } l.push(id); }
+  state.perfil.accesos=l; save(); pintarAccesos(); return true;
+}
+function irANodo(id){
+  const n=state.mnodes[id]; if(!n) return;
+  if(curMapId()!==n.map) setMap(n.map);
+  goLevel(n.parent); selectOnly(id); selectionChanged(); ensureVisible(id);
+}
+function accesosHTML(mid){
+  const l=accesos(); if(!l.length) return "";
+  return `<nav class="mv-accesos" aria-label="Accesos rápidos"><span class="mv-acc-ico" title="Accesos rápidos">${ICON_MARCADOR}</span>${l.map(id=>{
+    const n=state.mnodes[id], mp=state.maps[n.map];
+    return `<button type="button" class="mv-acceso" data-irnodo="${id}" style="--c:${n.color||mp.color}" title="${esc(rutaNodo(n))} · mantén pulsado para quitarlo"><span class="pk-dot pk-round"></span><span class="mv-acceso-t">${esc(n.title)}</span>${n.map!==mid?`<small>${esc(mp.title)}</small>`:""}</button>`; }).join("")}</nav>`;
+}
+// Repinta solo la fila y el marcador de la libreta, sin rehacer el mapa
+function pintarAccesos(){
+  const v=bvBody.querySelector(".mv"); if(!v) return;
+  const vieja=v.querySelector(".mv-accesos"), html=accesosHTML(curMapId());
+  if(vieja) vieja.outerHTML=html||""; else if(html) v.querySelector(".mv-head").insertAdjacentHTML("afterend",html);
+  const b=v.querySelector("[data-macceso]");
+  if(b){ const on=esAcceso(b.dataset.macceso); b.setAttribute("aria-pressed",String(on)); b.title=on?"Quitar de los accesos rápidos":"Añadir a los accesos rápidos"; }
+}
+// Quitar uno desde la fila: mantenerlo pulsado o clic derecho, con «Deshacer»
+bvBody.addEventListener("contextmenu",e=>{
+  const b=e.target.closest("[data-irnodo]"); if(!b) return;
+  e.preventDefault();
+  const id=b.dataset.irnodo, n=state.mnodes[id], antes=accesos();
+  alternarAcceso(id);
+  aviso(`«${n?n.title:"Nodo"}» ya no está en los accesos rápidos`, ()=>{ state.perfil.accesos=antes; save(); pintarAccesos(); }, document.getElementById("mv-graph"));
+});
+
 // ---- ayuda: comandos y atajos («?» arriba a la derecha) ----
 let mHelpOpen=false;
 // En Mac los atajos se muestran con sus teclas: ⌘ en lugar de Ctrl, ⌥ en lugar de Alt, etc.
@@ -2540,6 +2586,7 @@ function renderMapNoteNow(){
   const modo=`<div class="mn-modo" role="radiogroup" aria-label="Modo de la libreta"><button type="button" role="radio" data-nmodo="texto" aria-checked="${NP.rico}" title="Texto con formato y barra de herramientas">Texto</button><button type="button" role="radio" data-nmodo="" aria-checked="${!NP.rico}" title="Markdown">MD</button></div>`;
   box.innerHTML=`<div class="mn-head">
       <input type="text" class="mn-title" id="mn-title" maxlength="${s.kind==="map"?80:120}" aria-label="Título">
+      ${s.kind==="node"?`<button type="button" class="mn-acceso" data-macceso="${s.id}" aria-pressed="${esAcceso(s.id)}" title="${esAcceso(s.id)?"Quitar de los accesos rápidos":"Añadir a los accesos rápidos"}" aria-label="Acceso rápido">${ICON_MARCADOR}</button>`:""}
       ${modo}
       <label class="mn-page" title="Escribe un número para ir a esa página">Página
         <input type="number" id="mn-pg" min="1" value="1" aria-label="Página actual"> de <b id="mn-pgs">1</b></label>
@@ -3320,7 +3367,8 @@ function selIds(){
 }
 function selectOnly(id){ mSel=id||null; mMulti=new Set(id?[id]:[]); mSelLink=null; mZona=null; }
 function clearSel(){ mSel=null; mMulti=new Set(); mSelLink=null; mZona=null; }
-function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); pintarPanelZona(); }
+function selectionChanged(){ mNoteEditing=false; renderMapNote(); mgDraw(); pintarPanelZona();
+  for(const b of bvBody.querySelectorAll(".mv-acceso")) b.classList.toggle("on", b.dataset.irnodo===mSel); }
 const mapActive=()=>!boardsView.hidden && !!curMapId() && !!MG && !cdlg.open;
 const isTyping=()=>{ const a=document.activeElement; return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable); };
 
@@ -3738,6 +3786,9 @@ bvBody.addEventListener("click",e=>{
   if(!curMapId()) return;
   if(q("[data-mhelp]")){ toggleHelp(); return; }
   if((el=q("[data-mlevel]"))){ goLevel(el.dataset.mlevel||null); return; }
+  if((el=q("[data-irnodo]"))){ irANodo(el.dataset.irnodo); return; }
+  if((el=q("[data-macceso]"))){ const id=el.dataset.macceso, n=state.mnodes[id];
+    if(alternarAcceso(id)) mvToast(esAcceso(id)?`«${n.title}» añadido a los accesos rápidos`:`«${n.title}» quitado de los accesos rápidos`,false); return; }
   if((el=q("[data-macc]"))){ mRemember(); state.maps[curMapId()].color=el.dataset.macc; boardsChanged(); return; }
   if(q("[data-mexport]")){ openMenuKey=null; renderBoards(); exportMapPNG(); return; }
   if((el=q("[data-delmap]"))){ armDelete(el,()=>deleteMap(curMapId()),"Pulsa otra vez para eliminar el mapa"); return; }

@@ -89,6 +89,12 @@ dentro, su propio nivel con más nodos. El botón **?** del mapa muestra todos l
 - Por debajo, las dos guardan el mismo Markdown (el subrayado es `++así++`), así que se puede cambiar de modo en
   cualquier momento sin perder nada; el código, las tablas y las fórmulas se ven en Texto como texto tal cual.
 
+**Accesos rápidos.** El marcador (🔖) junto al título de la libreta de un nodo lo añade a los **accesos rápidos**
+(hasta 30). Aparecen en una fila fina bajo la cabecera del mapa, con los de todos los mapas (los de otro mapa
+dicen de cuál son), y en el menú de tableros y mapas, bajo «Accesos rápidos». Tocar uno lleva al nodo, con su
+nivel y su libreta abiertos. Para quitarlo, vuelve a tocar el marcador o mantén pulsado el acceso (clic derecho
+en el ordenador), con «Deshacer». Se guardan en el perfil y se sincronizan; si el nodo se borra, su acceso desaparece.
+
 **Áreas de color.** Con **«+ Área»** se añade una zona de color (rectángulo, cuadrado, óvalo o círculo) para
 delimitar partes del mapa, con su título y, al lado, cuántos nodos hay dentro (por ejemplo «Terminados · 12»).
 Al seleccionar un área aparece arriba del mapa su **panel**: título, forma, color, bloqueo, más opciones

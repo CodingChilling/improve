@@ -8991,3 +8991,162 @@ html.bloqueada body > :not(#bloqueo) {
     grid-template-columns: 1fr 1fr 1fr;
   }
 }
+
+/* ---------- Mapas: accesos rápidos a nodos ---------- */
+.mv-accesos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 8px;
+  padding: 2px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mv-accesos::-webkit-scrollbar {
+  display: none;
+}
+.mv-acc-ico {
+  flex: none;
+  display: inline-grid;
+  color: var(--muted);
+  opacity: 0.8;
+}
+.mv-acc-ico svg,
+.mn-acceso svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+.mv-acceso {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mv-acceso .pk-dot {
+  width: 8px;
+  height: 8px;
+}
+.mv-acceso-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mv-acceso small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.mv-acceso:hover {
+  background: var(--soft);
+}
+.mv-acceso.on {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+}
+.mn-acceso {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+}
+.mn-acceso svg {
+  width: 18px;
+  height: 18px;
+}
+.mn-acceso:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.mn-acceso[aria-pressed="true"] {
+  color: var(--acc, var(--gold));
+}
+.mn-acceso[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+.pk-sub {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* Móvil: en la cabecera del mapa, la ruta en su línea y colores, ★, ⋯ y ? juntos en la siguiente */
+@media (max-width: 699px) {
+  .mv-head {
+    gap: 6px 4px;
+    flex-wrap: wrap;
+  }
+  .mv-head .mv-crumbs {
+    flex: 1 1 100%;
+  }
+  .mv-head > .bd-sp {
+    display: none;
+  }
+  .mv-head .mv-acc {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 5px;
+    padding: 3px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .mv-head .mv-acc::-webkit-scrollbar {
+    display: none;
+  }
+  .mv-head .mv-acc .sw {
+    flex: 1 1 0;
+    min-width: 20px;
+    max-width: 30px;
+    width: auto;
+    height: auto;
+    aspect-ratio: 1;
+  }
+  .mv-head .bfav,
+  .mv-head .bd-more,
+  .mv-head .mv-help-btn {
+    flex: none;
+    min-width: 38px;
+    width: 38px;
+    min-height: 38px;
+    height: 38px;
+  }
+  .mv-acceso {
+    min-height: 32px;
+  }
+  .mn-acceso {
+    width: 40px;
+    height: 40px;
+  }
+}
+@media (max-width: 699px) {
+  /* El aviso del mapa, arriba y a lo ancho: abajo están los botones */
+  .mv-toast:not(.bd-aviso) {
+    top: 10px;
+    bottom: auto;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    justify-content: space-between;
+  }
+}
