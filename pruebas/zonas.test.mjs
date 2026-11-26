@@ -13,6 +13,14 @@ const enPagina = (p, wx, wy) => p.evaluate(([x, y]) => { const r = document.quer
 const rotulo = async (p, id) => { const b = await p.evaluate(i => MG.zCajas[i], id); return enPagina(p, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2); };
 const esquina = async (p, id, cual) => { const z = await p.evaluate(i => state.mzones[i], id); return enPagina(p, cual.includes("e") ? z.x + z.w : z.x, cual.includes("s") ? z.y + z.h : z.y); };
 const zona = (p, id) => p.evaluate(i => state.mzones[i] && { ...state.mzones[i] }, id);
+// Un punto del lienzo sin nodos, hilos ni áreas (en coordenadas de la página)
+const vacio = p => p.evaluate(() => {
+  const r = document.querySelector("#mv-graph canvas").getBoundingClientRect();
+  for (let y = r.height - 30; y > 30; y -= 17) for (let x = 30; x < r.width - 30; x += 19) {
+    if (!hitNode(x, y) && !hitLink(x, y) && !hitZona(x, y) && document.elementFromPoint(r.left + x, r.top + y) === document.querySelector("#mv-graph canvas")) return [r.left + x, r.top + y];
+  }
+  return null;
+});
 const nodo = (p, id) => p.evaluate(i => ({ x: state.mnodes[i].x, y: state.mnodes[i].y }), id);
 const arrastrar = async (p, [x, y], dx, dy, { alt = false } = {}) => {
   if (alt) await p.keyboard.down("Alt");
@@ -120,6 +128,16 @@ test("áreas de los mapas con ratón", async () => {
       assert.ok((await p.evaluate(() => cam().ox)) > c0.ox + 30, "se ha desplazado el mapa");
     }
 
+    // ---- Con el panel del área abierto: arrastrar el fondo mueve el mapa sin cerrarlo; un clic fuera lo cierra
+    await p.evaluate(i => { mZona = i; selectionChanged(); }, id);
+    await p.locator(".mz-panel").waitFor();
+    const vacioA = await vacio(p); assert.ok(vacioA, "hay un sitio vacío en el mapa");
+    await arrastrar(p, vacioA, 30, 15);
+    assert.equal(await p.evaluate(() => mZona), id, "arrastrar el fondo no quita la selección");
+    const fuera2 = await vacio(p);
+    await p.mouse.click(...fuera2);
+    assert.equal(await p.locator(".mz-panel").count(), 0, "un clic fuera cierra la barra del área");
+    assert.equal(await p.evaluate(() => mZona), null);
     // ---- Buscador: encuentra el área por su título y la selecciona
     await p.fill("#bv-q", "hech"); await p.locator('#bv-results [data-srz]').click();
     assert.equal(await p.evaluate(() => mZona), id);
@@ -178,6 +196,9 @@ test("áreas de los mapas con el dedo", async () => {
     assert.ok(muestra.width >= 24 && muestra.height >= 28, "muestras para el dedo");
     await p.locator('.mz-paleta button[aria-label="Salvia oscuro"]').tap();
     assert.equal((await zona(p, id)).color, await p.evaluate(() => Z_COLORS.find(c => c[1] === "Salvia oscuro")[0]));
+    // Tocar fuera del área cierra su barra
+    await p.touchscreen.tap(...(await vacio(p))); await p.waitForTimeout(150);
+    assert.equal(await p.locator(".mz-panel").count(), 0, "tocar fuera cierra la barra del área");
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
 });

@@ -3440,7 +3440,9 @@ function bindCanvas(cv){
     if(multi || e.shiftKey){                           // Mayús o Ctrl + arrastrar en el fondo: recuadro de selección
       MG.rect={x0:x, y0:y, x1:x, y1:y, base:multi?new Set(selIds()):new Set()}; mgDraw(); return;
     }
-    MG.pan={x, y, ox:cam().ox, oy:cam().oy};
+    // Con un área seleccionada, un clic o un toque en el fondo la deselecciona (y cierra su barra) al soltar, si no se ha
+    // arrastrado: así se puede mover el mapa mientras se edita el área
+    MG.pan={x, y, ox:cam().ox, oy:cam().oy, zona:!!mZona, movido:false};
     if(selIds().length||mSelLink){ clearSel(); selectionChanged(); }
     cv.classList.add("panning"); mgDraw();
   });
@@ -3470,7 +3472,7 @@ function bindCanvas(cv){
       for(const [id] of levelNodes(curMapId(),mapLevel)){ const p=posOf(id); if(p.x!=null && p.x>=ax&&p.x<=bx&&p.y>=ay&&p.y<=by) s.add(id); }
       mMulti=s; mSel=[...s][0]||null; mgDraw(); return;
     }
-    if(MG.pan){ const c=cam(); c.ox=MG.pan.ox+x-MG.pan.x; c.oy=MG.pan.oy+y-MG.pan.y; c.user=true; mgDraw(); return; }
+    if(MG.pan){ if(Math.hypot(x-MG.pan.x,y-MG.pan.y)>4) MG.pan.movido=true; const c=cam(); c.ox=MG.pan.ox+x-MG.pan.x; c.oy=MG.pan.oy+y-MG.pan.y; c.user=true; mgDraw(); return; }
     if(MG.wire){ const [wx,wy]=toWorld(x,y); MG.wire.x=wx; MG.wire.y=wy; mgDraw(); }
     const h=hitNode(x,y);
     if(h!==MG.hover){ MG.hover=h; mgDraw(); }
@@ -3506,7 +3508,7 @@ function bindCanvas(cv){
       if(to && to!==from) linkNodes(from,to);
       else if(!to){ const [wx,wy]=toWorld(x,y); createNode(wx,wy,from); }
       else mgDraw(); }
-    if(MG.pan){ MG.pan=null; cv.classList.remove("panning"); }
+    if(MG.pan){ const p=MG.pan; MG.pan=null; cv.classList.remove("panning"); if(p.zona&&!p.movido&&mZona){ clearSel(); selectionChanged(); } }
   });
   cv.addEventListener("pointerleave",()=>{ if(MG&&!MG.drag&&!MG.pan&&!MG.rect&&MG.hover){ MG.hover=null; mgDraw(); } });
   cv.addEventListener("dblclick",e=>{
