@@ -63,6 +63,14 @@ hoy que dentro de un mes.
 - **Buscador**: busca en todos los tableros, por título, descripción o checklist.
 - **Pasar entre tareas y tableros**: desde la ficha de una tarjeta, «Pasar a tareas del día»; desde la
   ficha de una tarea, «Pasar a un tablero». La checklist viaja con ella en los dos sentidos.
+- **Acciones rápidas**: clic derecho sobre una tarjeta (o mantenerla pulsada en el móvil) abre una hoja con
+  «Mover a…» (cualquier lista del tablero), prioridad, fecha límite, abrir, archivar y eliminar.
+- **En el móvil**: se ve una lista cada vez, a pantalla completa, con **pestañas** arriba (título y número de
+  tarjetas) para saltar entre ellas o deslizando de lado. Cabecera en una línea y buscador tras la lupa.
+  El botón **+** flotante añade una tarjeta a la lista que se ve. Gestos con una tarjeta: **mantenerla
+  pulsada** sin moverla abre sus acciones; mantenerla y **arrastrarla** la coloca en otro sitio (soltarla
+  sobre una pestaña la manda a esa lista, y quedarse encima un momento abre la lista para colocarla);
+  **deslizarla de lado** la pasa a la lista siguiente o a la anterior, con «Deshacer».
 
 #### Mapas
 
