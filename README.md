@@ -63,6 +63,14 @@ hoy que dentro de un mes.
 - **Buscador**: busca en todos los tableros, por título, descripción o checklist.
 - **Pasar entre tareas y tableros**: desde la ficha de una tarjeta, «Pasar a tareas del día»; desde la
   ficha de una tarea, «Pasar a un tablero». La checklist viaja con ella en los dos sentidos.
+- **Acciones rápidas**: clic derecho sobre una tarjeta (o mantenerla pulsada en el móvil) abre una hoja con
+  «Mover a…» (cualquier lista del tablero), prioridad, fecha límite, abrir, archivar y eliminar.
+- **En el móvil**: se ve una lista cada vez, a pantalla completa, con **pestañas** arriba (título y número de
+  tarjetas) para saltar entre ellas o deslizando de lado. Cabecera en una línea y buscador tras la lupa.
+  El botón **+** flotante añade una tarjeta a la lista que se ve. Gestos con una tarjeta: **mantenerla
+  pulsada** sin moverla abre sus acciones; mantenerla y **arrastrarla** la coloca en otro sitio (soltarla
+  sobre una pestaña la manda a esa lista, y quedarse encima un momento abre la lista para colocarla);
+  **deslizarla de lado** la pasa a la lista siguiente o a la anterior, con «Deshacer».
 
 #### Mapas
 
@@ -80,6 +88,12 @@ dentro, su propio nivel con más nodos. El botón **?** del mapa muestra todos l
 - **MD**: el Markdown de siempre, al estilo de Obsidian.
 - Por debajo, las dos guardan el mismo Markdown (el subrayado es `++así++`), así que se puede cambiar de modo en
   cualquier momento sin perder nada; el código, las tablas y las fórmulas se ven en Texto como texto tal cual.
+
+**Accesos rápidos.** El marcador (🔖) junto al título de la libreta de un nodo lo añade a los **accesos rápidos**
+(hasta 30). Aparecen en una fila fina bajo la cabecera del mapa, con los de todos los mapas (los de otro mapa
+dicen de cuál son), y en el menú de tableros y mapas, bajo «Accesos rápidos». Tocar uno lleva al nodo, con su
+nivel y su libreta abiertos. Para quitarlo, vuelve a tocar el marcador o mantén pulsado el acceso (clic derecho
+en el ordenador), con «Deshacer». Se guardan en el perfil y se sincronizan; si el nodo se borra, su acceso desaparece.
 
 **Áreas de color.** Con **«+ Área»** se añade una zona de color (rectángulo, cuadrado, óvalo o círculo) para
 delimitar partes del mapa, con su título y, al lado, cuántos nodos hay dentro (por ejemplo «Terminados · 12»).

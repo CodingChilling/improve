@@ -590,10 +590,13 @@ def validar_dia(d):
 
 ZONAS_CUERPO = ["cabeza", "pecho", "brazos", "manos", "abdomen", "piernas"]
 REF_RE = re.compile(r"^[hte]:[A-Za-z0-9_-]{1,40}$")
+ID_NODO_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+MAX_ACCESOS = 30
 
 
 def validar_perfil(p):
-    """Perfil: figura (hombre o mujer), nombre, «mi porqué» y qué reúne cada zona del cuerpo (None: sin elegir)."""
+    """Perfil: figura (hombre o mujer), nombre, «mi porqué», qué reúne cada zona del cuerpo (None: sin elegir)
+    y los accesos rápidos a nodos de los mapas (sus ids, en orden)."""
     if not isinstance(p, dict):
         raise ErrorDatos("perfil no válido")
     figura = str(p.get("figura") or "") or "hombre"
@@ -615,8 +618,19 @@ def validar_perfil(p):
                 if r not in salida:
                     salida.append(r)
             zonas[z] = salida
+    accesos = p.get("accesos")
+    if accesos is None:
+        accesos = []
+    if not isinstance(accesos, list) or len(accesos) > MAX_ACCESOS:
+        raise ErrorDatos("perfil no válido")
+    vistos = []
+    for a in accesos:
+        if not isinstance(a, str) or not ID_NODO_RE.match(a):
+            raise ErrorDatos("perfil no válido")
+        if a not in vistos:
+            vistos.append(a)
     return {"figura": figura, "nombre": str(p.get("nombre") or "").strip()[:40],
-            "porque": str(p.get("porque") or "").strip()[:300], "zonas": zonas}
+            "porque": str(p.get("porque") or "").strip()[:300], "zonas": zonas, "accesos": vistos}
 
 
 def guardar_config(con, datos):

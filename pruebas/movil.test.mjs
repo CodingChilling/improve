@@ -44,8 +44,8 @@ for (const [nombre, dispositivo] of [["iphone", "iPhone 13"], ["android", "Pixel
       await pagina.tap("#brand"); await pagina.tap('.bcard[data-board="b1"]'); await pagina.waitForTimeout(300);
       assert.equal(await desborde(pagina), 0, "el tablero no debe desbordar la página (las listas se desplazan dentro)");
       await foto("4-tablero");
-      const destino = await pagina.locator('.bl[data-list="l2"]').boundingBox();
-      await gesto.arrastrar(await centro(pagina.locator('.bc[data-card="c2"]')), [Math.min(destino.x + 30, perfil.viewport.width - 12), destino.y + 90]);
+      // (en el móvil se ve una lista cada vez: la tarjeta se suelta sobre la pestaña de la otra lista)
+      await gesto.arrastrar(await centro(pagina.locator('.bc[data-card="c2"]')), await centro(pagina.locator('[data-btab="l2"]')));
       await esperar(pagina, () => window.AscensoLocal.api("GET", "estado").then(e => e.cards.c2.list === "l2"), null, { que: "la tarjeta pasa a «En proceso»" });
       // La ficha de una tarjeta
       await pagina.locator('.bc[data-card="c1"]').tap(); await pagina.waitForTimeout(400);

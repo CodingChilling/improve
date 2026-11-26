@@ -284,7 +284,12 @@ window.AscensoLocal=(()=>{
         zonas[z]=out;
       }
     }
-    return {figura,nombre:cortar(texto(p.nombre).trim(),40),porque:cortar(texto(p.porque).trim(),300),zonas};
+    // Accesos rápidos a nodos de los mapas: sus ids, en orden
+    const acc=p.accesos===null||p.accesos===undefined?[]:p.accesos;
+    if(!Array.isArray(acc)||acc.length>30) mal("perfil no válido");
+    const accesos=[];
+    for(const a of acc){ if(typeof a!=="string"||!/^[A-Za-z0-9_-]{1,40}$/.test(a)) mal("perfil no válido"); if(!accesos.includes(a)) accesos.push(a); }
+    return {figura,nombre:cortar(texto(p.nombre).trim(),40),porque:cortar(texto(p.porque).trim(),300),zonas,accesos};
   }
   function guardarConfig(op,d){
     if(!esDic(d)) d={};

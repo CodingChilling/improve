@@ -51,6 +51,10 @@ const OPERACIONES = [
   ["PUT", "config", { perfil: { zonas: { cabeza: "h:h1" } } }],
   ["PUT", "config", { perfil: "nada" }],
   ["PUT", "config", { perfil: { nombre: "Leo", zonas: null } }],
+  ["PUT", "config", { perfil: { accesos: ["n1", "n2", "n1"] } }],
+  ["PUT", "config", { perfil: { accesos: ["n1", "a b"] } }],
+  ["PUT", "config", { perfil: { accesos: "n1" } }],
+  ["PUT", "config", { perfil: { accesos: Array.from({ length: 31 }, (_, i) => "n" + i) } }],
   ["PUT", "dias/2026-01-09", { type: "kyoga" }],
   // Ánimo del día y fecha en que se terminó una tarea
   ["PUT", "dias/2026-01-11", { a: 4 }],
