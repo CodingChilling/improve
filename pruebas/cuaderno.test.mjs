@@ -127,3 +127,24 @@ test("modo texto en el móvil: la barra cabe y se usa con el dedo", async () => 
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
 });
+
+test("diagramas Mermaid: se dibujan aunque la libreta se recoloque, y un error se avisa en su sitio", async () => {
+  const app = await servirApp(), nav = await chromium.launch();
+  try {
+    const { pagina: p } = await abrirConDatos(nav, app, { viewport: { width: 1280, height: 860 } });
+    const errores = []; p.on("pageerror", e => errores.push(String(e)));
+    await p.evaluate(() => {
+      showBoards(); setMap("m1");
+      state.maps.m1.mode = "";
+      state.maps.m1.notes = "## Diagramas\n```mermaid\ngraph TD\n  A[Inicio] --> B{¿Bien?}\n```\n```mermaid\ngraph LR\n  X --> Y\n```\n```mermaid\ngraph TD\n  A --> B((\n  mal ]]\n```\nFin.";
+      renderBoards();
+      // La libreta se recoloca varias veces seguidas (como al abrirse o al girar el móvil)
+      for (let i = 0; i < 4; i++) npLayout(true);
+    });
+    await esperar(p, () => document.querySelectorAll(".mn-mermaid[data-ok='1']").length === 3, null, { limite: 15000, que: "los diagramas terminan" });
+    assert.equal(await p.locator(".mn-mermaid svg").count(), 2, "los dos diagramas buenos se dibujan");
+    assert.match(await p.locator(".mn-merr").innerText(), /error en la línea 3/);
+    assert.equal(await p.evaluate(() => [...document.body.children].filter(x => /mmd/.test(x.id)).length), 0, "nada de avisos de Mermaid sueltos en la página");
+    assert.deepEqual(errores, []);
+  } finally { await nav.close(); await app.cerrar(); }
+});

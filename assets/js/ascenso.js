@@ -1882,11 +1882,34 @@ function renderRich(el){
   if(maths.length) loadLib("katex").then(()=>{
     for(const n of maths){ try{ katex.render(n.dataset.tex,n.querySelector(".hx-scroll")||n,{displayMode:n.classList.contains("mn-math"), throwOnError:false, strict:"ignore", trust:false}); }catch(e){} n.dataset.ok=1; }
     relayout(); }).catch(()=>{});
+  // Se marcan ya, para que otra pasada (la libreta se recoloca varias veces al abrirse) no los vuelva a dibujar
+  for(const n of mers) n.dataset.ok="0";
   if(mers.length) loadLib("mermaid").then(async()=>{
-    const dark=window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches, theme=dark?"dark":"neutral";
-    if(mermaidTheme!==theme){ mermaid.initialize({startOnLoad:false, securityLevel:"strict", theme, fontFamily:getComputedStyle(document.body).fontFamily+', "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"'}); mermaidTheme=theme; }
-    for(const n of mers){ try{ const {svg}=await mermaid.render("mmd"+(++mermaidN), n.dataset.src); n.innerHTML=svg; }catch(e){ n.classList.add("err"); } n.dataset.ok=1; }
+    // El tema sigue al de Ascenso (Ajustes › Apariencia), no solo al del sistema
+    const t=document.documentElement.dataset.theme, dark=t?t==="dark":!!(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches), theme=dark?"dark":"neutral";
+    if(mermaidTheme!==theme){ mermaid.initialize({startOnLoad:false, securityLevel:"strict", suppressErrorRendering:true, theme, fontFamily:getComputedStyle(document.body).fontFamily+', "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"'}); mermaidTheme=theme; }
+    // De uno en uno: Mermaid no admite dibujar dos diagramas a la vez
+    for(const n of mers){ colaMermaid=colaMermaid.then(()=>dibujarMermaid(n)).catch(()=>{}); }
+    await colaMermaid; for(const n of mers) n.dataset.ok=1;
     relayout(); }).catch(()=>{});
+}
+let colaMermaid=Promise.resolve();
+// Un diagrama: si tiene un error de sintaxis, se dice en su sitio (con la línea y el código) y no se dibuja nada más;
+// Mermaid deja su aviso de error (la «bomba») al final de la página: se quita siempre
+async function dibujarMermaid(n){
+  const id="mmd"+(++mermaidN), src=n.dataset.src||"";
+  try{
+    await mermaid.parse(src);
+    const {svg}=await mermaid.render(id,src);
+    n.classList.remove("err"); n.innerHTML=svg;
+  }catch(e){
+    const texto=String((e&&(e.message||e.str))||e||""), linea=(texto.match(/on line (\d+)/i)||[])[1];
+    const detalle=texto.split("\n").map(x=>x.trim()).filter(x=>x&&!/^-*\^$/.test(x)&&!/^\.\.\./.test(x)).pop()||"";
+    n.classList.add("err");
+    n.innerHTML=`<div class="mn-merr" role="note"><b>Este diagrama tiene un error${linea?` en la línea ${esc(linea)}`:""} y no se puede dibujar.</b>${detalle?`<span>${esc(detalle.slice(0,160))}</span>`:""}</div><pre>${esc(src)}</pre>`;
+  }finally{
+    for(const k of [id,"d"+id,"i"+id]){ const x=document.getElementById(k); if(x&&!n.contains(x)) x.remove(); }
+  }
 }
 // Fórmulas y diagramas ocupan un número exacto de líneas de la rejilla
 function snapRich(el){
