@@ -8443,3 +8443,220 @@ html.bloqueada body > :not(#bloqueo) {
     margin-left: auto;
   }
 }
+
+/* ---------- Página de Hoy: coherencia, móvil y dos columnas en pantallas anchas ---------- */
+/* La racha: el número nunca encoge ni se monta sobre el texto */
+.summit .n {
+  flex: none;
+}
+.summit .l {
+  overflow-wrap: anywhere;
+}
+/* Ánimo y peso, en la misma franja de la tarjeta de Hoy */
+.hoy-pie {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.hoy-pie .animo {
+  margin: 0;
+}
+.hoy-pie .weight {
+  margin: 0;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.hoy-pie .weight label {
+  font-size: 0.92rem;
+}
+.weight-campo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.hoy-pie .weight input {
+  width: 5.5em;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  text-align: right;
+}
+@media (min-width: 700px) {
+  .hoy-pie {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+/* Nueva tarea: una línea; las opciones aparecen al escribir */
+.tadd {
+  gap: 0;
+  padding: 8px;
+}
+.tadd-linea {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tadd-linea input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.tadd-linea input[type="text"]:focus {
+  border-color: var(--line);
+  background: var(--bg);
+  outline: none;
+}
+.tadd-mas {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--bg);
+}
+.tadd-mas svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.tadd-opc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 4px 4px;
+}
+.tadd-opc[hidden] {
+  display: none;
+}
+.tseg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.tseg button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.tseg button[data-tprio]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--pc);
+  vertical-align: 1px;
+}
+.tseg button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.tadd-opc .tagpick {
+  flex-basis: 100%;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .hoy-pie .weight input {
+    font-size: 16px;       /* en el móvil, 16 px: así el navegador no se acerca al escribir */
+  }
+}
+@media (pointer: coarse) {
+  .tseg button {
+    min-height: 34px;
+  }
+  .tadd-mas {
+    width: 44px;
+    height: 44px;
+  }
+}
+.ver-progreso {
+  margin: 28px 0 0;
+}
+.ver-progreso .linklike {
+  font-size: 0.95rem;
+}
+
+/* Pantallas anchas: el día a la izquierda (frase, racha, semana, hábitos) y, a la derecha, la imagen y las tareas */
+@media (min-width: 1100px) {
+  main {
+    max-width: 1180px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+    grid-template-rows: auto auto auto auto auto auto 1fr;
+    grid-template-areas:
+      "title  frame"
+      "quote  frame"
+      "summit frame"
+      "semana tareas"
+      "hoy    tareas"
+      "pie    tareas"
+      ".      tareas";
+    column-gap: 56px;
+    position: relative;
+    align-items: start;
+  }
+  main[hidden] {
+    display: none;        /* la rejilla no debe ganar al atributo hidden (perfil, librería, tableros) */
+  }
+  main > .head {
+    display: contents;
+  }
+  main > .head .titleblock { grid-area: title; }
+  main > .head blockquote { grid-area: quote; margin-top: 28px; }
+  main > .head .frame-slot { grid-area: frame; justify-self: end; }
+  main > .head .sum-row,
+  main > .head:not(.no-img) .sum-row {
+    grid-area: summit;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 24px;
+  }
+  main > .head:not(.no-img) .summit {
+    margin-top: 0;
+  }
+  main > .sec-semana { grid-area: semana; }
+  main > .sec-hoy { grid-area: hoy; }
+  main > .tasks { grid-area: tareas; margin-top: 40px; }
+  main > .ver-progreso,
+  main > .status,
+  main > p.status { grid-column: 1; }
+  main:has(.head.no-img) {
+    grid-template-areas:
+      "title  tareas"
+      "quote  tareas"
+      "summit tareas"
+      "semana tareas"
+      "hoy    tareas"
+      "pie    tareas"
+      ".      tareas";
+  }
+  main:has(.head.no-img) > .tasks { margin-top: 0; }
+  /* La tarjeta de tareas, en una columna estrecha: las tres listas en pestañas, como en el móvil */
+  main > .tasks .board {
+    grid-template-columns: 1fr;
+  }
+}

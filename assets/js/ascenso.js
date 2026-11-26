@@ -457,11 +457,6 @@ document.getElementById("animo")?.addEventListener("click",e=>{
   if(d.a===n) delete d.a; else d.a=n;
   save(); renderAnimo();
 });
-function weekSummary(m){
-  let done=0,total=0,n=0,ws=[];
-  for(let i=0;i<7;i++){ const d=addDays(m,i); if(d>today()) break; const x=counts(d,"week"); done+=x.done; total+=x.total; n++; const w=dayData(d).w; if(w) ws.push(+w); }
-  return {pct:total?done/total:0, avg: ws.length? ws.reduce((a,b)=>a+b,0)/ws.length : null, days:n};
-}
 
 function renderProgress(){
   // Racha: días seguidos alcanzando el mínimo configurado
@@ -471,21 +466,7 @@ function renderProgress(){
   for(let i=0;i<730;i++,d=addDays(d,-1)){ const r=ok(d); if(r===null) continue; if(!r) break; streak++; }
   document.getElementById("streakN").textContent=streak;
   document.getElementById("streakL").innerHTML=(streak===1?"día de racha":"días de racha")+"<small>"+(streak===0?"Cumple tus hábitos de hoy y empieza a subir.":streak<7?"Paso a paso. Sigue subiendo.":streak<30?"Ya estás por encima de las nubes.":"Esto ya es una forma de vivir.")+"</small>";
-  const wk=weekSummary(monday(today()));
-  const weeks=[]; let m=monday(today());
-  for(let i=0;i<8;i++){ weeks.push({m, ...weekSummary(m)}); m=addDays(m,-7); }
-  const withW=weeks.filter(x=>x.avg!=null);
-  let change="—";
-  if(withW.length>=2){ const diff=withW[0].avg-withW[withW.length-1].avg; change=(diff>0?"+":"")+diff.toFixed(1)+" kg"; }
-  document.getElementById("stats").innerHTML=`
-    <div class="stat"><div class="v">${Math.round(wk.pct*100)}&nbsp;%</div><div class="l">hábitos cumplidos esta semana</div></div>
-    <div class="stat"><div class="v">${wk.avg!=null?wk.avg.toFixed(1):"—"}</div><div class="l">peso medio esta semana (kg)</div></div>
-    <div class="stat"><div class="v">${change}</div><div class="l">cambio desde la semana más antigua con datos</div></div>`;
-  const rows=weeks.filter(x=>x.pct>0||x.avg!=null);
-  document.getElementById("hist").innerHTML = rows.length ?
-    `<thead><tr><th>Semana del</th><th class="num">Hábitos</th><th class="num">Peso medio</th></tr></thead><tbody>`+
-    rows.map(x=>`<tr><td>${x.m.toLocaleDateString("es-ES",{day:"numeric",month:"short"})}</td><td class="num">${Math.round(x.pct*100)} %</td><td class="num">${x.avg!=null?x.avg.toFixed(1)+" kg":"—"}</td></tr>`).join("")+"</tbody>"
-    : `<tbody><tr><td class="empty">Marca tus primeros hábitos y apunta tu peso para ver aquí la evolución semanal.</td></tr></tbody>`;
+  // El progreso semanal está en Perfil › Progreso (el enlace «Ver tu progreso» del final de Hoy)
 }
 
 // Cada frase: [texto, autor, obra, id]. El id es lo que se guarda en el historial: no lo cambies.
@@ -682,7 +663,6 @@ async function discoverImages(){
   const t = IMAGES.length ? IMAGES.length+(IMAGES.length===1?" imagen":" imágenes")+" en assets/images."
     : API ? "No hay imágenes en assets/images."
     : "Para mostrar las imágenes de assets/images, abre Ascenso con iniciar-ascenso.";
-  document.getElementById("imgstatus").textContent=t;
   document.getElementById("imgcfg").textContent=t;
   renderFrame(...frameArgs);
 }
@@ -4222,6 +4202,31 @@ function addTask(){
   save(); renderTasks(); renderTagMgr(); inp.focus();
 }
 document.getElementById("taddbtn").addEventListener("click",addTask);
+// Nueva tarea: una línea; prioridad, lista y etiquetas aparecen al escribir y recuerdan lo último elegido
+(()=>{
+  const tadd=document.getElementById("tadd"), opc=document.getElementById("tadd-opc"), inp=document.getElementById("tnew");
+  const sel={prio:document.getElementById("tprio"), list:document.getElementById("tlist")};
+  try{ const g=JSON.parse(localStorage.getItem("ascenso-nueva-tarea")||"{}");
+    if(["urgente","alta","media","baja"].includes(g.prio)) sel.prio.value=g.prio;
+    if(["pendiente","proceso","hecha"].includes(g.list)) sel.list.value=g.list; }catch(err){}
+  const pintar=()=>{
+    for(const b of opc.querySelectorAll("[data-tprio]")) b.setAttribute("aria-checked",String(b.dataset.tprio===sel.prio.value));
+    for(const b of opc.querySelectorAll("[data-tlist]")) b.setAttribute("aria-checked",String(b.dataset.tlist===sel.list.value));
+  };
+  const mostrar=si=>{ opc.hidden=!si; tadd.classList.toggle("abierta",si); };
+  pintar();
+  inp.addEventListener("focus",()=>mostrar(true));
+  inp.addEventListener("input",()=>mostrar(true));
+  tadd.addEventListener("focusout",e=>{ if(!tadd.contains(e.relatedTarget)&&!inp.value.trim()&&!newTaskTags.size) mostrar(false); });
+  opc.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) e.preventDefault(); });   // el foco sigue en el campo
+  opc.addEventListener("click",e=>{
+    const b=e.target.closest("[data-tprio],[data-tlist]"); if(!b) return;
+    if(b.dataset.tprio) sel.prio.value=b.dataset.tprio; else sel.list.value=b.dataset.tlist;
+    try{ localStorage.setItem("ascenso-nueva-tarea",JSON.stringify({prio:sel.prio.value,list:sel.list.value})); }catch(err){}
+    pintar();
+  });
+})();
+document.getElementById("ver-progreso").addEventListener("click",()=>{ if(window.AscensoPerfil&&window.AscensoPerfil.disponible) window.AscensoPerfil.abrir("progreso"); });
 // ---- Campos que se confirman con Intro, en el teléfono ----
 // Con varios campos seguidos, el teclado de Android enseña «Siguiente» en lugar de Intro, y entonces no había forma
 // de confirmar. Tres remedios: los campos piden la tecla «Hecho» (enterkeyhint), llevan al lado un botón «Añadir»
