@@ -4270,9 +4270,35 @@ body.img-dragging * {
 }
 /* Si un diagrama tiene un error, se ve su código con un aviso */
 .mn-mermaid.err {
+  flex-direction: column;
+  align-items: stretch;
   justify-content: flex-start;
+  gap: 6px;
+  padding: 8px 12px;
   border-left: 3px solid var(--p-urgente);
-  padding-left: 12px;
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--p-urgente) 6%, transparent);
+}
+.mn-merr {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.86rem;
+  line-height: 1.3;
+}
+.mn-merr b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.mn-merr small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.mn-merr span {
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
 /* En modo oscuro, los colores oscuros de las fórmulas (\color{blue}, \color{red}…) se aclaran para que se lean */
 @media (prefers-color-scheme: dark) {
@@ -8138,4 +8164,503 @@ html.bloqueada body > :not(#bloqueo) {
   display: inline-block;
   margin: 0 0 8px;
   font-size: 0.92rem;
+}
+/* ---------- Libreta en modo texto: selector de modo, barra de herramientas y bloques con formato ---------- */
+.mn-modo {
+  flex: none;
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+}
+.mn-modo button {
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.mn-modo button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.rc-cab {
+  position: relative;
+  margin: 6px 0 4px;
+}
+.rc-barra {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rc-barra::-webkit-scrollbar {
+  display: none;
+}
+.rc-grupo {
+  display: inline-flex;
+  gap: 1px;
+  padding-right: 6px;
+  margin-right: 4px;
+  border-right: 1px solid var(--line);
+}
+.rc-grupo:last-child {
+  border-right: 0;
+}
+.rc-barra button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1;
+}
+.rc-barra button:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.rc-barra button[aria-pressed="true"] {
+  background: var(--soft);
+  color: var(--acc);
+}
+.rc-barra svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rc-barra svg text {
+  fill: currentColor;
+  stroke: none;
+  font-family: var(--sans);
+  font-weight: 700;
+}
+.rc-barra svg circle {
+  fill: currentColor;
+  stroke: none;
+}
+.rc-barra .rc-t1 {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.rc-barra .rc-t2 {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.rc-barra .rc-neg {
+  font-family: var(--sans);
+  font-weight: 800;
+}
+.rc-barra .rc-cur {
+  font-style: italic;
+}
+.rc-barra .rc-sub {
+  font-family: var(--sans);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rc-barra .rc-tac {
+  font-family: var(--sans);
+  text-decoration: line-through;
+}
+.rc-enlace {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.rc-enlace[hidden] {
+  display: none;
+}
+.rc-enlace input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.rc-enlace button,
+.rc-enlace a {
+  flex: none;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.rc-enlace [hidden] {
+  display: none;
+}
+/* Los bloques: todo en la rejilla de líneas, como el Markdown al leer */
+.mn-rico {
+  white-space: pre-wrap;
+}
+.mn-rico .rc {
+  position: relative;
+  min-height: 1.5rem;
+}
+.mn-rico .rc-h1,
+.mn-rico .rc-h2,
+.mn-rico .rc-h3,
+.mn-rico .rc-h4,
+.mn-rico .rc-h5,
+.mn-rico .rc-h6 {
+  font-weight: 650;
+}
+.mn-rico .rc-h1 {
+  font-size: 1.3rem;
+}
+.mn-rico .rc-h2 {
+  font-size: 1.12rem;
+}
+.mn-rico .rc-h5,
+.mn-rico .rc-h6 {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.mn-rico .rc-ul,
+.mn-rico .rc-ol,
+.mn-rico .rc-ck {
+  padding-left: calc(1.5em + var(--dd, 0) * 1.4em);
+}
+.mn-rico [data-d="1"] { --dd: 1; }
+.mn-rico [data-d="2"] { --dd: 2; }
+.mn-rico [data-d="3"] { --dd: 3; }
+.mn-rico [data-d="4"] { --dd: 4; }
+.mn-rico [data-d="5"] { --dd: 5; }
+.mn-rico [data-d="6"] { --dd: 6; }
+.mn-rico .rc-ul::before,
+.mn-rico .rc-ol::before {
+  position: absolute;
+  left: calc(var(--dd, 0) * 1.4em);
+  width: 1.2em;
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.mn-rico .rc-ul::before {
+  content: "•";
+  text-align: center;
+}
+.mn-rico .rc-ol::before {
+  content: attr(data-n) ".";
+}
+.mn-rico .rc-caja {
+  position: absolute;
+  left: calc(var(--dd, 0) * 1.4em + 0.1em);
+  top: 0.3rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.mn-rico .rc-ck[data-ok="1"] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.mn-rico .rc-ck[data-ok="1"] .rc-caja {
+  border-color: var(--acc);
+  background: var(--acc) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.4l2.6 2.6L12 5.6' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat;
+}
+.mn-rico .rc-cita {
+  padding-left: 14px;
+  border-left: 3px solid var(--acc);
+  background: color-mix(in srgb, var(--acc) 7%, transparent);
+}
+.mn-rico .rc-hr {
+  height: 1.5rem;
+  background: linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
+  cursor: default;
+}
+.mn-rico .rc-raw {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  background: var(--soft);
+}
+.mn-rico a {
+  color: var(--acc);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mn-rico code {
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--soft);
+  font-size: 0.9em;
+}
+@media (pointer: coarse) {
+  .rc-barra button {
+    width: 36px;
+    height: 36px;
+  }
+  .rc-enlace input {
+    font-size: 16px;
+  }
+}
+/* En pantallas estrechas, el título de la libreta va en su propia fila (el modo y la página, debajo) */
+@media (max-width: 699px) {
+  .mn-head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .mn-head .mn-title {
+    flex: 1 1 100%;
+  }
+  .mn-head .mn-page {
+    margin-left: auto;
+  }
+}
+
+/* ---------- Página de Hoy: coherencia, móvil y dos columnas en pantallas anchas ---------- */
+/* La racha: el número nunca encoge ni se monta sobre el texto */
+.summit .n {
+  flex: none;
+}
+.summit .l {
+  overflow-wrap: anywhere;
+}
+/* Ánimo y peso, en la misma franja de la tarjeta de Hoy */
+.hoy-pie {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.hoy-pie .animo {
+  margin: 0;
+}
+.hoy-pie .weight {
+  margin: 0;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.hoy-pie .weight label {
+  font-size: 0.92rem;
+}
+.weight-campo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.hoy-pie .weight input {
+  width: 5.5em;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  text-align: right;
+}
+@media (min-width: 700px) {
+  .hoy-pie {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+/* Nueva tarea: una línea; las opciones aparecen al escribir */
+.tadd {
+  gap: 0;
+  padding: 8px;
+}
+.tadd-linea {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tadd-linea input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.tadd-linea input[type="text"]:focus {
+  border-color: var(--line);
+  background: var(--bg);
+  outline: none;
+}
+.tadd-mas {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--bg);
+}
+.tadd-mas svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.tadd-opc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 4px 4px;
+}
+.tadd-opc[hidden] {
+  display: none;
+}
+.tseg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.tseg button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.tseg button[data-tprio]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--pc);
+  vertical-align: 1px;
+}
+.tseg button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.tadd-opc .tagpick {
+  flex-basis: 100%;
+}
+@media (pointer: coarse), (max-width: 699px) {
+  .hoy-pie .weight input {
+    font-size: 16px;       /* en el móvil, 16 px: así el navegador no se acerca al escribir */
+  }
+}
+@media (pointer: coarse) {
+  .tseg button {
+    min-height: 34px;
+  }
+  .tadd-mas {
+    width: 44px;
+    height: 44px;
+  }
+}
+.ver-progreso {
+  margin: 28px 0 0;
+}
+.ver-progreso .linklike {
+  font-size: 0.95rem;
+}
+
+/* Pantallas anchas: el día a la izquierda (frase, racha, semana, hábitos) y, a la derecha, la imagen y las tareas */
+@media (min-width: 1100px) {
+  main {
+    max-width: 1180px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+    grid-template-rows: auto auto auto auto auto auto 1fr;
+    grid-template-areas:
+      "title  frame"
+      "quote  frame"
+      "summit frame"
+      "semana tareas"
+      "hoy    tareas"
+      "pie    tareas"
+      ".      tareas";
+    column-gap: 56px;
+    position: relative;
+    align-items: start;
+  }
+  main[hidden] {
+    display: none;        /* la rejilla no debe ganar al atributo hidden (perfil, librería, tableros) */
+  }
+  main > .head {
+    display: contents;
+  }
+  main > .head .titleblock { grid-area: title; }
+  main > .head blockquote { grid-area: quote; margin-top: 28px; }
+  main > .head .frame-slot { grid-area: frame; justify-self: end; }
+  main > .head .sum-row,
+  main > .head:not(.no-img) .sum-row {
+    grid-area: summit;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 24px;
+  }
+  main > .head:not(.no-img) .summit {
+    margin-top: 0;
+  }
+  main > .sec-semana { grid-area: semana; }
+  main > .sec-hoy { grid-area: hoy; }
+  main > .tasks { grid-area: tareas; margin-top: 40px; }
+  main > .ver-progreso,
+  main > .status,
+  main > p.status { grid-column: 1; }
+  main:has(.head.no-img) {
+    grid-template-areas:
+      "title  tareas"
+      "quote  tareas"
+      "summit tareas"
+      "semana tareas"
+      "hoy    tareas"
+      "pie    tareas"
+      ".      tareas";
+  }
+  main:has(.head.no-img) > .tasks { margin-top: 0; }
+  /* La tarjeta de tareas, en una columna estrecha: las tres listas en pestañas, como en el móvil */
+  main > .tasks .board {
+    grid-template-columns: 1fr;
+  }
 }

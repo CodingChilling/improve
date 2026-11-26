@@ -77,14 +77,14 @@
     </div>
   </header>
 
-  <section aria-labelledby="h-week">
+  <section aria-labelledby="h-week" class="sec-semana">
     <h2 id="h-week">Esta semana</h2>
     <div class="week" id="week"></div>
     <div class="legend" id="legend"></div>
-    <p class="hint">Toca un día para verlo. Cambia su entreno con los botones de abajo: vale para ese día y los mismos días de las semanas siguientes (en una semana pasada, solo para ese día).</p>
+    <p class="hint" title="Cambia su entreno con los botones de Hoy: vale para ese día y los mismos días de las semanas siguientes (en una semana pasada, solo para ese día).">Toca un día para verlo.</p>
   </section>
 
-  <section aria-labelledby="h-day">
+  <section aria-labelledby="h-day" class="sec-hoy">
     <div class="dayhead">
       <h2 id="h-day">Hoy</h2>
       <div class="nav">
@@ -95,10 +95,12 @@
     </div>
     <div class="plan" id="plan" role="group" aria-label="Entreno de este día"></div>
     <ul class="checks" id="checks"></ul>
-    <div class="animo"><span id="animo-l">¿Cómo te sientes?</span><div class="animo-caras" id="animo" role="radiogroup" aria-labelledby="animo-l"></div></div>
-    <div class="weight">
-      <label for="w">Peso de hoy (kg)</label>
-      <input id="w" type="number" inputmode="decimal" step="0.1" min="30" max="250" placeholder="81.5">
+    <div class="hoy-pie">
+      <div class="animo"><span id="animo-l">¿Cómo te sientes?</span><div class="animo-caras" id="animo" role="radiogroup" aria-labelledby="animo-l"></div></div>
+      <div class="weight">
+        <label for="w">Peso de hoy</label>
+        <span class="weight-campo"><input id="w" type="number" inputmode="decimal" step="0.1" min="30" max="250" placeholder="81.5"><span aria-hidden="true">kg</span></span>
+      </div>
     </div>
   </section>
 
@@ -106,14 +108,23 @@
     <div class="dayhead tasks-head">
       <h2 id="h-tasks">Tareas <span class="tdate" id="tdate"></span></h2>
     </div>
-    <div class="tadd">
-      <input type="text" id="tnew" maxlength="120" placeholder="Nueva tarea…" aria-label="Nueva tarea">
-      <div class="trow">
-        <label>Prioridad <select id="tprio"><option value="urgente">Urgente</option><option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option></select></label>
-        <label>Lista <select id="tlist"><option value="pendiente" selected>Pendientes</option><option value="proceso">En proceso</option><option value="hecha">Hechas</option></select></label>
-        <button type="button" class="add" id="taddbtn">Añadir</button>
+    <div class="tadd" id="tadd">
+      <div class="tadd-linea">
+        <input type="text" id="tnew" maxlength="120" placeholder="Nueva tarea…" aria-label="Nueva tarea" enterkeyhint="done">
+        <button type="button" class="tadd-mas" id="taddbtn" aria-label="Añadir tarea" title="Añadir tarea (Intro)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
-      <div class="tagpick" id="tnewtags" aria-label="Etiquetas de la nueva tarea"></div>
+      <!-- Prioridad, lista y etiquetas: aparecen al escribir (los select son la fuente de verdad, ocultos) -->
+      <div class="tadd-opc" id="tadd-opc" hidden>
+        <div class="tseg" role="radiogroup" aria-label="Prioridad">
+          <button type="button" role="radio" data-tprio="urgente" style="--pc:var(--p-urgente)">Urgente</button><button type="button" role="radio" data-tprio="alta" style="--pc:var(--p-alta)">Alta</button><button type="button" role="radio" data-tprio="media" style="--pc:var(--p-media)">Media</button><button type="button" role="radio" data-tprio="baja" style="--pc:var(--p-baja)">Baja</button>
+        </div>
+        <div class="tseg" role="radiogroup" aria-label="Lista">
+          <button type="button" role="radio" data-tlist="pendiente">Pendientes</button><button type="button" role="radio" data-tlist="proceso">En proceso</button><button type="button" role="radio" data-tlist="hecha">Hechas</button>
+        </div>
+        <select id="tprio" hidden aria-hidden="true" tabindex="-1"><option value="urgente">Urgente</option><option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option></select>
+        <select id="tlist" hidden aria-hidden="true" tabindex="-1"><option value="pendiente" selected>Pendientes</option><option value="proceso">En proceso</option><option value="hecha">Hechas</option></select>
+        <div class="tagpick" id="tnewtags" aria-label="Etiquetas de la nueva tarea"></div>
+      </div>
     </div>
     <div class="ttabs" id="ttabs" role="tablist" aria-label="Listas de tareas"></div>
     <div class="board" id="board"></div>
@@ -132,11 +143,7 @@
     </details>
   </section>
 
-  <section aria-labelledby="h-prog">
-    <h2 id="h-prog">Progreso</h2>
-    <div class="stats" id="stats"></div>
-    <div class="scroll"><table id="hist"></table></div>
-  </section>
+  <p class="ver-progreso"><button type="button" class="linklike" id="ver-progreso">Ver tu progreso ›</button></p>
 
   <details class="cfg" id="cfg">
     <summary>Configurar hábitos</summary>
@@ -183,7 +190,6 @@
   <dialog id="taskdlg" class="tdlg" aria-label="Ficha de la tarea"></dialog>
 
   <p class="status" id="status"></p>
-  <p class="status status-img" id="imgstatus"></p>
 </main>
 
 <div class="boards" id="boardsview" hidden>
@@ -217,6 +223,7 @@
 <script src="assets/js/servidor-local.js"></script>
 <script src="assets/js/cifrado.js"></script>
 <script src="assets/js/sync.js"></script>
+<script src="assets/js/texto.js"></script>
 <script src="assets/js/ascenso.js"></script>
 <script src="assets/js/epub.js"></script>
 <script src="assets/js/libreria.js"></script>

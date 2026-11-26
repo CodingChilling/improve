@@ -69,6 +69,18 @@ hoy que dentro de un mes.
 En la misma vista, bajo los tableros, están los **mapas**: nodos unidos por hilos, cada uno con su libreta y,
 dentro, su propio nivel con más nodos. El botón **?** del mapa muestra todos los gestos y atajos.
 
+**Libretas en modo Texto o MD.** Arriba de cada libreta (de un nodo o del propio mapa), un selector
+**«Texto | MD»** elige cómo se escribe; los nodos y mapas nuevos empiezan en **Texto**.
+- **Texto**: el formato se ve mientras escribes y hay una barra sencilla arriba: título, subtítulo, **negrita**,
+  *cursiva*, subrayado, tachado, checklist, viñetas, lista numerada, cita, enlace y separador. Intro en una checklist
+  o lista añade otro elemento debajo (Intro en uno vacío sale de la lista), Tab y Mayús+Tab sangran, Retroceso al
+  principio quita el formato, y escribir `- `, `1. `, `[] `, `# `, `## ` o `> ` al empezar una línea la convierte.
+  Atajos: Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Mayús+X (tachado) y Ctrl+K (enlace; Ctrl+clic lo abre). Tocar una casilla la
+  marca. Las imágenes, el índice y las páginas funcionan igual que en MD.
+- **MD**: el Markdown de siempre, al estilo de Obsidian.
+- Por debajo, las dos guardan el mismo Markdown (el subrayado es `++así++`), así que se puede cambiar de modo en
+  cualquier momento sin perder nada; el código, las tablas y las fórmulas se ven en Texto como texto tal cual.
+
 **Áreas de color.** Con **«+ Área»** se añade una zona de color (rectángulo, cuadrado, óvalo o círculo) para
 delimitar partes del mapa, con su título y, al lado, cuántos nodos hay dentro (por ejemplo «Terminados · 12»).
 Al seleccionar un área aparece arriba del mapa su **panel**: título, forma, color, bloqueo, más opciones
@@ -331,6 +343,7 @@ assets/
   js/objetivos.js         Objetivos con fecha: cómo van, calculado con los datos
   js/resumenes.js         Resúmenes de la semana, el mes y el año, y su imagen para compartir
   js/bloqueo.js           Bloqueo del dispositivo con PIN o huella (WebAuthn)
+  js/texto.js             Modo «Texto» de las libretas: editor con formato y barra de herramientas
   js/figura.js            El Hombre y la Mujer de Vitruvio (SVG propio) y sus capas de detalle
   js/tema.js              Tema claro, oscuro o automático
   js/libreria.js          La librería: estantería y lector de EPUB y PDF, subrayados y notas
