@@ -4290,6 +4290,10 @@ body.img-dragging * {
   font-weight: 600;
   color: var(--ink);
 }
+.mn-merr small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
 .mn-merr span {
   color: var(--muted);
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;

@@ -1867,7 +1867,8 @@ function renderRich(el){
   if(mers.length) loadLib("mermaid").then(async()=>{
     // El tema sigue al de Ascenso (Ajustes › Apariencia), no solo al del sistema
     const t=document.documentElement.dataset.theme, dark=t?t==="dark":!!(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches), theme=dark?"dark":"neutral";
-    if(mermaidTheme!==theme){ mermaid.initialize({startOnLoad:false, securityLevel:"strict", suppressErrorRendering:true, theme, fontFamily:getComputedStyle(document.body).fontFamily+', "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"'}); mermaidTheme=theme; }
+    if(mermaidTheme!==theme){ mermaid.initialize({startOnLoad:false, securityLevel:"strict", suppressErrorRendering:true, theme:"base", themeVariables:temaMermaid(dark),
+      fontFamily:getComputedStyle(document.body).fontFamily+', "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"'}); mermaidTheme=theme; }
     // De uno en uno: Mermaid no admite dibujar dos diagramas a la vez
     for(const n of mers){ colaMermaid=colaMermaid.then(()=>dibujarMermaid(n)).catch(()=>{}); }
     await colaMermaid; for(const n of mers) n.dataset.ok=1;
@@ -1876,17 +1877,56 @@ function renderRich(el){
 let colaMermaid=Promise.resolve();
 // Un diagrama: si tiene un error de sintaxis, se dice en su sitio (con la línea y el código) y no se dibuja nada más;
 // Mermaid deja su aviso de error (la «bomba») al final de la página: se quita siempre
+// Los diagramas con los colores de Ascenso: papel, tinta y tonos suaves (también las ramas de los mapas mentales)
+function temaMermaid(dark){
+  const c=dark
+    ? {fondo:"#252c30", caja:"#2c3438", tinta:"#e8ecea", suave:"#98a4a7", borde:"#435054", acento:"#d4a75e", ramas:["#4a3d27","#2f4a3d","#2f3d57","#55372f","#433a55","#4b4730"]}
+    : {fondo:"#f4f5f4", caja:"#ffffff", tinta:"#1f2a2e", suave:"#5d6a6d", borde:"#c9cfcd", acento:"#9a6b2f", ramas:["#ecdfca","#d8e7de","#dce4f1","#f1ded7","#e5ddee","#e9e4cf"]};
+  const v={darkMode:dark, background:c.fondo, mainBkg:c.caja, primaryColor:c.caja, primaryTextColor:c.tinta, primaryBorderColor:c.borde,
+    secondaryColor:c.ramas[0], tertiaryColor:c.fondo, textColor:c.tinta, lineColor:c.suave, nodeBorder:c.borde, clusterBkg:c.fondo,
+    clusterBorder:c.borde, edgeLabelBackground:c.fondo, titleColor:c.tinta, noteBkgColor:c.ramas[5], noteTextColor:c.tinta, git0:c.acento};
+  for(let i=0;i<12;i++){ v["cScale"+i]=c.ramas[i%c.ramas.length]; v["cScaleLabel"+i]=c.tinta; v["cScalePeer"+i]=c.borde; }
+  return v;
+}
+// Arreglos de los errores más comunes al escribir diagramas a mano (o pegarlos de otro sitio), que Mermaid no admite:
+// paréntesis, llaves o dos puntos dentro del texto de un nodo o de una flecha, y paréntesis sueltos en un mapa mental.
+// Solo se usan si el diagrama tal cual no se puede leer; lo escrito en la libreta no se toca.
+function repararMermaid(src){
+  const lineas=src.split("\n"), i0=lineas.findIndex(l=>l.trim()&&!l.trim().startsWith("%%")), tipo=i0<0?"":lineas[i0].trim().split(/\s+/)[0].toLowerCase();
+  const comillas=t=>'"'+t.trim().replace(/"/g,"#quot;")+'"';
+  const raro=/[(){}\[\]:;|]/;
+  if(tipo==="mindmap"){
+    const PARECIDOS={"(":"（",")":"）","[":"［","]":"］","{":"｛","}":"｝"};
+    // Un nodo con forma es «id(texto)», «((texto))», «[texto]», «{{texto}}»…; el resto es texto, y sus paréntesis se
+    // cambian por otros que se ven igual pero no significan nada para Mermaid
+    const forma=/^[^\s()[\]{}]*\s*(\(\(.*\)\)|\(.*\)|\[.*\]|\{\{.*\}\}|\)\).*\(\(|\).*\()\s*$/;
+    return lineas.map((l,i)=>{ if(i<=i0) return l; const m=l.match(/^(\s*)(.*)$/), t=m[2];
+      if(!t||t.startsWith("::")||t.startsWith("%%")||forma.test(t)) return l;
+      return m[1]+t.replace(/[()[\]{}]/g,c=>PARECIDOS[c]); }).join("\n");
+  }
+  if(/^(flowchart|graph)$/.test(tipo)){
+    return lineas.map((l,i)=>i<=i0?l:l
+      .replace(/([\w-]+)\[(?!["[(/\\])([^\]\n]*?)\](?!\])/g,(m,id,t)=>raro.test(t)?`${id}[${comillas(t)}]`:m)
+      .replace(/([\w-]+)\{(?![{"])([^}\n]*?)\}(?!\})/g,(m,id,t)=>raro.test(t)?`${id}{${comillas(t)}}`:m)
+      .replace(/\|(?!")([^|\n]*?)\|/g,(m,t)=>raro.test(t)?`|${comillas(t)}|`:m)).join("\n");
+  }
+  return src;
+}
 async function dibujarMermaid(n){
   const id="mmd"+(++mermaidN), src=n.dataset.src||"";
   try{
-    await mermaid.parse(src);
-    const {svg}=await mermaid.render(id,src);
+    let usar=src;
+    try{ await mermaid.parse(src); }
+    catch(e1){ const rep=repararMermaid(src); if(rep===src) throw e1; try{ await mermaid.parse(rep); usar=rep; }catch(e2){ throw e1; } }
+    const {svg}=await mermaid.render(id,usar);
     n.classList.remove("err"); n.innerHTML=svg;
+    if(usar!==src) n.title="Dibujado con un pequeño ajuste (paréntesis o dos puntos dentro del texto)";
   }catch(e){
-    const texto=String((e&&(e.message||e.str))||e||""), linea=(texto.match(/on line (\d+)/i)||[])[1];
-    const detalle=texto.split("\n").map(x=>x.trim()).filter(x=>x&&!/^-*\^$/.test(x)&&!/^\.\.\./.test(x)).pop()||"";
+    // El aviso dice qué línea es y la enseña, en vez de la jerga del analizador
+    const texto=String((e&&(e.message||e.str))||e||""), linea=+((texto.match(/on line (\d+)/i)||[])[1]||0);
+    const lin=linea?(src.split("\n")[linea-1]||"").trim():"";
     n.classList.add("err");
-    n.innerHTML=`<div class="mn-merr" role="note"><b>Este diagrama tiene un error${linea?` en la línea ${esc(linea)}`:""} y no se puede dibujar.</b>${detalle?`<span>${esc(detalle.slice(0,160))}</span>`:""}</div><pre>${esc(src)}</pre>`;
+    n.innerHTML=`<div class="mn-merr" role="note"><b>Este diagrama tiene un error${linea?` en la línea ${linea}`:""} y no se puede dibujar.</b>${lin?`<span>${esc(lin.slice(0,120))}</span>`:""}<small>Revisa los símbolos de esa línea: el texto con paréntesis, corchetes o dos puntos suele ir entre comillas.</small></div><pre>${esc(src)}</pre>`;
   }finally{
     for(const k of [id,"d"+id,"i"+id]){ const x=document.getElementById(k); if(x&&!n.contains(x)) x.remove(); }
   }

@@ -145,6 +145,13 @@ test("diagramas Mermaid: se dibujan aunque la libreta se recoloque, y un error s
     assert.equal(await p.locator(".mn-mermaid svg").count(), 2, "los dos diagramas buenos se dibujan");
     assert.match(await p.locator(".mn-merr").innerText(), /error en la línea 3/);
     assert.equal(await p.evaluate(() => [...document.body.children].filter(x => /mmd/.test(x.id)).length), 0, "nada de avisos de Mermaid sueltos en la página");
+    // Errores comunes que se arreglan solos al dibujar (sin tocar lo escrito): paréntesis en un mapa mental y dentro
+    // del texto de un nodo o de una flecha
+    const notas = "```mermaid\nmindmap\n  root((🧭 Tema))\n    Bloque: definición\n      (Paréntesis) dentro\n```\n```mermaid\ngraph TD\n  A[texto (con) paréntesis] -->|sí (claro)| B{¿y esto: qué?}\n```";
+    await p.evaluate(n => { state.maps.m1.notes = n; renderMapNote(); }, notas);
+    await esperar(p, () => document.querySelectorAll(".mn-mermaid[data-ok='1']").length === 2, null, { limite: 15000, que: "los diagramas reparados" });
+    assert.equal(await p.locator(".mn-mermaid svg").count(), 2, "los dos se dibujan");
+    assert.equal(await p.evaluate(() => state.maps.m1.notes), notas, "lo escrito no cambia");
     assert.deepEqual(errores, []);
   } finally { await nav.close(); await app.cerrar(); }
 });
