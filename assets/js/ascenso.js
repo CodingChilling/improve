@@ -198,14 +198,14 @@ function cleanMapData(x){
     if(!ID.test(id)||!m) continue;
     const title=String(m.title||"").trim().slice(0,80); if(!title) continue;
     maps[id]={title, color:HEX.test(m.color||"")?m.color.toUpperCase():M_COLORS[0], fav:!!m.fav,
-      order:Number.isFinite(+m.order)?Math.round(+m.order):0, notes:String(m.notes||"").slice(0,LIMITE_LIBRETA), created:String(m.created||"").slice(0,40)};
+      order:Number.isFinite(+m.order)?Math.round(+m.order):0, notes:String(m.notes||"").slice(0,LIMITE_LIBRETA), mode:m.mode==="texto"?"texto":"", created:String(m.created||"").slice(0,40)};
   }
   const raw={};
   for(const [id,n] of Object.entries(obj(x.mnodes))){
     if(!ID.test(id)||!n||!maps[n.map]) continue;
     const title=String(n.title||"").trim().slice(0,120); if(!title) continue;
     raw[id]={map:n.map, parent:typeof n.parent==="string"&&n.parent?n.parent:null, title,
-      color:HEX.test(n.color||"")?n.color.toUpperCase():"", x:pos(n.x), y:pos(n.y), notes:String(n.notes||"").slice(0,LIMITE_LIBRETA), created:String(n.created||"").slice(0,40)};
+      color:HEX.test(n.color||"")?n.color.toUpperCase():"", x:pos(n.x), y:pos(n.y), notes:String(n.notes||"").slice(0,LIMITE_LIBRETA), mode:n.mode==="texto"?"texto":"", created:String(n.created||"").slice(0,40)};
   }
   // Solo nodos cuya cadena de padres existe, es del mismo mapa y no da vueltas
   for(const [id,n] of Object.entries(raw)){
@@ -1567,6 +1567,9 @@ bvResults.addEventListener("click",e=>{
 // ---------- Mapas de nodos (en la vista de tableros, sección «Mapas») ----------
 // ======================================================================
 let mapLevel=null, mSel=null, mSelLink=null, mNoteEditing=false, mZona=null;
+// Libreta en modo texto (con barra de herramientas): siempre se escribe en ella, con el formato a la vista
+const editando=()=>mNoteEditing||!!NP.rico;
+const fuenteEditor=el=>NP.rico&&window.AscensoTexto?AscensoTexto.fuente(el):edSource(el);
 let nbMapOpen=false, nmDraft={title:"", color:M_COLORS[0]};
 // Reparto mapa | libreta, en % del mapa. Empieza con la libreta más grande (40 | 60), y se puede ajustar
 let mSplit=(()=>{ try{ const v=+localStorage.getItem("ascenso-reparto-mapa-libreta"); return v>=20&&v<=80?v:40; }catch(e){ return 40; } })();
@@ -1659,7 +1662,7 @@ function createMap(){
   mRemember();
   const id=newId("m");
   state.maps[id]={title:title.slice(0,80), color:nmDraft.color, fav:false,
-    order:Math.max(-1,...Object.values(state.maps).map(m=>m.order))+1, notes:"", created:new Date().toISOString()};
+    order:Math.max(-1,...Object.values(state.maps).map(m=>m.order))+1, notes:"", mode:"texto", created:new Date().toISOString()};
   nbMapOpen=false; nmDraft={title:"", color:M_COLORS[0]};
   save(); setMap(id);
 }
@@ -1780,8 +1783,10 @@ function mdInline(s){
   const keep=[], put=h=>{ keep.push(h); return "\u0000"+(keep.length-1)+"\u0000"; };
   const fmt=x=>x.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/(^|[^\w])__(.+?)__(?!\w)/g,"$1<strong>$2</strong>")
                .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g,"$1<em>$2</em>").replace(/(^|[^\w])_([^_\s][^_]*?)_(?!\w)/g,"$1<em>$2</em>")
-               .replace(/~~(.+?)~~/g,"<del>$1</del>");
+               .replace(/~~(.+?)~~/g,"<del>$1</del>").replace(/\+\+(.+?)\+\+/g,"<u>$1</u>");
   const link=(url,label)=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${emojiWrap(label)}</a>`;
+  // Un carácter con «\» delante se muestra tal cual (lo usa el modo texto para que * _ # - > | no cambien el formato)
+  s=s.replace(/\\([\\`*_~+#\-.>|[\]()!$])/g,(m,c)=>put(esc(c)));
   s=s.replace(/`([^`\n]+)`/g,(_,c)=>put(`<code>${esc(c)}</code>`));
   // Fórmulas en línea: $...$ (no confunde precios: tras el $ de apertura no va un espacio ni antes del de cierre)
   s=s.replace(/(^|[^\\$])\$(?![\s$])([^$\n]*?[^\s\\$])\$(?!\d)/g,(m,pre,tex)=>pre+put(`<span class="mn-im" data-tex="${esc(tex)}">${esc(tex)}</span>`));
@@ -2188,10 +2193,12 @@ bvBody.addEventListener("paste",e=>{
   const files=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>f.type.startsWith("image/"));
   const ed=document.getElementById("mn-text"), inEd=ed&&ed.contains(e.target);
   if(!files.length){                                       // texto: sin formato
-    if(inEd){ e.preventDefault(); e.stopPropagation(); edPasteText(e.clipboardData.getData("text/plain")||""); }
+    if(inEd){ e.preventDefault(); e.stopPropagation(); const tx=e.clipboardData.getData("text/plain")||"";
+      if(NP.rico){ if((NP.srcLen||0)+tx.length>LIMITE_LIBRETA) noteCount(LIMITE_LIBRETA); else AscensoTexto.pegar(ed,tx); } else edPasteText(tx); }
     return;
   }
   e.preventDefault(); e.stopPropagation();
+  if(inEd&&NP.rico){ const li=AscensoTexto.lineaDelCursor(ed); addImagesToNote(files,{line:li??lastVisibleSrcLine()}); return; }
   const p=inEd?edCaretPos(ed):null;
   addImagesToNote(files,p!=null?{caret:p}:{line:hoverSrcLine()??lastVisibleSrcLine()});
 });
@@ -2233,7 +2240,9 @@ bvBody.addEventListener("drop",e=>{
 // Botón «Imagen» de la libreta (en el móvil abre también la cámara)
 bvBody.addEventListener("change",e=>{
   if(e.target.id!=="mn-file") return;
-  const ed=document.getElementById("mn-text"), p=ed?edCaretPos(ed):null;
+  const ed=document.getElementById("mn-text");
+  if(ed&&NP.rico){ const li=AscensoTexto.lineaDelCursor(ed); addImagesToNote(e.target.files,{line:li??lastVisibleSrcLine()}); e.target.value=""; return; }
+  const p=ed?edCaretPos(ed):null;
   addImagesToNote(e.target.files, p!=null?{caret:p}:{line:lastVisibleSrcLine()});
   e.target.value="";
 });
@@ -2395,6 +2404,7 @@ function renderMapNote(){
 }
 function renderMapNoteNow(){
   const box=document.getElementById("mv-note"); if(!box) return;
+  NP.rico=false;
   const many=selIds();
   if(many.length>1){
     if(NP.ro) NP.ro.disconnect(); NP.el=null;
@@ -2421,23 +2431,31 @@ function renderMapNoteNow(){
       <button type="button" class="sw auto" data-ncolor="" aria-pressed="${!s.o.color}" aria-label="Automático: el acento del mapa" title="Automático: el acento del mapa"></button>
       ${M_COLORS.map(cc=>`<button type="button" class="sw" data-ncolor="${cc}" aria-pressed="${cc===s.o.color}" style="--c:${cc}" aria-label="Color del nodo"></button>`).join("")}` : "";
   const addSub = s.kind==="node" && s.id===mapLevel && !(ch[s.id]||[]).length;
+  NP.rico=s.o.mode==="texto"&&!!window.AscensoTexto;
+  const modo=`<div class="mn-modo" role="radiogroup" aria-label="Modo de la libreta"><button type="button" role="radio" data-nmodo="texto" aria-checked="${NP.rico}" title="Texto con formato y barra de herramientas">Texto</button><button type="button" role="radio" data-nmodo="" aria-checked="${!NP.rico}" title="Markdown">MD</button></div>`;
   box.innerHTML=`<div class="mn-head">
       <input type="text" class="mn-title" id="mn-title" maxlength="${s.kind==="map"?80:120}" aria-label="Título">
+      ${modo}
       <label class="mn-page" title="Escribe un número para ir a esa página">Página
         <input type="number" id="mn-pg" min="1" value="1" aria-label="Página actual"> de <b id="mn-pgs">1</b></label>
     </div>
     <div class="mn-meta"><span>${meta}</span><span class="mn-key">${keyName("Ctrl+I")}: índice</span><label class="mn-addimg" title="${keyName("Añadir imágenes (también puedes pegarlas con Ctrl+V")} o arrastrarlas)">+ Imagen<input type="file" id="mn-file" accept="image/*" multiple hidden></label><span class="mn-count" id="mn-count" hidden></span>${colors}</div>
     ${addSub?`<button type="button" class="mn-addsub" data-maddsub>+ Añadir subnodos</button>`:""}
+    ${NP.rico?`<div class="rc-cab">${AscensoTexto.barraHTML()}</div>`:""}
     <div class="mn-body" id="mn-body">
-      ${mNoteEditing
-        ? `<div class="mn-scroll mn-text" id="mn-text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Libreta" spellcheck="true"></div>`
+      ${editando()
+        ? `<div class="mn-scroll mn-text${NP.rico?" mn-rico":""}" id="mn-text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Libreta" spellcheck="true"></div>`
         : `<div class="mn-scroll mn-md" id="mn-md" tabindex="0">${mdRender(s.o.notes)}</div>`}
       <div class="np-hint" id="np-hint" aria-live="polite"></div>
-      <div class="mn-rail" id="mn-rail" role="scrollbar" aria-label="Páginas" aria-controls="${mNoteEditing?"mn-text":"mn-md"}"></div>
+      <div class="mn-rail" id="mn-rail" role="scrollbar" aria-label="Páginas" aria-controls="${editando()?"mn-text":"mn-md"}"></div>
       <div class="mn-index" id="mn-index" hidden></div>
     </div>`;
   document.getElementById("mn-title").value=s.o.title;
-  if(mNoteEditing){ const ed=document.getElementById("mn-text"); edRender(ed,s.o.notes); NP.srcLen=s.o.notes.length; }
+  if(NP.rico){
+    const ed=document.getElementById("mn-text");
+    AscensoTexto.pintar(ed,s.o.notes); NP.srcLen=s.o.notes.length;
+    AscensoTexto.montar(ed,box.querySelector(".rc-barra"),{limite:n=>{ if((NP.srcLen||0)+n>LIMITE_LIBRETA){ noteCount(LIMITE_LIBRETA); return true; } return false; }});
+  } else if(mNoteEditing){ const ed=document.getElementById("mn-text"); edRender(ed,s.o.notes); NP.srcLen=s.o.notes.length; }
   npMount(s); noteCount(s.o.notes.length);
 }
 
@@ -2547,7 +2565,7 @@ function npWheel(e){
 }
 // Teclado al leer (la libreta en lectura también se recorre con las flechas, Av Pág, Re Pág, Inicio y Fin)
 function npKeys(e){
-  if(mNoteEditing||e.ctrlKey||e.altKey||e.metaKey) return;
+  if(editando()||e.ctrlKey||e.altKey||e.metaKey) return;
   const [lo,hi]=pageBounds(NP.cp), map={ArrowDown:48, ArrowUp:-48, PageDown:NP.pageH*0.85, PageUp:-NP.pageH*0.85, " ":NP.pageH*0.85};
   if(e.key==="Home"){ e.preventDefault(); npSmoothTo(lo); return; }
   if(e.key==="End"){ e.preventDefault(); npSmoothTo(hi); return; }
@@ -2578,7 +2596,7 @@ function npGoScreen(sc){
   const el=NP.el; if(!el) return;
   sc=Math.min(NP.screens-1,Math.max(0,Math.round(sc)||0));
   npSetTop(sc*NP.pageH);
-  if(mNoteEditing) npCaretAt(el.scrollTop);
+  if(editando()) npCaretAt(el.scrollTop);
 }
 const npGo=page=>npGoScreen((Math.min(NP.pages,Math.max(1,Math.round(page)||1))-1)*SEGS_POR_PAGINA);
 // Barra de desplazamiento de la página actual: el carril es solo esta página; el tirador, siempre del mismo tamaño
@@ -2594,7 +2612,7 @@ function npRail(){
 }
 
 function npMount(s){
-  const el=document.getElementById(mNoteEditing?"mn-text":"mn-md"), body=document.getElementById("mn-body");
+  const el=document.getElementById(editando()?"mn-text":"mn-md"), body=document.getElementById("mn-body");
   if(NP.ro) NP.ro.disconnect();
   npStop(); clearTimeout(NP.pullT);
   Object.assign(NP,{el, key:s.kind+":"+s.id, drag:null, turning:false, pull:0, pullDir:0, lock:false, target:null, expect:null});
@@ -2603,22 +2621,21 @@ function npMount(s){
   el.addEventListener("wheel",npWheel,{passive:false});
   el.addEventListener("keydown",npKeys);
   npTouch(el);
-  if(mNoteEditing){
+  if(editando()){
     // Al escribir, el navegador mantiene el cursor a la vista desplazando lo justo
     el.addEventListener("input",()=>{ layoutFloats(el); npPad(); npUpdate(); });
-    el.addEventListener("keydown",edKeydown);
-    el.addEventListener("beforeinput",edBeforeInput);
+    if(!NP.rico){ el.addEventListener("keydown",edKeydown); el.addEventListener("beforeinput",edBeforeInput); }
   }
   npLayout(false);
   const view=()=>el.getBoundingClientRect().top;
-  if(!mNoteEditing && NP.pendingTopLine!=null){
+  if(!editando() && NP.pendingTopLine!=null){
     // Al salir de la escritura, la línea que estaba arriba de la vista sigue arriba
     const {line, off}=NP.pendingTopLine; NP.pendingTopLine=null;
     const els=[...el.querySelectorAll("[data-line]")].filter(n=>+n.dataset.line<=line);
     const target=els[els.length-1];
     if(target){ const top=target.getBoundingClientRect().top-view()+el.scrollTop; npSetTop(top-off, top); }
   }
-  if(mNoteEditing){
+  if(mNoteEditing||(NP.rico&&NP.pendingCaret)){
     el.focus();
     if(NP.pendingCaret){
       // Al pulsar una línea leyendo, el cursor va justo ahí y esa línea se queda a la misma altura en la pantalla
@@ -2668,7 +2685,7 @@ function npLayout(keep){
   NP.pageH=Math.max(lh*3, Math.floor(avail/lh)*lh);
   const before=el.scrollTop;
   el.style.height=NP.pageH+"px";
-  if(!mNoteEditing) renderRich(el);
+  if(!editando()) renderRich(el);
   renderFloats(el);
   npPad();
   NP.pages=Math.max(1,Math.ceil(NP.screens/SEGS_POR_PAGINA));
@@ -2702,9 +2719,9 @@ let miItems=[], miActive=0;
 function toggleIndex(){
   const box=document.getElementById("mn-index"); if(!box) return;
   if(!box.hidden){ closeIndex(); return; }
-  const s=noteSubject(), el=NP.el, hs=headingsOf(mNoteEditing?edSource(el):s.o.notes);
+  const s=noteSubject(), el=NP.el, hs=headingsOf(editando()?fuenteEditor(el):s.o.notes);
   // Página de cada título
-  if(mNoteEditing){ const tops=edLineTops(el); hs.forEach(h=>{ h.screen=Math.floor(((tops[h.line]||{}).top||0)/NP.pageH); }); }
+  if(editando()){ const tops=edLineTops(el); hs.forEach(h=>{ h.screen=Math.floor(((tops[h.line]||{}).top||0)/NP.pageH); }); }
   else { const els=[...el.querySelectorAll("h2,h3,h4")]; hs.forEach((h,i)=>{ h.screen=els[i]?Math.floor(els[i].offsetTop/NP.pageH):0; }); }
   hs.forEach(h=>{ h.page=Math.floor(h.screen/SEGS_POR_PAGINA)+1; });
   miItems=hs; miActive=Math.max(0,hs.findIndex(h=>h.screen>=NP.screen));
@@ -2727,7 +2744,7 @@ function miGo(i){
   closeIndex();
   // Se va al propio título, que queda arriba de la vista
   let top;
-  if(mNoteEditing){ el.focus(); edSetCaret(el,h.line,0); const t=edLineTops(el)[h.line]; top=t?t.top:0; }
+  if(editando()){ el.focus(); edSetCaret(el,h.line,0); const t=edLineTops(el)[h.line]; top=t?t.top:0; }
   else { const n=el.querySelector(`[data-line="${h.line}"]`); top=n?n.getBoundingClientRect().top-el.getBoundingClientRect().top+el.scrollTop:0; }
   npSetTop(Math.max(0,top-4), top);
 }
@@ -2783,7 +2800,7 @@ function createNode(wx,wy,from){
   mRemember();
   const wasSolo = mapLevel && !levelNodes(mid,mapLevel).length;
   const id=newId("n");
-  state.mnodes[id]={map:mid, parent:mapLevel, title:"Nuevo nodo", color:"", x:wx==null?null:Math.round(wx), y:wy==null?null:Math.round(wy), notes:"", created:new Date().toISOString()};
+  state.mnodes[id]={map:mid, parent:mapLevel, title:"Nuevo nodo", color:"", x:wx==null?null:Math.round(wx), y:wy==null?null:Math.round(wy), notes:"", mode:"texto", created:new Date().toISOString()};
   if(from) state.mlinks[newId("x")]={a:from, b:id};
   selectOnly(id); mNoteEditing=false; save();
   if(MG&&MG.birth) MG.birth[id]=performance.now();
@@ -3296,7 +3313,7 @@ function copySelection(){
   const ids=selIds(); if(!ids.length) return null;
   const ch=childrenIndex(), all=[], add=id=>{ all.push(id); for(const k of ch[id]||[]) add(k); }; ids.forEach(add);
   const set=new Set(all), tops=new Set(ids);
-  mClip={nodes:all.map(id=>{ const n=state.mnodes[id]; return {id, parent:tops.has(id)?null:n.parent, title:n.title, color:n.color, x:n.x, y:n.y, notes:n.notes}; }),
+  mClip={nodes:all.map(id=>{ const n=state.mnodes[id]; return {id, parent:tops.has(id)?null:n.parent, title:n.title, color:n.color, x:n.x, y:n.y, notes:n.notes, mode:n.mode||""}; }),
          links:Object.values(state.mlinks).filter(l=>set.has(l.a)&&set.has(l.b)).map(l=>[l.a,l.b]),
          text:outlineText(ids,ch), count:ids.length};
   return mClip.text;
@@ -3310,7 +3327,7 @@ function pasteClip(wx,wy){
   const now=new Date().toISOString();
   for(const n of c.nodes){ const top=n.parent===null;
     state.mnodes[ids[n.id]]={map:mid, parent:top?(mapLevel||null):ids[n.parent], title:n.title, color:n.color,
-      x:top?(n.x!=null?Math.round(n.x-cx+wx):null):n.x, y:top?(n.y!=null?Math.round(n.y-cy+wy):null):n.y, notes:n.notes, created:now}; }
+      x:top?(n.x!=null?Math.round(n.x-cx+wx):null):n.x, y:top?(n.y!=null?Math.round(n.y-cy+wy):null):n.y, notes:n.notes, mode:n.mode||"", created:now}; }
   for(const [a,b] of c.links) state.mlinks[newId("x")]={a:ids[a], b:ids[b]};
   clearSel(); tops.forEach((n,i)=>{ if(i===0) mSel=ids[n.id]; mMulti.add(ids[n.id]); });
   save(); renderBoards(); revealAll(selIds());
@@ -3335,7 +3352,7 @@ function pasteList(text,wx,wy){
     const parent=stack.length?stack[stack.length-1].id:(mapLevel||null), id=newId("n");
     let x=null, y=null;
     if(!stack.length){ const k=tops.length, col=k%4, row=Math.floor(k/4); x=Math.round(wx+(col-1.5)*150); y=Math.round(wy+row*95); tops.push(id); }
-    state.mnodes[id]={map:mid, parent, title:it.title, color:"", x, y, notes:"", created:now};
+    state.mnodes[id]={map:mid, parent, title:it.title, color:"", x, y, notes:"", mode:"texto", created:now};
     stack.push({indent:it.indent, id});
   }
   clearSel(); tops.forEach((id,i)=>{ if(i===0) mSel=id; mMulti.add(id); });
@@ -3623,6 +3640,8 @@ bvBody.addEventListener("click",e=>{
   if((el=q("[data-mcolor]"))){ mRemember(); for(const id of selIds()) state.mnodes[id].color=el.dataset.mcolor; save(); mgDraw(); return; }
   if(q("[data-mmove]")){ openMoveTo(selIds()); return; }
   if(q("[data-mdel]")){ askDeleteNodes(selIds()); return; }
+  if((el=q("[data-nmodo]"))){ const s=noteSubject(); if(!s.o||(s.o.mode||"")===el.dataset.nmodo) return;
+    flushSave(); mRemember(); s.o.mode=el.dataset.nmodo; mNoteEditing=false; save(); renderMapNote(); return; }
   if((el=q("[data-ncolor]"))){ const s=noteSubject(); if(s.kind!=="node") return; mRemember(); s.o.color=el.dataset.ncolor; save(); renderMapNote(); mgDraw(); return; }
   if(q("[data-maddsub]")){ createNode(null,null,null); return; }
   if((el=q("[data-ckline]"))){ const s=noteSubject(), lines=s.o.notes.split("\n"), i=+el.dataset.ckline;
@@ -3642,7 +3661,7 @@ bvBody.addEventListener("input",e=>{
     if(t.id==="mn-title"){ const v=t.value.trim(); if(!v) return; s.o.title=v.slice(0,s.kind==="map"?80:120);
       const cr=bvBody.querySelector(`.mv-crumb[data-mlevel="${s.kind==="map"?"":s.id}"]`); if(cr) cr.textContent=s.o.title;
       if(s.kind==="map") document.getElementById("bv-current").textContent=s.o.title; }
-    else { const src=edSource(t); NP.srcLen=src.length; s.o.notes=src.slice(0,LIMITE_LIBRETA); noteCount(src.length); saveSoon(); if(!(MG&&MG.idleOn)) mgDraw(); return; }
+    else { const src=fuenteEditor(t); NP.srcLen=src.length; s.o.notes=src.slice(0,LIMITE_LIBRETA); noteCount(src.length); saveSoon(); if(!(MG&&MG.idleOn)) mgDraw(); return; }
     save(); mgDraw();
   }
 });
@@ -3654,7 +3673,7 @@ bvBody.addEventListener("focusout",e=>{
   // Mientras el foco siga dentro de la libreta (índice, número de página, colores) se sigue en modo escritura
   if(e.target.id==="mn-text") flushSave();
   if(NP.rerendering) return;            // la libreta se está repintando (p. ej. tras cambiar una imagen): se sigue escribiendo
-  if(e.target.id==="mn-text" && !dentro){ NP.pendingTopLine=topLineOfScreen(e.target); mNoteEditing=false; renderMapNote(); }
+  if(e.target.id==="mn-text" && !dentro && !NP.rico){ NP.pendingTopLine=topLineOfScreen(e.target); mNoteEditing=false; renderMapNote(); }
   if(e.target.id==="mn-title"){ const s=noteSubject(); if(s.o) e.target.value=s.o.title; }
 });
 bvBody.addEventListener("keydown",e=>{
@@ -4458,7 +4477,7 @@ function setStatus(t,nivel="ok"){
   // Con cuenta, el panel de la cuenta (cuenta.js) completa este texto con el estado de la sincronización
   document.dispatchEvent(new CustomEvent("ascenso:estado",{detail:{t,nivel}}));
 }
-const VERSION_NECESARIA=18;
+const VERSION_NECESARIA=19;
 // Copia en localStorage: solo en la versión clásica, por si el servidor no responde.
 // Con los datos en IndexedDB no hace falta (y así no queda nada personal en localStorage).
 function saveLocal(){

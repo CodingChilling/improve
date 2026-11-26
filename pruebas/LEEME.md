@@ -42,6 +42,7 @@ Las capturas de la prueba móvil quedan en `pruebas/resultados/`.
 | `objetivos-ui.test.mjs` | Los objetivos desde el perfil: crear (con errores), progreso, cuadrado de la figura, título escapado, archivar y eliminar con dos toques. |
 | `resumenes.test.mjs` | Los resúmenes: periodos cerrados y sus títulos, cifras de una semana, aviso del lunes en el día, navegar ‹ ›, mes, y la imagen PNG de 1080 × 1350. |
 | `bloqueo.test.mjs` | El bloqueo: poner el PIN (sin guardarlo), oculta desde antes de pintar, espera tras 5 fallos (también al recargar), segundo plano, huella con un autenticador virtual de WebAuthn, cambiar el PIN y «olvidé el PIN». |
+| `cuaderno.test.mjs` | Libretas en modo Texto: barra, atajos, Intro en checklist y listas, sangría, casillas, enlaces, pegar Markdown, ida y vuelta Texto ↔ MD sin pérdidas (también con código, tablas, fórmulas e imágenes) y la barra en el móvil. |
 | `zonas.test.mjs` | Áreas de color de los mapas, con ratón y con el dedo: crear, mover con los nodos de dentro o sola, tamaño, forma, color, bloquear, título, buscar, borrar y deshacer. |
 | `notas.test.mjs` | Las frases (ids únicos y completos) y el diario de reflexiones y notas: lista con la frase de cada día, filtros, búsqueda e ir al día. |
 | `entreno.test.mjs` | Tipos de entreno propios (añadir, color, quitar con sustituto o archivar) y cambios de entreno de un día: hacia las semanas siguientes, nunca hacia las pasadas. |

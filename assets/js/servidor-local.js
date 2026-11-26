@@ -24,7 +24,7 @@ window.AscensoLocal=(()=>{
   const MAX_IMAGEN=15*1024*1024;         // bytes por imagen
   const DIAS_HUERFANAS=30;               // días que se conserva una imagen que ya no está en ninguna libreta
   const TIPOS_IMAGEN=new Set(["image/webp","image/png","image/jpeg","image/gif"]);
-  const VERSION_APP=18;
+  const VERSION_APP=19;
   const TABLAS=["config","habitos","dias","historial","etiquetas","tareas","notas","eventos","tableros",
                 "etiquetas_tablero","listas","tarjetas","mapas","nodos","conexiones","zonas","objetivos","adjuntos",
                 "libros","lecturas","subrayados","archivos"];
@@ -198,7 +198,7 @@ window.AscensoLocal=(()=>{
       labels:(v.labels||[]).filter(e=>idsEtiquetasTab.has(e)),check:(v.check||[]).map(p=>({id:p.id,t:p.t,d:!!p.d})),order:v.order,created:v.created,archived:v.archived||null};
     // Mapas
     const mapasT=vivos("mapas"), mapas={};
-    for(const [id,v] of mapasT) mapas[id]={title:v.title,color:v.color,fav:!!v.fav,order:v.order,notes:v.notes,created:v.created};
+    for(const [id,v] of mapasT) mapas[id]={title:v.title,color:v.color,fav:!!v.fav,order:v.order,notes:v.notes,mode:v.mode||"",created:v.created};
     const nodosT=vivos("nodos"), nodos={}, visible=new Map();
     const seVe=(id,camino)=>{
       if(visible.has(id)) return visible.get(id);
@@ -207,7 +207,7 @@ window.AscensoLocal=(()=>{
       if(ok&&n.parent) ok=!camino.has(id)&&seVe(n.parent,new Set(camino).add(id));
       visible.set(id,ok); return ok;
     };
-    for(const [id,v] of nodosT) if(seVe(id,new Set())) nodos[id]={map:v.map,parent:v.parent||null,title:v.title,color:v.color||"",x:v.x,y:v.y,notes:v.notes,created:v.created};
+    for(const [id,v] of nodosT) if(seVe(id,new Set())) nodos[id]={map:v.map,parent:v.parent||null,title:v.title,color:v.color||"",x:v.x,y:v.y,notes:v.notes,mode:v.mode||"",created:v.created};
     const conexiones={};
     for(const [id,v] of vivos("conexiones")) if(nodos[v.a]&&nodos[v.b]) conexiones[id]={a:v.a,b:v.b};
     const objetivos={};
@@ -482,8 +482,10 @@ window.AscensoLocal=(()=>{
     if(!COLOR_RE.test(color)) mal("color no válido");
     const prev=op.leer("mapas",mid);
     op.poner("mapas",mid,{title:titulo,color:color.toUpperCase(),fav:!!d.fav,order:entero(dato(d,"order",0),"orden"),
-      notes:cortar(texto(d.notes),LIMITE_LIBRETA),created:prev?prev.created:cortar(texto(d.created),40)});
+      notes:cortar(texto(d.notes),LIMITE_LIBRETA),mode:modoLibreta(d),created:prev?prev.created:cortar(texto(d.created),40)});
   }
+  // Cómo se escribe la libreta: «texto» (con barra de herramientas) o Markdown (vacío). Lo demás cuenta como Markdown.
+  const modoLibreta=d=>d.mode==="texto"?"texto":"";
   function guardarNodo(op,nid,d){
     nid=comprobarId(nid,"nodo");
     if(!esDic(d)) mal("nodo no válido");
@@ -502,7 +504,7 @@ window.AscensoLocal=(()=>{
     if(!op.leer("mapas",mapa)) errorBD();
     const prev=op.leer("nodos",nid);
     op.poner("nodos",nid,{map:mapa,parent:padre,title:titulo,color:color.toUpperCase(),x,y,
-      notes:cortar(texto(d.notes),LIMITE_LIBRETA),created:prev?prev.created:cortar(texto(d.created),40)});
+      notes:cortar(texto(d.notes),LIMITE_LIBRETA),mode:modoLibreta(d),created:prev?prev.created:cortar(texto(d.created),40)});
   }
   function guardarConexion(op,cid,d){
     cid=comprobarId(cid,"conexión");

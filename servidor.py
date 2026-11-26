@@ -236,6 +236,7 @@ CREATE TABLE IF NOT EXISTS mapas (
   favorito INTEGER NOT NULL DEFAULT 0,
   orden    INTEGER NOT NULL DEFAULT 0,
   notas    TEXT NOT NULL DEFAULT '',   -- libreta del propio mapa
+  modo     TEXT NOT NULL DEFAULT '',   -- cómo se escribe la libreta: '' (Markdown) o 'texto' (con barra de herramientas)
   creado   TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS nodos (
@@ -247,6 +248,7 @@ CREATE TABLE IF NOT EXISTS nodos (
   x           REAL,
   y           REAL,
   notas       TEXT NOT NULL DEFAULT '',
+  modo        TEXT NOT NULL DEFAULT '',                        -- '' (Markdown) o 'texto'
   creado      TEXT NOT NULL,
   actualizado TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -300,9 +302,9 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   huerfano_desde TEXT
 );
 """
-VERSION_BD = 14
+VERSION_BD = 15
 # Versión del servidor: la página la comprueba para avisar si está hablando con un servidor antiguo
-VERSION_APP = 18
+VERSION_APP = 19
 
 
 class ErrorDatos(Exception):
@@ -336,6 +338,9 @@ def migrar(con):
     columnas = {r[1] for r in con.execute("PRAGMA table_info(tarjetas)")}
     if "archivada" not in columnas:
         con.execute("ALTER TABLE tarjetas ADD COLUMN archivada TEXT")
+    for tabla in ("mapas", "nodos"):                                   # modo de la libreta (Markdown o texto)
+        if "modo" not in {r[1] for r in con.execute(f"PRAGMA table_info({tabla})")}:
+            con.execute(f"ALTER TABLE {tabla} ADD COLUMN modo TEXT NOT NULL DEFAULT ''")
 
 
 def iniciar_bd():
@@ -428,12 +433,12 @@ def leer_estado(con):
             tarjetas[r["tarjeta_id"]]["check"].append({"id": r["id"], "t": r["texto"], "d": bool(r["hecho"])})
     mapas = {
         r["id"]: {"title": r["titulo"], "color": r["color"], "fav": bool(r["favorito"]), "order": r["orden"],
-                  "notes": r["notas"], "created": r["creado"]}
+                  "notes": r["notas"], "mode": r["modo"], "created": r["creado"]}
         for r in con.execute("SELECT * FROM mapas")
     }
     nodos = {
         r["id"]: {"map": r["mapa_id"], "parent": r["padre_id"], "title": r["titulo"], "color": r["color"] or "",
-                  "x": r["x"], "y": r["y"], "notes": r["notas"], "created": r["creado"]}
+                  "x": r["x"], "y": r["y"], "notes": r["notas"], "mode": r["modo"], "created": r["creado"]}
         for r in con.execute("SELECT * FROM nodos")
     }
     conexiones = {r["id"]: {"a": r["desde"], "b": r["hasta"]} for r in con.execute("SELECT * FROM conexiones")}
@@ -973,12 +978,17 @@ def guardar_mapa(con, mid, datos):
     if not COLOR_RE.match(color):
         raise ErrorDatos("color no válido")
     con.execute(
-        """INSERT INTO mapas (id, titulo, color, favorito, orden, notas, creado) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO mapas (id, titulo, color, favorito, orden, notas, modo, creado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET titulo=excluded.titulo, color=excluded.color, favorito=excluded.favorito,
-             orden=excluded.orden, notas=excluded.notas""",
+             orden=excluded.orden, notas=excluded.notas, modo=excluded.modo""",
         (mid, titulo, color.upper(), int(bool(datos.get("fav"))), entero(datos.get("order", 0), "orden"),
-         str(datos.get("notes") or "")[:LIMITE_LIBRETA], str(datos.get("created") or "")[:40]),
+         str(datos.get("notes") or "")[:LIMITE_LIBRETA], modo_libreta(datos), str(datos.get("created") or "")[:40]),
     )
+
+
+def modo_libreta(datos):
+    """Cómo se escribe la libreta: «texto» (con barra de herramientas) o Markdown (vacío). Lo demás cuenta como Markdown."""
+    return "texto" if datos.get("mode") == "texto" else ""
 
 
 def guardar_nodo(con, nid, datos):
@@ -1001,12 +1011,13 @@ def guardar_nodo(con, nid, datos):
     if color and not COLOR_RE.match(color):
         raise ErrorDatos("color no válido")
     con.execute(
-        """INSERT INTO nodos (id, mapa_id, padre_id, titulo, color, x, y, notas, creado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO nodos (id, mapa_id, padre_id, titulo, color, x, y, notas, modo, creado)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET mapa_id=excluded.mapa_id, padre_id=excluded.padre_id, titulo=excluded.titulo,
-             color=excluded.color, x=excluded.x, y=excluded.y, notas=excluded.notas,
+             color=excluded.color, x=excluded.x, y=excluded.y, notas=excluded.notas, modo=excluded.modo,
              actualizado=datetime('now', 'localtime')""",
         (nid, mapa, padre, titulo, color.upper() or None, real_o_nada(datos.get("x")), real_o_nada(datos.get("y")),
-         str(datos.get("notes") or "")[:LIMITE_LIBRETA], str(datos.get("created") or "")[:40]),
+         str(datos.get("notes") or "")[:LIMITE_LIBRETA], modo_libreta(datos), str(datos.get("created") or "")[:40]),
     )
 
 
